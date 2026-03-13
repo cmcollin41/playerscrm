@@ -42,7 +42,8 @@ export async function POST(req: Request) {
           first_name,
           last_name,
           email,
-          name
+          name,
+          dependent
         ),
         roster:rosters (
           id,
@@ -88,11 +89,35 @@ export async function POST(req: Request) {
       )
     }
 
-    // Get recipient email
-    const recipientEmail = invoice.person?.email
+    // Get recipient email — if the person is a dependent, look up their parent/guardian
+    let recipientEmail = invoice.person?.email
+    let recipientName = invoice.person?.first_name || invoice.person?.name || "there"
+
+    if (!recipientEmail && invoice.person?.dependent) {
+      const { data: relationship } = await supabase
+        .from("relationships")
+        .select("person_id")
+        .eq("relation_id", invoice.person.id)
+        .eq("primary", true)
+        .single()
+
+      if (relationship) {
+        const { data: guardian } = await supabase
+          .from("people")
+          .select("email, first_name, name")
+          .eq("id", relationship.person_id)
+          .single()
+
+        if (guardian?.email) {
+          recipientEmail = guardian.email
+          recipientName = guardian.first_name || guardian.name || recipientName
+        }
+      }
+    }
+
     if (!recipientEmail) {
       return NextResponse.json(
-        { error: "No email address found for recipient" },
+        { error: "No email address found for recipient or their guardian" },
         { status: 400 }
       )
     }
@@ -148,7 +173,7 @@ export async function POST(req: Request) {
           </div>
           
           <div class="content">
-            <p>Hello ${invoice.person.first_name || invoice.person.name || "there"},</p>
+            <p>Hello ${recipientName},</p>
             
             <p>You have an invoice from <strong>${invoice.account.name}</strong>:</p>
             
@@ -177,7 +202,7 @@ export async function POST(req: Request) {
     const emailText = `
 Invoice from ${invoice.account.name}
 
-Hello ${invoice.person.first_name || invoice.person.name || "there"},
+Hello ${recipientName},
 
 You have an invoice from ${invoice.account.name}:
 
