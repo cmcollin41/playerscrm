@@ -77,7 +77,7 @@ export default function MergePeopleModal({
         grade: mergeSelection.grade === '1' ? person1.grade : person2.grade,
         dependent: mergeSelection.dependent === '1' ? person1.dependent : person2.dependent,
         tags: mergeSelection.tags === 'both' 
-          ? [...new Set([...(person1.tags || []), ...(person2.tags || [])])]
+          ? Array.from(new Set([...(person1.tags || []), ...(person2.tags || [])]))
           : mergeSelection.tags === '1' ? person1.tags : person2.tags,
       };
 
