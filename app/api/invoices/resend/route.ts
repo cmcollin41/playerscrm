@@ -123,9 +123,12 @@ export async function POST(req: Request) {
       )
     }
 
-    // Determine sender
-    const sender = invoice.account?.senders?.[0]?.email
-      ? `${invoice.account.name} <${invoice.account.senders[0].email}>`
+    // Determine sender — prefer youth@ for invoices, fall back to first available
+    const senders = invoice.account?.senders || []
+    const preferredSender = senders.find((s: any) => s.email?.includes("youth"))
+      || senders[0]
+    const sender = preferredSender?.email
+      ? `${invoice.account.name} <${preferredSender.email}>`
       : null
 
     if (!sender) {
