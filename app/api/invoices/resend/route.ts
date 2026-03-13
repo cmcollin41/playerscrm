@@ -208,7 +208,7 @@ export async function POST(req: Request) {
               ${invoice.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${invoice.description}</p>` : ""}
             </div>
             
-            <a href="${paymentLink}" class="button">Pay Invoice</a>
+            <a href="${paymentLink}" class="button" style="display: inline-block; padding: 12px 24px; background-color: #16a34a; color: #ffffff !important; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: 600;">Pay Invoice</a>
             
             <p>Or copy and paste this link into your browser:<br>
             <a href="${paymentLink}">${paymentLink}</a></p>
