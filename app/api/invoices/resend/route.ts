@@ -170,7 +170,7 @@ export async function POST(req: Request) {
     const formattedAmount = new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: "USD",
-    }).format((invoice.amount || 0) / 100)
+    }).format(invoice.amount || 0)
 
     // Prepare email content
     const emailSubject = `Invoice ${invoice.invoice_number || invoice.id.slice(0, 8)} from ${invoice.account.name}`
