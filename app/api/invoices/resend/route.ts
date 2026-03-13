@@ -186,7 +186,7 @@ export async function POST(req: Request) {
             .header { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
             .content { padding: 20px 0; }
             .invoice-details { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; }
-            .button { display: inline-block; padding: 12px 24px; background-color: #007bff; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+            .button { display: inline-block; padding: 12px 24px; background-color: #16a34a; color: #ffffff; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: 600; }
             .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 14px; color: #6c757d; }
           </style>
         </head>
