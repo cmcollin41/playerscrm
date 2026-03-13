@@ -4,14 +4,6 @@ import { useState, useMemo, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -20,17 +12,18 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline"
+import { PlusIcon } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
 import SendEmailSheet from "@/components/modal/send-email-sheet"
-import { Mail, Send, CheckCircle2, XCircle, ArrowUpDown, List, Radio, ArrowRight } from "lucide-react"
+import { Mail, Send, CheckCircle2, XCircle, List, Radio, ArrowRight } from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { getInitials } from "@/lib/utils"
 import Link from "next/link"
 import {
   ColumnDef,
   ColumnFiltersState,
   SortingState,
   VisibilityState,
-  flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
@@ -163,59 +156,15 @@ export default function EmailsClient({
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [rowSelection, setRowSelection] = useState({})
 
-  // Define columns
   const columns = useMemo<ColumnDef<Email>[]>(
     () => [
       {
         accessorKey: "created_at",
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-              className="hover:bg-transparent p-0"
-            >
-              Date
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-          )
-        },
-        cell: ({ row }) => (
-          <div>
-            <div className="font-medium">
-              {new Date(row.original.created_at).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(row.original.created_at), { addSuffix: true })}
-            </div>
-          </div>
-        ),
+        header: "Date",
       },
       {
         accessorKey: "recipient",
         header: "Recipient",
-        cell: ({ row }) => {
-          const recipient = row.original.recipient
-          return recipient ? (
-            <div>
-              <div className="font-medium">
-                {recipient.first_name} {recipient.last_name}
-                {recipient.dependent && (
-                  <Badge variant="outline" className="ml-2 text-xs">
-                    Dependent
-                  </Badge>
-                )}
-              </div>
-              <div className="text-sm text-muted-foreground">{recipient.email}</div>
-            </div>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          )
-        },
         filterFn: (row, id, value) => {
           const recipient = row.original.recipient
           if (!recipient) return false
@@ -227,12 +176,10 @@ export default function EmailsClient({
       {
         accessorKey: "sender",
         header: "Sender",
-        cell: ({ row }) => <div className="text-sm">{row.original.sender || "—"}</div>,
       },
       {
         accessorKey: "subject",
         header: "Subject",
-        cell: ({ row }) => <div className="font-medium">{row.original.subject || "—"}</div>,
         filterFn: (row, id, value) => {
           return row.original.subject?.toLowerCase().includes(value.toLowerCase()) || false
         },
@@ -240,21 +187,6 @@ export default function EmailsClient({
       {
         accessorKey: "content",
         header: "Content",
-        cell: ({ row }) => {
-          const content = row.original.content
-          return (
-            <div className="max-w-xs text-sm text-muted-foreground truncate" title={content || ""}>
-              {content ? (
-                <>
-                  {content.replace(/<[^>]*>/g, "").substring(0, 100)}
-                  {content.length > 100 ? "..." : ""}
-                </>
-              ) : (
-                "—"
-              )}
-            </div>
-          )
-        },
         filterFn: (row, id, value) => {
           return row.original.content?.toLowerCase().includes(value.toLowerCase()) || false
         },
@@ -262,7 +194,6 @@ export default function EmailsClient({
       {
         accessorKey: "status",
         header: "Status",
-        cell: ({ row }) => getStatusBadge(row.original.status),
         filterFn: (row, id, value) => {
           if (value === "all") return true
           return row.original.status === value
@@ -501,47 +432,7 @@ export default function EmailsClient({
         </Card>
       </div>
 
-      {/* Email History Section Header */}
-      <div className="pt-4">
-        <h2 className="text-2xl font-bold tracking-tight">Email History</h2>
-        <p className="text-muted-foreground">All one-off emails sent from your account</p>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Search and filter email history</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search by recipient, subject, sender, or content..."
-                  value={globalFilter ?? ""}
-                  onChange={(e) => setGlobalFilter(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="sent">Sent</SelectItem>
-                <SelectItem value="delivered">Delivered</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Emails Table */}
+      {/* Email History */}
       <Card>
         <CardHeader>
           <CardTitle>Email History ({table.getFilteredRowModel().rows.length})</CardTitle>
@@ -550,56 +441,126 @@ export default function EmailsClient({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id}>
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(
-                                header.column.columnDef.header,
-                                header.getContext()
-                              )}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows?.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={columns.length} className="h-24 text-center">
-                        {emails.length === 0 ? (
-                          <div className="flex flex-col items-center gap-2 py-8">
-                            <Mail className="h-12 w-12 text-muted-foreground/50" />
-                            <p className="font-medium">No emails sent yet</p>
-                            <p className="text-sm text-muted-foreground">
-                              Send your first email to get started
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-muted-foreground">No emails match your filters</p>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+          <div className="w-full space-y-4">
+            <div className="flex items-center gap-4">
+              <Input
+                placeholder="Search by recipient, subject, sender, or content..."
+                value={globalFilter ?? ""}
+                onChange={(e) => setGlobalFilter(e.target.value)}
+                className="max-w-sm"
+              />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="delivered">Delivered</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+            {table.getRowModel().rows?.length ? (
+              <div className="divide-y rounded-md border">
+                {table.getRowModel().rows.map((row) => {
+                  const email = row.original
+                  const recipient = email.recipient
+                  const plainContent = email.content
+                    ? email.content.replace(/<[^>]*>/g, "").substring(0, 140)
+                    : ""
+
+                  return (
+                    <div
+                      key={row.id}
+                      className="flex gap-4 px-5 py-4 hover:bg-muted/50 transition-colors"
+                    >
+                      <Avatar className="h-9 w-9 shrink-0 mt-0.5">
+                        <AvatarFallback className="text-xs">
+                          {recipient
+                            ? getInitials(recipient.first_name, recipient.last_name)
+                            : "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1 space-y-2.5">
+                        {/* Row 1: Recipient + status/date */}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {recipient ? (
+                              <span className="text-[15px] font-semibold truncate">
+                                {recipient.first_name} {recipient.last_name}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">Unknown recipient</span>
+                            )}
+                            {recipient?.dependent && (
+                              <Badge variant="outline" className="text-[10px]">
+                                Dependent
+                              </Badge>
+                            )}
+                            {recipient?.email && (
+                              <span className="text-xs text-muted-foreground/70 truncate hidden sm:inline">
+                                {recipient.email}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            {getStatusBadge(email.status)}
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {new Date(email.created_at).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Row 2: Subject */}
+                        <p className="text-sm font-medium text-foreground/90 truncate leading-tight">
+                          {email.subject || <span className="text-muted-foreground italic">No subject</span>}
+                        </p>
+
+                        {/* Row 3: Content preview */}
+                        {plainContent && (
+                          <p className="text-[13px] text-muted-foreground/70 line-clamp-1 leading-relaxed">
+                            {plainContent}
+                          </p>
+                        )}
+
+                        {/* Row 4: Sender + relative time — visually separated */}
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-border/40">
+                          <Mail className="h-3 w-3 text-muted-foreground/50" />
+                          <span className="text-[11px] text-muted-foreground/60">
+                            {email.sender || "Unknown sender"}
+                          </span>
+                          <span className="text-muted-foreground/30">·</span>
+                          <span className="text-[11px] text-muted-foreground/60">
+                            {formatDistanceToNow(new Date(email.created_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                {emails.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-12">
+                    <Mail className="h-12 w-12 text-muted-foreground/50" />
+                    <p className="font-medium">No emails sent yet</p>
+                    <p className="text-sm text-muted-foreground">
+                      Send your first email to get started
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center py-12">
+                    <p className="text-muted-foreground">No emails match your filters</p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Pagination Controls */}
             <div className="flex items-center justify-between">

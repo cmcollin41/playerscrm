@@ -8,6 +8,8 @@ import {
   MixerHorizontalIcon
 } from "@radix-ui/react-icons";
 import EditRosterFeeModal from "@/components/modal/edit-roster-fee-modal";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getInitials } from "@/lib/utils";
 
 import {
   ColumnDef,
@@ -43,7 +45,7 @@ import { Badge } from "@/components/ui/badge";
 import SendEmailModal from "@/components/modal/send-email-sheet";
 import SendButton from "@/components/modal-buttons/send-button";
 import { useRouter } from "next/navigation";
-import { CheckCircle, Mail, FileText, DollarSign, ExternalLink, AlertCircle } from "lucide-react";
+import { CheckCircle, Mail, FileText, ExternalLink, AlertCircle } from "lucide-react";
 import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
 import { CreateRosterInvoiceButton } from "@/components/create-roster-invoice-button";
 import SendEmailSheet from "@/components/modal/send-email-sheet";
@@ -114,11 +116,15 @@ export type Person = {
   last_name: string;
   name: string;
   primary_contacts: any;
+  jersey_number?: number;
+  position?: string;
+  photo?: string;
+  roster_grade?: string;
 };
 
 const createColumns = (
   team: any, 
-  onEditFee: (rosterId: string, currentFeeId: string | null, personName: string) => void,
+  onEditRoster: (roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null }, personName: string) => void,
   onResendInvoice: (invoiceId: string) => void,
   resendingInvoiceId: string | null
 ): ColumnDef<Person>[] => [
@@ -145,13 +151,39 @@ const createColumns = (
     accessorKey: "name",
     header: "Name",
     cell: ({ row }) => (
-      <div className="font-medium">{row.getValue("name")}</div>
+      <div className="flex items-center gap-3">
+        <Avatar className="h-8 w-8">
+          {row.original.photo && <AvatarImage src={row.original.photo} alt={row.getValue("name") as string} />}
+          <AvatarFallback className="text-xs">
+            {getInitials(row.original.first_name, row.original.last_name)}
+          </AvatarFallback>
+        </Avatar>
+        <div className="font-medium">{row.getValue("name")}</div>
+      </div>
     ),
   },
   {
-    accessorKey: "grade",
+    accessorKey: "jersey_number",
+    header: "#",
+    cell: ({ row }) => {
+      const num = row.getValue("jersey_number") as number | undefined
+      return <div className="font-mono">{num != null ? `#${num}` : "—"}</div>
+    },
+  },
+  {
+    accessorKey: "position",
+    header: "Position",
+    cell: ({ row }) => <div>{row.getValue("position") || "—"}</div>,
+  },
+  {
+    id: "grade",
     header: "Grade",
-    cell: ({ row }) => <div>{row.getValue("grade") || "—"}</div>,
+    cell: ({ row }) => {
+      const grade = row.original.roster_grade || (row.original as any).grade || ""
+      const GRADE_LABELS: Record<string, string> = { "9": "Freshman", "10": "Sophomore", "11": "Junior", "12": "Senior" }
+      return <div>{GRADE_LABELS[grade] || grade || "—"}</div>
+    },
+    accessorFn: (row) => row.roster_grade || (row as any).grade || "",
   },
   {
     accessorKey: "fees",
@@ -282,16 +314,20 @@ const createColumns = (
             </Link>
           </Button>
 
-          {/* Edit Fee Button */}
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onEditFee(roster?.id, fees?.id || null, person.name)}
+            onClick={() => onEditRoster({
+              id: roster?.id,
+              feeId: fees?.id || null,
+              jerseyNumber: roster?.jersey_number ?? null,
+              position: roster?.position ?? null,
+              grade: roster?.grade ?? null,
+            }, person.name)}
             className="h-8 px-3 text-xs"
-            title="Edit Fee"
+            title="Edit Roster Entry"
           >
-            <DollarSign className="h-3.5 w-3.5 mr-1" />
-            Edit Fee
+            Edit
           </Button>
 
           {/* Invoice/Payment Status Actions */}
@@ -357,23 +393,33 @@ export function TeamTable({
   const { refresh } = router;
   const supabase = createClient();
 
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "jersey_number", desc: false },
+  ]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
   const [resendingInvoiceId, setResendingInvoiceId] = useState<string | null>(null);
   
-  // State for edit fee modal
-  const [editFeeModalOpen, setEditFeeModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingRosterId, setEditingRosterId] = useState<string>("");
   const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
+  const [editingJerseyNumber, setEditingJerseyNumber] = useState<number | null>(null);
+  const [editingPosition, setEditingPosition] = useState<string | null>(null);
+  const [editingGrade, setEditingGrade] = useState<string | null>(null);
   const [editingPersonName, setEditingPersonName] = useState<string>("");
 
-  const handleEditFee = (rosterId: string, currentFeeId: string | null, personName: string) => {
-    setEditingRosterId(rosterId);
-    setEditingFeeId(currentFeeId);
+  const handleEditRoster = (
+    roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null },
+    personName: string
+  ) => {
+    setEditingRosterId(roster.id);
+    setEditingFeeId(roster.feeId);
+    setEditingJerseyNumber(roster.jerseyNumber);
+    setEditingPosition(roster.position);
+    setEditingGrade(roster.grade);
     setEditingPersonName(personName);
-    setEditFeeModalOpen(true);
+    setEditModalOpen(true);
   };
 
   const handleResendInvoice = async (invoiceId: string) => {
@@ -412,7 +458,7 @@ export function TeamTable({
 
   const table = useReactTable({
     data,
-    columns: createColumns(team, handleEditFee, handleResendInvoice, resendingInvoiceId),
+    columns: createColumns(team, handleEditRoster, handleResendInvoice, resendingInvoiceId),
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
@@ -468,11 +514,15 @@ export function TeamTable({
   return (
     <>
       <EditRosterFeeModal
-        open={editFeeModalOpen}
-        onOpenChange={setEditFeeModalOpen}
+        open={editModalOpen}
+        onOpenChange={setEditModalOpen}
         rosterId={editingRosterId}
         currentFeeId={editingFeeId}
+        currentJerseyNumber={editingJerseyNumber}
+        currentPosition={editingPosition}
+        currentGrade={editingGrade}
         personName={editingPersonName}
+        onRefresh={onRefresh}
       />
       <div className="w-full space-y-4">
         <div className="flex items-center gap-4">

@@ -17,6 +17,8 @@ import {
   Phone as PhoneIcon,
   User
 } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { getInitials } from "@/lib/utils"
 
 import {
   ColumnDef,
@@ -67,6 +69,7 @@ export interface Person {
   dependent: boolean;
   primary_contacts: any;
   relationships: any;
+  photo?: string;
 }
 
 const columns: ColumnDef<Person>[] = [
@@ -95,6 +98,12 @@ const columns: ColumnDef<Person>[] = [
     header: "Name",
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
+        <Avatar className="h-8 w-8">
+          {row.original.photo && <AvatarImage src={row.original.photo} alt={row.getValue("name") as string} />}
+          <AvatarFallback className="text-xs">
+            {getInitials(row.original.first_name, row.original.last_name)}
+          </AvatarFallback>
+        </Avatar>
         <div className="flex items-center gap-2">
           {!row.original.dependent ? (
             <span title="Primary Contact">

@@ -6,7 +6,8 @@ import { useForm, useFieldArray } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import LoadingDots from "@/components/icons/loading-dots";
-import { PlusIcon, XIcon } from "lucide-react";
+import { PlusIcon, XIcon, Upload, ImageIcon } from "lucide-react";
+import Image from "next/image";
 import {
   Sheet,
   SheetContent,
@@ -71,6 +72,8 @@ const formSchema = z.object({
   birthdate: z.date().optional(),
   grade: z.string().min(1, "Grade is required"),
   tags: z.array(z.string()).default([]),
+  photo: z.string().optional(),
+  isPublic: z.boolean().default(false),
   relationships: z.array(z.object({
     relationshipId: z.string().optional(),
     id: z.string().min(1, "Person ID is required"),
@@ -164,6 +167,8 @@ export default function PersonSheet({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<Date | undefined>(undefined)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
+  const [photoPreview, setPhotoPreview] = useState<string | null>(person?.photo || null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -176,7 +181,8 @@ export default function PersonSheet({
       birthdate: person?.birthdate ? new Date(person.birthdate) : undefined,
       grade: person?.grade || "",
       tags: person?.tags || [],
-      // Deduplicate and map relationships
+      photo: person?.photo || "",
+      isPublic: person?.is_public || false,
       relationships: deduplicateRelationships(fromRelationships || []).map((rel) => ({
         relationshipId: rel.id,
         id: rel.from?.id,
@@ -214,11 +220,14 @@ export default function PersonSheet({
         birthdate: undefined,
         grade: "",
         tags: [],
+        photo: "",
+        isPublic: false,
         relationships: []
       });
+      setPhotoPreview(null);
       setError(null);
     } else if (open && person) {
-      // Reset to person's data if editing
+      setPhotoPreview(person.photo || null);
       form.reset({
         firstName: person.first_name || "",
         lastName: person.last_name || "",
@@ -228,6 +237,8 @@ export default function PersonSheet({
         birthdate: person.birthdate ? new Date(person.birthdate) : undefined,
         grade: person.grade || "",
         tags: person.tags || [],
+        photo: person.photo || "",
+        isPublic: person.is_public || false,
         relationships: deduplicateRelationships(fromRelationships || []).map((rel: any) => ({
           relationshipId: rel.id,
           id: rel.from?.id,
@@ -311,6 +322,8 @@ export default function PersonSheet({
         grade: values.grade,
         tags: values.tags,
         dependent: values.dependent,
+        photo: values.photo || null,
+        is_public: values.isPublic,
       };
 
       if (!account?.id) {
@@ -372,7 +385,6 @@ export default function PersonSheet({
 
       toast.success(person ? "Person updated successfully" : "Person created successfully");
       
-      // Reset form to initial state
       form.reset({
         firstName: "",
         lastName: "",
@@ -382,6 +394,8 @@ export default function PersonSheet({
         birthdate: undefined,
         grade: "",
         tags: [],
+        photo: "",
+        isPublic: false,
         relationships: []
       });
       
@@ -637,6 +651,128 @@ export default function PersonSheet({
                           </Select>
                         </FormControl>
                         <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="photo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Photo</FormLabel>
+                        <FormControl>
+                          <div className="flex items-center gap-4">
+                            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full border-2 border-dashed border-gray-200 bg-gray-50">
+                              {photoPreview ? (
+                                <Image
+                                  src={photoPreview}
+                                  alt="Headshot preview"
+                                  fill
+                                  className="object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center">
+                                  <ImageIcon className="h-8 w-8 text-gray-300" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={isUploadingPhoto}
+                                onClick={() => {
+                                  const input = document.createElement('input')
+                                  input.type = 'file'
+                                  input.accept = 'image/jpeg,image/png,image/webp'
+                                  input.onchange = async (e) => {
+                                    const file = (e.target as HTMLInputElement).files?.[0]
+                                    if (!file) return
+
+                                    if (file.size > 5 * 1024 * 1024) {
+                                      toast.error("Image must be under 5MB")
+                                      return
+                                    }
+
+                                    setIsUploadingPhoto(true)
+                                    try {
+                                      const ext = file.name.split('.').pop()
+                                      const fileName = `${account?.id}/${crypto.randomUUID()}.${ext}`
+
+                                      const { data, error: uploadError } = await supabase.storage
+                                        .from('headshots')
+                                        .upload(fileName, file, { upsert: true })
+
+                                      if (uploadError) throw uploadError
+
+                                      const { data: urlData } = supabase.storage
+                                        .from('headshots')
+                                        .getPublicUrl(data.path)
+
+                                      field.onChange(urlData.publicUrl)
+                                      setPhotoPreview(urlData.publicUrl)
+                                      toast.success("Photo uploaded")
+                                    } catch (err) {
+                                      console.error('Upload error:', err)
+                                      toast.error("Failed to upload photo")
+                                    } finally {
+                                      setIsUploadingPhoto(false)
+                                    }
+                                  }
+                                  input.click()
+                                }}
+                              >
+                                {isUploadingPhoto ? (
+                                  <LoadingDots color="gray" />
+                                ) : (
+                                  <>
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Upload Photo
+                                  </>
+                                )}
+                              </Button>
+                              {photoPreview && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="text-red-500 hover:text-red-700"
+                                  onClick={() => {
+                                    field.onChange("")
+                                    setPhotoPreview(null)
+                                  }}
+                                >
+                                  <XIcon className="mr-2 h-3 w-3" />
+                                  Remove
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="isPublic"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">Public Profile</FormLabel>
+                          <FormDescription>
+                            Show this person on your public team website
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
                       </FormItem>
                     )}
                   />

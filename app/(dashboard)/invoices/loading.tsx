@@ -1,13 +1,13 @@
 import { Skeleton } from "@/components/ui/skeleton"
 
-export default function PeopleLoading() {
+export default function InvoicesLoading() {
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div className="space-y-2">
             <Skeleton className="h-9 w-36" />
-            <Skeleton className="h-4 w-72" />
+            <Skeleton className="h-4 w-80" />
           </div>
           <Skeleton className="h-10 w-32" />
         </div>
@@ -31,11 +31,12 @@ export default function PeopleLoading() {
         <div className="px-6 pb-6 space-y-4">
           <div className="flex items-center gap-4">
             <Skeleton className="h-10 w-64" />
-            <Skeleton className="ml-auto h-10 w-24" />
+            <Skeleton className="h-10 w-40" />
+            <Skeleton className="h-10 w-36" />
           </div>
           <div className="space-y-1">
-            {[...Array(8)].map((_, i) => (
-              <Skeleton key={i} className="h-14 w-full" />
+            {[...Array(6)].map((_, i) => (
+              <Skeleton key={i} className="h-[104px] w-full" />
             ))}
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { PeopleTable } from "./table";
 import { getPrimaryContacts } from "@/lib/fetchers/client";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface PeopleTableWrapperProps {
   initialPeople: any[];
@@ -71,13 +72,13 @@ export function PeopleTableWrapper({ initialPeople, account }: PeopleTableWrappe
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-10 w-full animate-pulse rounded bg-gray-200" />
-        <div className="space-y-2">
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={i}
-              className="h-16 w-full animate-pulse rounded bg-gray-100"
-            />
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="ml-auto h-10 w-24" />
+        </div>
+        <div className="space-y-1">
+          {[...Array(8)].map((_, i) => (
+            <Skeleton key={i} className="h-14 w-full" />
           ))}
         </div>
       </div>

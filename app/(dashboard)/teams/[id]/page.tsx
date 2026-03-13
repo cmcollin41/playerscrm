@@ -10,10 +10,20 @@ import { useEffect, useState, use } from "react";
 import { AddToStaffModal } from "@/components/modal/add-to-staff-modal";
 import { AddToRosterModal } from "@/components/modal/add-to-roster-modal";
 import { getInitials } from "@/lib/utils";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, DollarSign, CheckCircle, AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+
+const LEVEL_LABELS: Record<string, string> = {
+  bantam: "Bantam",
+  club: "Club",
+  freshman: "Freshman",
+  sophomore: "Sophomore",
+  jv: "JV",
+  varsity: "Varsity",
+}
 
 async function getPrimaryContacts(supabase: any, person: any) {
   if (person?.dependent) {
@@ -171,6 +181,9 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             return {
               ...r.people,
               primary_contacts: primaryPeople,
+              jersey_number: r.jersey_number,
+              position: r.position,
+              roster_grade: r.grade,
               fees: r.fees || {
                 id: "",
                 name: "",
@@ -228,11 +241,26 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       {/* Header */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">{team?.name}</h1>
-            <p className="text-muted-foreground">
-              Manage your team roster, fees, and invoices
-            </p>
+          <div className="flex items-center gap-4">
+            <Avatar className="h-14 w-14">
+              {team?.icon && <AvatarImage src={team.icon} alt={team?.name} />}
+              <AvatarFallback className="text-lg font-semibold">
+                {team?.name ? team.name.substring(0, 2).toUpperCase() : "T"}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-bold tracking-tight">{team?.name}</h1>
+                {team?.level && (
+                  <Badge variant="outline" className="capitalize text-sm">
+                    {LEVEL_LABELS[team.level] || team.level}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-muted-foreground">
+                Manage your team roster, fees, and invoices
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <AddToRosterModal 
@@ -326,11 +354,15 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
           <CardContent>
             <div className="flex flex-wrap gap-3">
               {team.staff.map((staffMember: any, index: number) => (
-                <div
+                <Link
                   key={index}
-                  className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2"
+                  href={`/people/${staffMember.people?.id}`}
+                  className="flex items-center gap-2 rounded-lg border bg-gray-50 px-3 py-2 transition-colors hover:bg-gray-100 hover:border-gray-300"
                 >
                   <Avatar className="h-8 w-8">
+                    {staffMember.people?.photo && (
+                      <AvatarImage src={staffMember.people.photo} alt={staffMember.people.name} />
+                    )}
                     <AvatarFallback className="text-xs">
                       {getInitials(
                         staffMember.people?.first_name,
@@ -339,7 +371,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
                     </AvatarFallback>
                   </Avatar>
                   <span className="text-sm font-medium">{staffMember.people.name}</span>
-                </div>
+                </Link>
               ))}
             </div>
           </CardContent>

@@ -36,6 +36,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -48,12 +49,19 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 
-// Define the form schema
+const GRADE_OPTIONS = [
+  ...Array.from({ length: 12 }, (_, i) => String(i + 1)),
+  "Graduated",
+] as const
+
 const formSchema = z.object({
   person: z.string({
     required_error: "Please select a person",
   }),
   fee: z.string().optional(),
+  jersey_number: z.coerce.number().int().min(0).max(99).optional(),
+  position: z.string().optional(),
+  grade: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -63,6 +71,7 @@ interface Person {
   first_name: string
   last_name: string
   name?: string
+  grade?: string
 }
 
 interface Fee {
@@ -98,7 +107,7 @@ export function AddToRosterModal({
       // Fetch people
       const { data: peopleData, error: peopleError } = await supabase
         .from("people")
-        .select("id, first_name, last_name, name")
+        .select("id, first_name, last_name, name, grade")
         .eq("account_id", accountId)
       
       if (peopleData) setPeople(peopleData)
@@ -131,15 +140,25 @@ export function AddToRosterModal({
     setIsSubmitting(true)
     
     try {
-      // Build roster data
       const rosterData: any = {
         team_id: team.id,
         person_id: data.person,
       }
 
-      // Add fee_id only if a fee was selected
       if (data.fee && data.fee !== "none") {
         rosterData.fee_id = data.fee
+      }
+
+      if (data.jersey_number != null) {
+        rosterData.jersey_number = data.jersey_number
+      }
+
+      if (data.position) {
+        rosterData.position = data.position
+      }
+
+      if (data.grade) {
+        rosterData.grade = data.grade
       }
 
       const { error } = await supabase.from("rosters").insert([rosterData])
@@ -233,6 +252,9 @@ export function AddToRosterModal({
                                   shouldDirty: true,
                                   shouldTouch: true,
                                 })
+                                if (person.grade && !form.getValues("grade")) {
+                                  form.setValue("grade", person.grade)
+                                }
                                 setComboboxOpen(false)
                               }
 
@@ -264,6 +286,81 @@ export function AddToRosterModal({
                 </FormItem>
               )}
             />
+
+            <div className="grid grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="jersey_number"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Jersey #</FormLabel>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={99}
+                      placeholder="e.g. 23"
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value
+                        field.onChange(val === '' ? undefined : Number(val))
+                      }}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="position"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Position</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PG">PG</SelectItem>
+                        <SelectItem value="SG">SG</SelectItem>
+                        <SelectItem value="SF">SF</SelectItem>
+                        <SelectItem value="PF">PF</SelectItem>
+                        <SelectItem value="C">C</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="grade"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Grade</FormLabel>
+                    <Select
+                      onValueChange={field.onChange}
+                      value={field.value}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {GRADE_OPTIONS.map((g) => (
+                          <SelectItem key={g} value={g}>{g}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}

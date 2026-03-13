@@ -17,4 +17,6 @@ export type People = {
   created_at: string;
   email_confirmed: string | null;
   list_people: ListPerson[];
+  photo?: string;
+  is_public?: boolean;
 };

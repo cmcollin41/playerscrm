@@ -4,14 +4,6 @@ import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -20,10 +12,20 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { MagnifyingGlassIcon, ArrowUpIcon, ArrowDownIcon, PaperAirplaneIcon } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
+import {
+  DollarSign,
+  FileText,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  Send,
+  RotateCw,
+} from "lucide-react"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { getInitials } from "@/lib/utils"
 
 interface Invoice {
   id: string
@@ -60,8 +62,40 @@ interface InvoicesClientProps {
   accountId: string
 }
 
-type SortField = "created_at" | "amount" | "status" | "due_date" | "person"
+type SortField = "created_at" | "amount" | "due_date" | "person"
 type SortDirection = "asc" | "desc"
+
+const isOverdue = (invoice: Invoice) =>
+  invoice.status === "sent" &&
+  invoice.due_date &&
+  new Date(invoice.due_date) < new Date()
+
+const getStatusBadge = (status: string, overdue: boolean) => {
+  if (overdue) {
+    return (
+      <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100">
+        <AlertTriangle className="h-3 w-3 mr-1" />
+        OVERDUE
+      </Badge>
+    )
+  }
+
+  const config: Record<string, { className: string; icon: React.ElementType }> = {
+    draft: { className: "bg-gray-100 text-gray-800 hover:bg-gray-100", icon: FileText },
+    sent: { className: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100", icon: Clock },
+    paid: { className: "bg-green-100 text-green-800 hover:bg-green-100", icon: CheckCircle2 },
+  }
+
+  const statusConfig = config[status] || config.sent
+  const Icon = statusConfig.icon
+
+  return (
+    <Badge variant="outline" className={statusConfig.className}>
+      <Icon className="h-3 w-3 mr-1" />
+      {status.toUpperCase()}
+    </Badge>
+  )
+}
 
 export default function InvoicesClient({ invoices, accountId }: InvoicesClientProps) {
   const router = useRouter()
@@ -71,43 +105,36 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [resendingInvoiceId, setResendingInvoiceId] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
+  const pageSize = 25
 
-  // Calculate statistics
   const stats = useMemo(() => {
     const total = invoices.length
     const sent = invoices.filter(inv => inv.status === "sent").length
     const paid = invoices.filter(inv => inv.status === "paid").length
     const draft = invoices.filter(inv => inv.status === "draft").length
+    const overdue = invoices.filter(inv => isOverdue(inv)).length
     const totalAmount = invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0)
     const paidAmount = invoices
       .filter(inv => inv.status === "paid")
       .reduce((sum, inv) => sum + (inv.amount || 0), 0)
-    const pendingAmount = invoices
-      .filter(inv => inv.status === "sent")
+    const overdueAmount = invoices
+      .filter(inv => isOverdue(inv))
       .reduce((sum, inv) => sum + (inv.amount || 0), 0)
 
-    return {
-      total,
-      sent,
-      paid,
-      draft,
-      totalAmount,
-      paidAmount,
-      pendingAmount,
-    }
+    return { total, sent, paid, draft, overdue, totalAmount, paidAmount, overdueAmount }
   }, [invoices])
 
-  // Filter and sort invoices
   const filteredInvoices = useMemo(() => {
     let filtered = invoices
 
-    // Apply status filter
-    if (statusFilter !== "all") {
+    if (statusFilter === "overdue") {
+      filtered = filtered.filter(inv => isOverdue(inv))
+    } else if (statusFilter === "unpaid") {
+      filtered = filtered.filter(inv => inv.status !== "paid" && inv.status !== "draft")
+    } else if (statusFilter !== "all") {
       filtered = filtered.filter(inv => inv.status === statusFilter)
     }
 
-    // Apply search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(inv => {
@@ -117,20 +144,21 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
         const email = inv.person?.email?.toLowerCase() || ""
         const description = inv.description?.toLowerCase() || ""
         const invoiceNumber = inv.invoice_number?.toLowerCase() || ""
+        const teamName = inv.roster?.team?.name?.toLowerCase() || ""
 
         return (
           personName.includes(query) ||
           email.includes(query) ||
           description.includes(query) ||
-          invoiceNumber.includes(query)
+          invoiceNumber.includes(query) ||
+          teamName.includes(query)
         )
       })
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
-      let aValue: any
-      let bValue: any
+      let aValue: string | number
+      let bValue: string | number
 
       switch (sortField) {
         case "created_at":
@@ -140,10 +168,6 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
         case "amount":
           aValue = a.amount
           bValue = b.amount
-          break
-        case "status":
-          aValue = a.status
-          bValue = b.status
           break
         case "due_date":
           aValue = a.due_date ? new Date(a.due_date).getTime() : 0
@@ -157,98 +181,52 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
           return 0
       }
 
-      if (sortDirection === "asc") {
-        return aValue > bValue ? 1 : -1
-      } else {
-        return aValue < bValue ? 1 : -1
-      }
+      return sortDirection === "asc"
+        ? aValue > bValue ? 1 : -1
+        : aValue < bValue ? 1 : -1
     })
 
     return filtered
   }, [invoices, searchQuery, statusFilter, sortField, sortDirection])
 
-  // Paginate the filtered invoices
   const paginatedInvoices = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize
-    const endIndex = startIndex + pageSize
-    return filteredInvoices.slice(startIndex, endIndex)
+    const start = (currentPage - 1) * pageSize
+    return filteredInvoices.slice(start, start + pageSize)
   }, [filteredInvoices, currentPage, pageSize])
 
   const totalPages = Math.ceil(filteredInvoices.length / pageSize)
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc")
     } else {
       setSortField(field)
       setSortDirection("desc")
     }
-    setCurrentPage(1) // Reset to first page when sorting
-  }
-
-  const getStatusBadge = (status: string) => {
-    const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
-      draft: "secondary",
-      sent: "default",
-      paid: "outline",
-    }
-
-    const colors: Record<string, string> = {
-      draft: "bg-gray-100 text-gray-800 hover:bg-gray-100",
-      sent: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100",
-      paid: "bg-green-100 text-green-800 hover:bg-green-100",
-    }
-
-    return (
-      <Badge variant={variants[status] || "default"} className={colors[status]}>
-        {status.toUpperCase()}
-      </Badge>
-    )
-  }
-
-  const SortIcon = ({ field }: { field: SortField }) => {
-    if (sortField !== field) return null
-    return sortDirection === "asc" ? (
-      <ArrowUpIcon className="ml-2 h-4 w-4 inline" />
-    ) : (
-      <ArrowDownIcon className="ml-2 h-4 w-4 inline" />
-    )
+    setCurrentPage(1)
   }
 
   const handleResendInvoice = async (invoiceId: string) => {
     setResendingInvoiceId(invoiceId)
-    
+
     try {
       const response = await fetch("/api/invoices/resend", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ invoiceId }),
       })
 
       const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to resend invoice")
-      }
+      if (!response.ok) throw new Error(data.error || "Failed to resend invoice")
 
       toast.success("Invoice email resent successfully!")
-      router.refresh() // Refresh to update the UI with new metadata
+      router.refresh()
     } catch (error: any) {
       console.error("Error resending invoice:", error)
       toast.error(error.message || "Failed to resend invoice")
     } finally {
       setResendingInvoiceId(null)
     }
-  }
-
-  const isOverdue = (invoice: Invoice) => {
-    return (
-      invoice.status === "sent" &&
-      invoice.due_date &&
-      new Date(invoice.due_date) < new Date()
-    )
   }
 
   return (
@@ -258,6 +236,7 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
+            <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
@@ -269,82 +248,49 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Amount</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ${stats.totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </div>
-            <p className="text-xs text-muted-foreground">Across all invoices</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Amount Paid</CardTitle>
+            <CardTitle className="text-sm font-medium">Amount Collected</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
               ${stats.paidAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
-            <p className="text-xs text-muted-foreground">{stats.paid} invoices paid</p>
+            <p className="text-xs text-muted-foreground">
+              of ${stats.totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} total
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Amount</CardTitle>
+            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              ${stats.pendingAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
+            <p className="text-xs text-muted-foreground">
+              ${stats.overdueAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} outstanding
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Collection Rate</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {stats.total > 0 ? Math.round((stats.paid / stats.total) * 100) : 0}%
             </div>
-            <p className="text-xs text-muted-foreground">{stats.sent} invoices sent</p>
+            <p className="text-xs text-muted-foreground">
+              {stats.paid} of {stats.total} invoices paid
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Search and filter invoices</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search by name, email, invoice number, or description..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value)
-                    setCurrentPage(1) // Reset to first page when searching
-                  }}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={statusFilter} onValueChange={(value) => {
-              setStatusFilter(value)
-              setCurrentPage(1) // Reset to first page when filtering
-            }}>
-              <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="sent">Sent</SelectItem>
-                <SelectItem value="paid">Paid</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Invoices Table */}
+      {/* Invoice List */}
       <Card>
         <CardHeader>
           <CardTitle>All Invoices ({filteredInvoices.length})</CardTitle>
@@ -353,244 +299,224 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleSort("created_at")}
-                      className="hover:bg-transparent p-0"
+          <div className="w-full space-y-4">
+            <div className="flex items-center gap-4">
+              <Input
+                placeholder="Search by name, email, invoice #, or team..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value)
+                  setCurrentPage(1)
+                }}
+                className="max-w-sm"
+              />
+              <Select value={statusFilter} onValueChange={(value) => {
+                setStatusFilter(value)
+                setCurrentPage(1)
+              }}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="sent">Sent (Awaiting Payment)</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="unpaid">All Unpaid</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortField} onValueChange={(value) => {
+                handleSort(value as SortField)
+              }}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="created_at">Sort by Date</SelectItem>
+                  <SelectItem value="amount">Sort by Amount</SelectItem>
+                  <SelectItem value="due_date">Sort by Due Date</SelectItem>
+                  <SelectItem value="person">Sort by Recipient</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {paginatedInvoices.length ? (
+              <div className="divide-y rounded-md border">
+                {paginatedInvoices.map((invoice) => {
+                  const overdue = isOverdue(invoice)
+                  const person = invoice.person
+
+                  return (
+                    <div
+                      key={invoice.id}
+                      className={`flex gap-4 px-5 py-4 hover:bg-muted/50 transition-colors ${overdue ? "bg-red-50/40" : ""}`}
                     >
-                      Date <SortIcon field="created_at" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>Invoice #</TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleSort("person")}
-                      className="hover:bg-transparent p-0"
-                    >
-                      Recipient <SortIcon field="person" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleSort("amount")}
-                      className="hover:bg-transparent p-0"
-                    >
-                      Amount <SortIcon field="amount" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleSort("status")}
-                      className="hover:bg-transparent p-0"
-                    >
-                      Status <SortIcon field="status" />
-                    </Button>
-                  </TableHead>
-                  <TableHead>
-                    <Button
-                      variant="ghost"
-                      onClick={() => handleSort("due_date")}
-                      className="hover:bg-transparent p-0"
-                    >
-                      Due Date <SortIcon field="due_date" />
-                    </Button>
-                  </TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginatedInvoices.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                      No invoices found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  paginatedInvoices.map((invoice) => (
-                    <TableRow key={invoice.id}>
-                      <TableCell className="font-medium">
-                        {new Date(invoice.created_at).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                        <div className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(new Date(invoice.created_at), { addSuffix: true })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {invoice.invoice_number || (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {invoice.person ? (
-                          <div>
-                            <div className="font-medium">
-                              {invoice.person.first_name} {invoice.person.last_name}
-                              {invoice.person.dependent && (
-                                <Badge variant="outline" className="ml-2 text-xs">
-                                  Dependent
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              {invoice.person.email}
-                            </div>
+                      <Avatar className="h-9 w-9 shrink-0 mt-0.5">
+                        <AvatarFallback className="text-xs">
+                          {person
+                            ? getInitials(person.first_name, person.last_name)
+                            : "?"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1 space-y-2.5">
+                        {/* Row 1: Recipient + amount */}
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {person ? (
+                              <span className="text-[15px] font-semibold truncate">
+                                {person.first_name} {person.last_name}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">Unknown recipient</span>
+                            )}
+                            {person?.dependent && (
+                              <Badge variant="outline" className="text-[10px]">
+                                Dependent
+                              </Badge>
+                            )}
                             {invoice.roster?.team && (
-                              <div className="text-xs text-muted-foreground">
-                                Team: {invoice.roster.team.name}
-                              </div>
+                              <Badge variant="secondary" className="text-[10px] hidden sm:inline-flex">
+                                {invoice.roster.team.name}
+                              </Badge>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="max-w-xs truncate" title={invoice.description || ""}>
-                          {invoice.description || (
-                            <span className="text-muted-foreground">—</span>
+                          <span className="text-[15px] font-bold tabular-nums shrink-0">
+                            ${invoice.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+
+                        {/* Row 2: Description */}
+                        <p className="text-sm font-medium text-foreground/90 truncate leading-tight">
+                          {invoice.description || <span className="text-muted-foreground italic">No description</span>}
+                        </p>
+
+                        {/* Row 3: Invoice # + due date */}
+                        <div className="flex items-center gap-2">
+                          {invoice.invoice_number && (
+                            <>
+                              <span className="text-[13px] text-muted-foreground/70 font-mono">
+                                #{invoice.invoice_number}
+                              </span>
+                              <span className="text-muted-foreground/30">·</span>
+                            </>
+                          )}
+                          {invoice.due_date && (
+                            <span className={`text-[13px] ${overdue ? "text-red-600 font-medium" : "text-muted-foreground/70"}`}>
+                              Due {new Date(invoice.due_date).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                              {overdue && " — overdue"}
+                            </span>
+                          )}
+                          {person?.email && (
+                            <>
+                              <span className="text-muted-foreground/30">·</span>
+                              <span className="text-[13px] text-muted-foreground/70 truncate hidden md:inline">
+                                {person.email}
+                              </span>
+                            </>
                           )}
                         </div>
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        ${invoice.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                      <TableCell>
-                        {invoice.due_date ? (
-                          <div>
-                            {new Date(invoice.due_date).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                              year: "numeric",
-                            })}
-                            {isOverdue(invoice) && (
-                              <div className="text-xs text-red-600 font-medium">Overdue</div>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {invoice.status === "sent" && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleResendInvoice(invoice.id)}
-                            disabled={resendingInvoiceId === invoice.id}
-                            className={`${
-                              isOverdue(invoice) 
-                                ? "text-red-600 hover:text-red-700 hover:bg-red-50" 
-                                : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            }`}
-                          >
-                            <PaperAirplaneIcon className="h-4 w-4 mr-1" />
-                            {resendingInvoiceId === invoice.id ? "Sending..." : "Resend"}
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between px-2 py-4">
-              <div className="flex-1 text-sm text-muted-foreground">
-                Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, filteredInvoices.length)} of {filteredInvoices.length} results
+                        {/* Row 4: Status + date + actions — visually separated */}
+                        <div className="flex items-center justify-between pt-1 border-t border-border/40">
+                          <div className="flex items-center gap-2">
+                            {getStatusBadge(invoice.status, !!overdue)}
+                            <span className="text-[11px] text-muted-foreground/60">
+                              {new Date(invoice.created_at).toLocaleDateString("en-US", {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                              })}
+                            </span>
+                            <span className="text-muted-foreground/30">·</span>
+                            <span className="text-[11px] text-muted-foreground/60">
+                              {formatDistanceToNow(new Date(invoice.created_at), { addSuffix: true })}
+                            </span>
+                          </div>
+                          {invoice.status === "sent" && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleResendInvoice(invoice.id)}
+                              disabled={resendingInvoiceId === invoice.id}
+                              className={`h-7 text-xs ${
+                                overdue
+                                  ? "text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              }`}
+                            >
+                              {resendingInvoiceId === invoice.id ? (
+                                <>
+                                  <RotateCw className="h-3 w-3 mr-1 animate-spin" />
+                                  Sending...
+                                </>
+                              ) : (
+                                <>
+                                  <Send className="h-3 w-3 mr-1" />
+                                  Resend
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-              <div className="flex items-center space-x-6 lg:space-x-8">
-                <div className="flex items-center space-x-2">
-                  <p className="text-sm font-medium">Rows per page</p>
-                  <Select
-                    value={`${pageSize}`}
-                    onValueChange={(value) => {
-                      setPageSize(Number(value))
-                      setCurrentPage(1)
-                    }}
-                  >
-                    <SelectTrigger className="h-8 w-[70px]">
-                      <SelectValue placeholder={pageSize} />
-                    </SelectTrigger>
-                    <SelectContent side="top">
-                      {[10, 20, 30, 40, 50].map((size) => (
-                        <SelectItem key={size} value={`${size}`}>
-                          {size}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            ) : (
+              <div className="rounded-md border">
+                {invoices.length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-12">
+                    <FileText className="h-12 w-12 text-muted-foreground/50" />
+                    <p className="font-medium">No invoices yet</p>
+                    <p className="text-sm text-muted-foreground">
+                      Create your first invoice to get started
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center py-12">
+                    <p className="text-muted-foreground">No invoices match your filters</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">
+                Showing {((currentPage - 1) * pageSize) + 1} to{" "}
+                {Math.min(currentPage * pageSize, filteredInvoices.length)}{" "}
+                of {filteredInvoices.length} invoice(s)
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => prev - 1)}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <div className="text-sm text-muted-foreground">
+                  Page {currentPage} of {totalPages || 1}
                 </div>
-                <div className="flex w-[100px] items-center justify-center text-sm font-medium">
-                  Page {currentPage} of {totalPages}
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    onClick={() => setCurrentPage(1)}
-                    disabled={currentPage === 1}
-                  >
-                    <span className="sr-only">Go to first page</span>
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                    </svg>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                    disabled={currentPage === 1}
-                  >
-                    <span className="sr-only">Go to previous page</span>
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                    disabled={currentPage === totalPages}
-                  >
-                    <span className="sr-only">Go to next page</span>
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="h-8 w-8 p-0"
-                    onClick={() => setCurrentPage(totalPages)}
-                    disabled={currentPage === totalPages}
-                  >
-                    <span className="sr-only">Go to last page</span>
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-                    </svg>
-                  </Button>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  disabled={currentPage >= totalPages}
+                >
+                  Next
+                </Button>
               </div>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
     </div>
   )
 }
-

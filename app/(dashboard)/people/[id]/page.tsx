@@ -12,10 +12,12 @@ import {
 } from "@/components/ui/card";
 import { fullName } from "@/lib/utils";
 import { toast } from "sonner";
-import { BadgeCheck, Users, Receipt, UserPlus } from "lucide-react";
+import { BadgeCheck, Users, Receipt, UserPlus, Globe } from "lucide-react";
 import LoadingCircle from "@/components/icons/loading-circle";
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { getInitials } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button";
 import PersonSheet from "@/components/modal/person-sheet";
@@ -31,8 +33,21 @@ interface PersonPageProps {
 interface Team {
   id: string
   name: string
+  level?: string
   is_active: boolean
   created_at: string
+  jersey_number?: number
+  position?: string
+  roster_grade?: string
+}
+
+const LEVEL_LABELS: Record<string, string> = {
+  bantam: "Bantam",
+  club: "Club",
+  freshman: "Freshman",
+  sophomore: "Sophomore",
+  jv: "JV",
+  varsity: "Varsity",
 }
 
 interface Payment {
@@ -99,7 +114,6 @@ export default function PersonPage({ params }: PersonPageProps) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
 
-  // Added fetchRoster function
   async function fetchRoster() {
     const { data, error } = await supabase
       .from("rosters")
@@ -108,6 +122,7 @@ export default function PersonPage({ params }: PersonPageProps) {
         teams (
           id,
           name,
+          level,
           is_active,
           created_at
         )
@@ -120,7 +135,13 @@ export default function PersonPage({ params }: PersonPageProps) {
       return;
     }
 
-    setRoster(data.map((entry) => entry.teams));
+    setRoster(data.map((entry) => ({
+      ...entry.teams,
+      jersey_number: entry.jersey_number,
+      position: entry.position,
+      roster_grade: entry.grade,
+      level: entry.teams?.level,
+    })));
   }
 
   // Add this new function to fetch payments
@@ -267,11 +288,10 @@ export default function PersonPage({ params }: PersonPageProps) {
       .single();
 
     if (error) {
-      console.error(error);
       return false;
     }
 
-    return data ? true : false;
+    return !!data;
   }
 
   async function fetchPerson() {
@@ -345,11 +365,27 @@ export default function PersonPage({ params }: PersonPageProps) {
       {/* Header Section */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              {person?.name || fullName(person)}
-            </h1>
-            <p className="text-muted-foreground">{person?.email || "No email on file"}</p>
+          <div className="flex items-center gap-4">
+            <Avatar className="h-16 w-16">
+              <AvatarImage src={person?.photo} alt={person?.name} />
+              <AvatarFallback className="text-lg">
+                {getInitials(person?.first_name, person?.last_name)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-bold tracking-tight">
+                  {person?.name || fullName(person)}
+                </h1>
+                {person?.is_public && (
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                    <Globe className="h-3 w-3 mr-1" />
+                    Public
+                  </Badge>
+                )}
+              </div>
+              <p className="text-muted-foreground">{person?.email || "No email on file"}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <PersonSheet 
@@ -363,7 +399,8 @@ export default function PersonPage({ params }: PersonPageProps) {
             />
             <Button 
               onClick={() => setInvoiceModalOpen(true)}
-              variant="default"
+              variant="outline"
+              size="sm"
             >
               <Receipt className="h-4 w-4 mr-2" />
               Create Invoice
@@ -474,9 +511,21 @@ export default function PersonPage({ params }: PersonPageProps) {
                           )} 
                         />
                         <div>
-                          <div className="font-medium">{team.name}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {team.is_active ? "Active" : "Inactive"}
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{team.name}</span>
+                            {team.level && (
+                              <Badge variant="outline" className="text-xs capitalize">
+                                {LEVEL_LABELS[team.level] || team.level}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            {team.roster_grade && <span>{{ "9": "Freshman", "10": "Sophomore", "11": "Junior", "12": "Senior" }[team.roster_grade] || `Grade ${team.roster_grade}`}</span>}
+                            {team.jersey_number != null && <span>#{team.jersey_number}</span>}
+                            {team.position && <span>{team.position}</span>}
+                            {!team.roster_grade && !team.jersey_number && !team.position && (
+                              <span>{team.is_active ? "Active" : "Inactive"}</span>
+                            )}
                           </div>
                         </div>
                       </div>

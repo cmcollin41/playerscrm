@@ -11,6 +11,7 @@ import {
   CrossCircledIcon,
 } from "@radix-ui/react-icons";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import {
   ColumnDef,
@@ -51,7 +52,9 @@ import { useCallback } from "react";
 export type Team = {
   id: string;
   name: string;
+  level: string;
   is_active: boolean;
+  icon?: string;
   rosters: any;
   staff: {
     people: {
@@ -59,6 +62,15 @@ export type Team = {
     };
   }[];
 };
+
+const LEVEL_LABELS: Record<string, string> = {
+  bantam: "Bantam",
+  club: "Club",
+  freshman: "Freshman",
+  sophomore: "Sophomore",
+  jv: "JV",
+  varsity: "Varsity",
+}
 
 const columns: ColumnDef<Team>[] = [
   {
@@ -85,7 +97,33 @@ const columns: ColumnDef<Team>[] = [
   {
     accessorKey: "name",
     header: "Name",
-    cell: ({ row }) => <div>{row.getValue("name")}</div>,
+    cell: ({ row }) => (
+      <div className="flex items-center gap-3">
+        <Avatar className="h-8 w-8">
+          {row.original.icon && <AvatarImage src={row.original.icon} alt={row.getValue("name") as string} />}
+          <AvatarFallback className="text-xs font-medium">
+            {(row.getValue("name") as string)?.substring(0, 2).toUpperCase() || "T"}
+          </AvatarFallback>
+        </Avatar>
+        <div className="font-medium">{row.getValue("name")}</div>
+      </div>
+    ),
+  },
+  {
+    accessorKey: "level",
+    header: "Level",
+    cell: ({ row }) => {
+      const level = row.getValue("level") as string
+      return (
+        <Badge variant="outline" className="capitalize">
+          {LEVEL_LABELS[level] || level}
+        </Badge>
+      )
+    },
+    filterFn: (row, id, value) => {
+      if (!value || value === "all") return true
+      return row.getValue(id) === value
+    },
   },
   {
     accessorKey: "is_active",
@@ -267,8 +305,8 @@ export function TeamTable({ data, account }: { data: Team[]; account: any }) {
   // const teams = selectedRows.map((row) => row.original);
 
   return (
-    <div className="w-full">
-      <div className="flex items-center gap-2 py-4">
+    <div className="w-full space-y-4">
+      <div className="flex items-center gap-4">
         <Input
           placeholder="Search by name..."
           value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
@@ -336,8 +374,8 @@ export function TeamTable({ data, account }: { data: Team[]; account: any }) {
       </div>
 
       {isAnyRowSelected && (
-        <div className="mb-2 flex justify-between space-x-4 py-2">
-          <div className="flex items-center space-x-2">
+        <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
+          <div className="flex items-center gap-2">
             <SendEmailSheet
               people={primaryContacts}
               account={account}
@@ -399,7 +437,7 @@ export function TeamTable({ data, account }: { data: Team[]; account: any }) {
                   onClick={() => navigateToTeam(row.original.id)}
                   key={row.id}
                   data-state={row.getIsSelected() && "selected"}
-                  className="cursor-pointer hover:bg-gray-50"
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
@@ -424,12 +462,12 @@ export function TeamTable({ data, account }: { data: Team[]; account: any }) {
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="text-muted-foreground flex-1 text-sm">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
           {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
+          {table.getFilteredRowModel().rows.length} row(s) selected
         </div>
-        <div className="space-x-2">
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"

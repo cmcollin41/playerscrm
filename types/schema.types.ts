@@ -26,6 +26,54 @@ export interface People {
   dependent?: boolean;
   aau_number?: string;
   stripe_customer_id?: string;
+  photo?: string;
+  is_public?: boolean;
+  slug?: string;
+  height?: string;
+  weight_lbs?: number;
+  grad_year?: number;
+  hometown?: string;
+  bio?: string;
+  accounts?: Accounts;
+}
+
+export interface Rosters {
+  id: string /* primary key */;
+  created_at?: string;
+  team_id?: string /* foreign key to teams.id */;
+  person_id?: string /* foreign key to people.id */;
+  fee_id?: string /* foreign key to fees.id */;
+  jersey_number?: number;
+  position?: string;
+  grade?: string;
+  teams?: Teams;
+  people?: People;
+}
+
+export interface Teams {
+  id: string /* primary key */;
+  created_at?: string;
+  account_id?: string /* foreign key to accounts.id */;
+  season_id?: string /* foreign key to seasons.id */;
+  name?: string;
+  coach?: string;
+  icon?: string;
+  level: 'bantam' | 'club' | 'freshman' | 'sophomore' | 'jv' | 'varsity';
+  is_public?: boolean;
+  is_active?: boolean;
+  slug?: string;
+  accounts?: Accounts;
+}
+
+export interface Seasons {
+  id: string /* primary key */;
+  created_at?: string;
+  account_id?: string /* foreign key to accounts.id */;
+  year_start: number;
+  year_end: number;
+  slug: string;
+  display_name: string;
+  is_current?: boolean;
   accounts?: Accounts;
 }
 

@@ -21,6 +21,7 @@ module.exports = {
         "accordion-up": "accordion-up 0.2s ease-out",
         blink: 'blink 1.4s infinite both',
         "loading-dots": "rotate 1s linear infinite",
+        shimmer: "shimmer 1.5s infinite",
       },
       keyframes: {
         "accordion-down": {
@@ -30,6 +31,9 @@ module.exports = {
         "accordion-up": {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: 0 },
+        },
+        shimmer: {
+          "100%": { transform: "translateX(100%)" },
         },
       },
     },
