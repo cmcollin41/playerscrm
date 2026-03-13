@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { sendTransactionalEmail } from "@/lib/email-service"
 import { createClient } from "@/lib/supabase/server"
+import Stripe from "stripe"
 
 export const maxDuration = 60
 
@@ -134,13 +135,33 @@ export async function POST(req: Request) {
       )
     }
 
-    // Create invoice payment link
-    const baseUrl =
-      process.env.NODE_ENV === "production"
-        ? "https://app.athletes.app"
-        : "http://localhost:3000"
+    // Retrieve the Stripe hosted invoice URL for payment
+    const stripeInvoiceId = invoice.metadata?.stripe_invoice_id
+    const stripeAccountId = invoice.account?.stripe_id || invoice.metadata?.stripe_account_id
 
-    const paymentLink = `${baseUrl}/pay?invoice_id=${invoice.id}`
+    if (!stripeInvoiceId || !stripeAccountId) {
+      return NextResponse.json(
+        { error: "No Stripe invoice found for this invoice. Cannot generate payment link." },
+        { status: 400 }
+      )
+    }
+
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: "2023-08-16",
+    })
+
+    const stripeInvoice = await stripe.invoices.retrieve(
+      stripeInvoiceId,
+      { stripeAccount: stripeAccountId }
+    )
+
+    const paymentLink = stripeInvoice.hosted_invoice_url
+    if (!paymentLink) {
+      return NextResponse.json(
+        { error: "Stripe invoice has no payment link. It may have been voided or already paid." },
+        { status: 400 }
+      )
+    }
 
     // Format amount
     const formattedAmount = new Intl.NumberFormat("en-US", {
