@@ -13,7 +13,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Plus, X, Trophy } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -41,6 +44,9 @@ interface EditRosterFeeModalProps {
   currentJerseyNumber?: number | null;
   currentPosition?: string | null;
   currentGrade?: string | null;
+  currentBio?: string | null;
+  personId: string;
+  currentHeight?: string | null;
   personName: string;
   onRefresh?: () => void | Promise<void>;
 }
@@ -53,6 +59,9 @@ export default function EditRosterFeeModal({
   currentJerseyNumber,
   currentPosition,
   currentGrade,
+  currentBio,
+  personId,
+  currentHeight,
   personName,
   onRefresh,
 }: EditRosterFeeModalProps) {
@@ -63,6 +72,10 @@ export default function EditRosterFeeModal({
   const [jerseyNumber, setJerseyNumber] = useState<string>("");
   const [position, setPosition] = useState<string>("");
   const [grade, setGrade] = useState<string>("");
+  const [bio, setBio] = useState<string>("");
+  const [height, setHeight] = useState<string>("");
+  const [awards, setAwards] = useState<{ id: string; title: string }[]>([]);
+  const [newAwardTitle, setNewAwardTitle] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -88,8 +101,18 @@ export default function EditRosterFeeModal({
       setJerseyNumber(currentJerseyNumber != null ? String(currentJerseyNumber) : "");
       setPosition(currentPosition || "");
       setGrade(currentGrade || "");
+      setBio(currentBio || "");
+      setHeight(currentHeight || "");
+
+      if (personId) {
+        supabase
+          .from("person_awards")
+          .select("id, title")
+          .eq("person_id", personId)
+          .then(({ data }) => setAwards(data ?? []));
+      }
     }
-  }, [open, currentFeeId, currentJerseyNumber, currentPosition, currentGrade, supabase]);
+  }, [open, currentFeeId, currentJerseyNumber, currentPosition, currentGrade, currentBio, currentHeight, personId, supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,6 +130,8 @@ export default function EditRosterFeeModal({
       updateData.jersey_number = jerseyNumber ? Number(jerseyNumber) : null;
       updateData.position = position && position !== "none_clear" ? position : null;
       updateData.grade = grade && grade !== "none_clear" ? grade : null;
+      updateData.bio = bio || null;
+      updateData.height = height || null;
 
       const { error } = await supabase
         .from("rosters")
@@ -183,6 +208,83 @@ export default function EditRosterFeeModal({
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="height">Height</Label>
+            <Input
+              id="height"
+              placeholder={`e.g. 6'2"`}
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Awards</Label>
+            {awards.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {awards.map((award) => (
+                  <Badge key={award.id} variant="secondary" className="gap-1 pr-1">
+                    <Trophy className="h-3 w-3 text-yellow-600" />
+                    {award.title}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await supabase.from("person_awards").delete().eq("id", award.id);
+                        setAwards((prev) => prev.filter((a) => a.id !== award.id));
+                      }}
+                      className="ml-0.5 rounded-full p-0.5 hover:bg-red-100 hover:text-red-600"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Award title (e.g. All-State)"
+                value={newAwardTitle}
+                onChange={(e) => setNewAwardTitle(e.target.value)}
+                className="flex-1"
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (!newAwardTitle.trim() || !personId) return;
+                    const { data, error } = await supabase
+                      .from("person_awards")
+                      .insert({ person_id: personId, title: newAwardTitle.trim() })
+                      .select("id, title")
+                      .single();
+                    if (!error && data) {
+                      setAwards((prev) => [data, ...prev]);
+                      setNewAwardTitle("");
+                    }
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!newAwardTitle.trim()}
+                onClick={async () => {
+                  if (!newAwardTitle.trim() || !personId) return;
+                  const { data, error } = await supabase
+                    .from("person_awards")
+                    .insert({ person_id: personId, title: newAwardTitle.trim() })
+                    .select("id, title")
+                    .single();
+                  if (!error && data) {
+                    setAwards((prev) => [data, ...prev]);
+                    setNewAwardTitle("");
+                  }
+                }}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="fee">Fee</Label>
             <Select
               value={selectedFeeId || "none"}
@@ -200,6 +302,18 @@ export default function EditRosterFeeModal({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bio">Season Bio</Label>
+            <Textarea
+              id="bio"
+              placeholder="Write a season-specific bio for this player..."
+              className="resize-none"
+              rows={3}
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+            />
           </div>
 
           <div className="flex justify-end space-x-2">

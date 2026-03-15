@@ -120,11 +120,12 @@ export type Person = {
   position?: string;
   photo?: string;
   roster_grade?: string;
+  height?: string;
 };
 
 const createColumns = (
   team: any, 
-  onEditRoster: (roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null }, personName: string) => void,
+  onEditRoster: (roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null; bio: string | null; personId: string; height: string | null }, personName: string) => void,
   onResendInvoice: (invoiceId: string) => void,
   resendingInvoiceId: string | null
 ): ColumnDef<Person>[] => [
@@ -323,6 +324,9 @@ const createColumns = (
               jerseyNumber: roster?.jersey_number ?? null,
               position: roster?.position ?? null,
               grade: roster?.grade ?? null,
+              bio: roster?.bio ?? null,
+              personId: person.id,
+              height: roster?.height ?? null,
             }, person.name)}
             className="h-8 px-3 text-xs"
             title="Edit Roster Entry"
@@ -407,10 +411,13 @@ export function TeamTable({
   const [editingJerseyNumber, setEditingJerseyNumber] = useState<number | null>(null);
   const [editingPosition, setEditingPosition] = useState<string | null>(null);
   const [editingGrade, setEditingGrade] = useState<string | null>(null);
+  const [editingBio, setEditingBio] = useState<string | null>(null);
+  const [editingPersonId, setEditingPersonId] = useState<string>("");
+  const [editingHeight, setEditingHeight] = useState<string | null>(null);
   const [editingPersonName, setEditingPersonName] = useState<string>("");
 
   const handleEditRoster = (
-    roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null },
+    roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null; bio: string | null; personId: string; height: string | null },
     personName: string
   ) => {
     setEditingRosterId(roster.id);
@@ -418,6 +425,9 @@ export function TeamTable({
     setEditingJerseyNumber(roster.jerseyNumber);
     setEditingPosition(roster.position);
     setEditingGrade(roster.grade);
+    setEditingBio(roster.bio);
+    setEditingPersonId(roster.personId);
+    setEditingHeight(roster.height);
     setEditingPersonName(personName);
     setEditModalOpen(true);
   };
@@ -521,6 +531,9 @@ export function TeamTable({
         currentJerseyNumber={editingJerseyNumber}
         currentPosition={editingPosition}
         currentGrade={editingGrade}
+        currentBio={editingBio}
+        personId={editingPersonId}
+        currentHeight={editingHeight}
         personName={editingPersonName}
         onRefresh={onRefresh}
       />

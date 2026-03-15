@@ -13,8 +13,10 @@ import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, DollarSign, CheckCircle, AlertCircle, X } from "lucide-react";
+import { Users, DollarSign, CheckCircle, AlertCircle, X, Plus, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -101,7 +103,8 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
           ), 
           fees(*, payments(*))
         ),
-        staff(*, people(*))
+        staff(*, people(*)),
+        team_awards(*)
       `)
       .eq("id", id)
       .single();
@@ -126,6 +129,39 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       return
     }
     toast.success("Staff member removed")
+    fetchTeam()
+  }
+
+  const [newAwardTitle, setNewAwardTitle] = useState("")
+  const [newAwardYear, setNewAwardYear] = useState("")
+  const [isAddingAward, setIsAddingAward] = useState(false)
+
+  const addAward = async () => {
+    if (!newAwardTitle.trim()) return
+    setIsAddingAward(true)
+    const { error } = await supabase.from("team_awards").insert({
+      team_id: id,
+      title: newAwardTitle.trim(),
+      year: newAwardYear ? Number(newAwardYear) : null,
+    })
+    if (error) {
+      toast.error("Failed to add award")
+    } else {
+      toast.success("Award added")
+      setNewAwardTitle("")
+      setNewAwardYear("")
+      fetchTeam()
+    }
+    setIsAddingAward(false)
+  }
+
+  const removeAward = async (awardId: string) => {
+    const { error } = await supabase.from("team_awards").delete().eq("id", awardId)
+    if (error) {
+      toast.error("Failed to remove award")
+      return
+    }
+    toast.success("Award removed")
     fetchTeam()
   }
 
@@ -399,6 +435,78 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
           </CardContent>
         </Card>
       )}
+
+      {/* Awards Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Trophy className="h-4 w-4" />
+            Awards
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {team?.team_awards && team.team_awards.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {team.team_awards
+                .sort((a: any, b: any) => (b.year ?? 0) - (a.year ?? 0))
+                .map((award: any) => (
+                  <div
+                    key={award.id}
+                    className="group flex items-center gap-1.5 rounded-full border bg-yellow-50 px-3 py-1.5 text-sm"
+                  >
+                    <Trophy className="h-3.5 w-3.5 text-yellow-600" />
+                    <span className="font-medium">{award.title}</span>
+                    {award.year && (
+                      <span className="text-muted-foreground">({award.year})</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeAward(award.id)}
+                      className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-red-100 hover:text-red-600 group-hover:opacity-100"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Award title (e.g. State Champions)"
+              value={newAwardTitle}
+              onChange={(e) => setNewAwardTitle(e.target.value)}
+              className="flex-1"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  addAward()
+                }
+              }}
+            />
+            <Input
+              placeholder="Year"
+              type="number"
+              value={newAwardYear}
+              onChange={(e) => setNewAwardYear(e.target.value)}
+              className="w-24"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  addAward()
+                }
+              }}
+            />
+            <Button
+              size="sm"
+              onClick={addAward}
+              disabled={!newAwardTitle.trim() || isAddingAward}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Roster Table */}
       <Card>

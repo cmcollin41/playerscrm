@@ -35,6 +35,7 @@ export interface People {
   hometown?: string;
   bio?: string;
   accounts?: Accounts;
+  person_awards?: PersonAwards[];
 }
 
 export interface Rosters {
@@ -46,6 +47,8 @@ export interface Rosters {
   jersey_number?: number;
   position?: string;
   grade?: string;
+  bio?: string;
+  height?: string;
   teams?: Teams;
   people?: People;
 }
@@ -63,6 +66,23 @@ export interface Teams {
   is_active?: boolean;
   slug?: string;
   accounts?: Accounts;
+  team_awards?: TeamAwards[];
+}
+
+export interface TeamAwards {
+  id: string /* primary key */;
+  team_id: string /* foreign key to teams.id */;
+  title: string;
+  year?: number;
+  created_at?: string;
+}
+
+export interface PersonAwards {
+  id: string /* primary key */;
+  person_id: string /* foreign key to people.id */;
+  title: string;
+  year?: number;
+  created_at?: string;
 }
 
 export interface Seasons {

@@ -44,6 +44,7 @@ import {
   FormDescription,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { format } from "date-fns"
@@ -85,6 +86,7 @@ const formSchema = z.object({
   tags: z.array(z.string()).default([]),
   photo: z.string().optional(),
   isPublic: z.boolean().default(false),
+  bio: z.string().optional(),
   relationships: z.array(z.object({
     relationshipId: z.string().optional(),
     id: z.string().min(1, "Person ID is required"),
@@ -196,6 +198,7 @@ export default function PersonSheet({
       tags: person?.tags || [],
       photo: person?.photo || "",
       isPublic: person?.is_public || false,
+      bio: person?.bio || "",
       relationships: deduplicateRelationships(fromRelationships || []).map((rel) => ({
         relationshipId: rel.id,
         id: rel.from?.id,
@@ -235,6 +238,7 @@ export default function PersonSheet({
         tags: [],
         photo: "",
         isPublic: false,
+        bio: "",
         relationships: []
       });
       setPhotoPreview(null);
@@ -252,6 +256,7 @@ export default function PersonSheet({
         tags: person.tags || [],
         photo: person.photo || "",
         isPublic: person.is_public || false,
+        bio: person.bio || "",
         relationships: deduplicateRelationships(fromRelationships || []).map((rel: any) => ({
           relationshipId: rel.id,
           id: rel.from?.id,
@@ -337,6 +342,7 @@ export default function PersonSheet({
         dependent: values.dependent,
         photo: values.photo || null,
         is_public: values.isPublic,
+        bio: values.bio || null,
       };
 
       if (!account?.id) {
@@ -810,6 +816,25 @@ export default function PersonSheet({
                             onCheckedChange={field.onChange}
                           />
                         </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="bio"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Bio</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            placeholder="Write a short bio..."
+                            className="resize-none"
+                            rows={3}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
                       </FormItem>
                     )}
                   />

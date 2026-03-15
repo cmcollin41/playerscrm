@@ -12,9 +12,11 @@ interface PublicPlayer {
   grad_year: number | null
   hometown: string | null
   bio: string | null
+  season_bio: string | null
   jersey_number: number | null
   position: string | null
   grade: string | null
+  awards: PublicAward[]
 }
 
 interface PublicStaff {
@@ -25,12 +27,18 @@ interface PublicStaff {
   photo: string | null
 }
 
+interface PublicAward {
+  title: string
+  year?: number | null
+}
+
 interface PublicTeam {
   id: string
   name: string | null
   level: string
   icon: string | null
   slug: string | null
+  awards: PublicAward[]
   staff: PublicStaff[]
   players: PublicPlayer[]
 }
@@ -57,6 +65,10 @@ export async function GET(request: NextRequest) {
         level,
         icon,
         slug,
+        team_awards(
+          title,
+          year
+        ),
         staff(
           id,
           people(
@@ -71,18 +83,22 @@ export async function GET(request: NextRequest) {
           jersey_number,
           position,
           grade,
+          bio,
+          height,
           people(
             id,
             first_name,
             last_name,
             name,
             photo,
-            height,
             weight_lbs,
             grad_year,
             hometown,
             bio,
-            is_public
+            is_public,
+            person_awards(
+              title
+            )
           )
         )
       `)
@@ -105,6 +121,10 @@ export async function GET(request: NextRequest) {
       level: team.level,
       icon: team.icon,
       slug: team.slug,
+      awards: (team.team_awards ?? []).map((a: any) => ({
+        title: a.title,
+        year: a.year ?? null,
+      })),
       staff: (team.staff ?? []).map((s: any) => ({
         id: s.people?.id,
         first_name: s.people?.first_name ?? null,
@@ -120,14 +140,18 @@ export async function GET(request: NextRequest) {
           last_name: r.people?.last_name ?? null,
           name: r.people?.name ?? null,
           photo: r.people?.photo ?? null,
-          height: r.people?.height ?? null,
+          height: r.height ?? null,
           weight_lbs: r.people?.weight_lbs ?? null,
           grad_year: r.people?.grad_year ?? null,
           hometown: r.people?.hometown ?? null,
           bio: r.people?.bio ?? null,
+          season_bio: r.bio ?? null,
           jersey_number: r.jersey_number ?? null,
           position: r.position ?? null,
           grade: r.grade ?? null,
+          awards: (r.people?.person_awards ?? []).map((a: any) => ({
+            title: a.title,
+          })),
         })),
     }))
 

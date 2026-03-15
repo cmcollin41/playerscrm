@@ -37,7 +37,8 @@ import {
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Check, ChevronsUpDown, Plus, X, Trophy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   Dialog,
@@ -62,6 +63,7 @@ const formSchema = z.object({
   jersey_number: z.coerce.number().int().min(0).max(99).optional(),
   position: z.string().optional(),
   grade: z.string().optional(),
+  height: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -97,6 +99,8 @@ export function AddToRosterModal({
   const [comboboxOpen, setComboboxOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [awards, setAwards] = useState<{ id: string; title: string }[]>([])
+  const [newAwardTitle, setNewAwardTitle] = useState("")
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -129,7 +133,20 @@ export function AddToRosterModal({
     }
   }, [supabase, accountId, dialogOpen])
 
-  const selectedPerson = people.find((p) => p.id === form.watch("person"))
+  const selectedPersonId = form.watch("person")
+  const selectedPerson = people.find((p) => p.id === selectedPersonId)
+
+  useEffect(() => {
+    if (!selectedPersonId) return
+    const fetchPersonDetails = async () => {
+      const { data: personAwards } = await supabase
+        .from("person_awards")
+        .select("id, title")
+        .eq("person_id", selectedPersonId)
+      setAwards(personAwards ?? [])
+    }
+    fetchPersonDetails()
+  }, [selectedPersonId, supabase])
 
   const filteredPeople = people.filter((person) => {
     const name = person.name || `${person.first_name} ${person.last_name}`
@@ -159,6 +176,10 @@ export function AddToRosterModal({
 
       if (data.grade) {
         rosterData.grade = data.grade
+      }
+
+      if (data.height) {
+        rosterData.height = data.height
       }
 
       const { error } = await supabase.from("rosters").insert([rosterData])
@@ -287,7 +308,7 @@ export function AddToRosterModal({
               )}
             />
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <FormField
                 control={form.control}
                 name="jersey_number"
@@ -360,7 +381,95 @@ export function AddToRosterModal({
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="height"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Height</FormLabel>
+                    <Input
+                      placeholder={`e.g. 6'2"`}
+                      {...field}
+                      value={field.value ?? ""}
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
+
+            {selectedPersonId && (
+              <div className="space-y-2">
+                <FormLabel>Awards</FormLabel>
+                {awards.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {awards.map((award) => (
+                      <Badge key={award.id} variant="secondary" className="gap-1 pr-1">
+                        <Trophy className="h-3 w-3 text-yellow-600" />
+                        {award.title}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await supabase.from("person_awards").delete().eq("id", award.id)
+                            setAwards((prev) => prev.filter((a) => a.id !== award.id))
+                          }}
+                          className="ml-0.5 rounded-full p-0.5 hover:bg-red-100 hover:text-red-600"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Award title (e.g. All-State)"
+                    value={newAwardTitle}
+                    onChange={(e) => setNewAwardTitle(e.target.value)}
+                    className="flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        if (!newAwardTitle.trim()) return
+                        const addAward = async () => {
+                          const { data, error } = await supabase
+                            .from("person_awards")
+                            .insert({ person_id: selectedPersonId, title: newAwardTitle.trim() })
+                            .select("id, title")
+                            .single()
+                          if (!error && data) {
+                            setAwards((prev) => [data, ...prev])
+                            setNewAwardTitle("")
+                          }
+                        }
+                        addAward()
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={!newAwardTitle.trim()}
+                    onClick={async () => {
+                      if (!newAwardTitle.trim()) return
+                      const { data, error } = await supabase
+                        .from("person_awards")
+                        .insert({ person_id: selectedPersonId, title: newAwardTitle.trim() })
+                        .select("id, title")
+                        .single()
+                      if (!error && data) {
+                        setAwards((prev) => [data, ...prev])
+                        setNewAwardTitle("")
+                      }
+                    }}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <FormField
               control={form.control}
