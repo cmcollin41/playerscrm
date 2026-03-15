@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
   DialogContent,
@@ -435,104 +436,108 @@ export default function ListDetailClient({
 
       {/* New Broadcast Dialog */}
       <Dialog open={showBroadcastForm} onOpenChange={setShowBroadcastForm}>
-        <DialogContent className="sm:max-w-[550px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[550px] max-h-[85vh] h-[85vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
             <DialogTitle>New Broadcast</DialogTitle>
             <DialogDescription>
               Send an email to all {list.list_people.length} members of {list.name}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateBroadcast} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="bc-sender">From *</Label>
-                <Select value={selectedSender} onValueChange={setSelectedSender}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a sender" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {senders.map((s) => (
-                      <SelectItem key={s.id} value={`${s.name} <${s.email}>`}>
-                        {s.name} &lt;{s.email}&gt;
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {senders.length === 0 && (
-                  <p className="text-xs text-red-600">
-                    No verified senders. Add one in Settings first.
+          <form onSubmit={handleCreateBroadcast} className="flex flex-col flex-1 min-h-0">
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="space-y-4 px-6 py-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="bc-sender">From *</Label>
+                    <Select value={selectedSender} onValueChange={setSelectedSender}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a sender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {senders.map((s) => (
+                          <SelectItem key={s.id} value={`${s.name} <${s.email}>`}>
+                            {s.name} &lt;{s.email}&gt;
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {senders.length === 0 && (
+                      <p className="text-xs text-red-600">
+                        No verified senders. Add one in Settings first.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="bc-name">Broadcast Name</Label>
+                    <Input
+                      id="bc-name"
+                      placeholder="Internal name (optional)"
+                      value={broadcastName}
+                      onChange={(e) => setBroadcastName(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bc-subject">Subject *</Label>
+                  <Input
+                    id="bc-subject"
+                    placeholder="Email subject line"
+                    value={broadcastSubject}
+                    onChange={(e) => setBroadcastSubject(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="bc-content">Email Content *</Label>
+                  <Textarea
+                    id="bc-content"
+                    placeholder="Just type your email here. Line breaks and paragraphs are preserved automatically."
+                    value={broadcastContent}
+                    onChange={(e) => setBroadcastContent(e.target.value)}
+                    rows={8}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Personalize with {"{{{FIRST_NAME|there}}}"}, {"{{{LAST_NAME}}}"}, or {"{{{EMAIL}}}"}.
                   </p>
-                )}
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="bc-name">Broadcast Name</Label>
-                <Input
-                  id="bc-name"
-                  placeholder="Internal name (optional)"
-                  value={broadcastName}
-                  onChange={(e) => setBroadcastName(e.target.value)}
+            </ScrollArea>
+            <div className="shrink-0 flex items-center justify-between border-t px-6 py-4">
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="bc-send-now"
+                  checked={sendNow}
+                  onCheckedChange={setSendNow}
                 />
+                <Label htmlFor="bc-send-now" className="cursor-pointer text-sm">
+                  Send now
+                </Label>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="bc-subject">Subject *</Label>
-              <Input
-                id="bc-subject"
-                placeholder="Email subject line"
-                value={broadcastSubject}
-                onChange={(e) => setBroadcastSubject(e.target.value)}
-                required
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="bc-content">Email Content *</Label>
-              <Textarea
-                id="bc-content"
-                placeholder="Just type your email here. Line breaks and paragraphs are preserved automatically."
-                value={broadcastContent}
-                onChange={(e) => setBroadcastContent(e.target.value)}
-                rows={8}
-                required
-              />
-              <p className="text-xs text-muted-foreground">
-                Personalize with {"{{{FIRST_NAME|there}}}"}, {"{{{LAST_NAME}}}"}, or {"{{{EMAIL}}}"}.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Switch
-                id="bc-send-now"
-                checked={sendNow}
-                onCheckedChange={setSendNow}
-              />
-              <Label htmlFor="bc-send-now" className="cursor-pointer">
-                Send immediately
-              </Label>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowBroadcastForm(false)}
-                disabled={broadcastLoading}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                disabled={broadcastLoading || !selectedSender || !broadcastSubject || !broadcastContent}
-              >
-                {broadcastLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
-                )}
-                {sendNow ? "Send Broadcast" : "Save as Draft"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowBroadcastForm(false)}
+                  disabled={broadcastLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={broadcastLoading || !selectedSender || !broadcastSubject || !broadcastContent}
+                >
+                  {broadcastLoading ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="mr-2 h-4 w-4" />
+                  )}
+                  {sendNow ? "Send Broadcast" : "Save as Draft"}
+                </Button>
+              </div>
             </div>
           </form>
         </DialogContent>

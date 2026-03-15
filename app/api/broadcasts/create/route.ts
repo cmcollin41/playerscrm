@@ -72,7 +72,7 @@ export async function POST(req: Request) {
     const unsubscribeFooter = `
       <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;text-align:center;">
         <p style="font-size:12px;color:#737373;margin:0;">
-          You're receiving this because you're on the <strong>${list.name}</strong> list.
+          You're receiving this because you're on Provo Basketball's <strong>${list.name}</strong> list.
         </p>
         <p style="font-size:12px;color:#737373;margin:4px 0 0;">
           <a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#737373;text-decoration:underline;">Unsubscribe</a> from this list.

@@ -31,6 +31,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
 import { 
@@ -372,124 +374,124 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
               New Broadcast
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <form onSubmit={handleCreateBroadcast}>
-              <DialogHeader>
-                <DialogTitle>Create New Broadcast</DialogTitle>
-                <DialogDescription>
-                  Compose and send a newsletter to one of your lists
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label htmlFor="list">Select List</Label>
-                  <Select value={selectedListId} onValueChange={setSelectedListId} required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a list to send to" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {syncedLists.map((list) => (
-                        <SelectItem key={list.id} value={list.id}>
-                          {list.name} ({list.list_people[0]?.count || 0} members)
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {syncedLists.length === 0 && (
-                    <p className="text-sm text-red-600">
-                      No synced lists available. Please sync a list first.
+          <DialogContent className="max-w-2xl max-h-[85vh] h-[85vh] flex flex-col p-0 gap-0">
+            <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
+              <DialogTitle>Create New Broadcast</DialogTitle>
+              <DialogDescription>
+                Compose and send a newsletter to one of your lists
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleCreateBroadcast} className="flex flex-col flex-1 min-h-0">
+              <ScrollArea className="flex-1 min-h-0">
+                <div className="space-y-4 px-6 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="list">Select List</Label>
+                    <Select value={selectedListId} onValueChange={setSelectedListId} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a list to send to" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {syncedLists.map((list) => (
+                          <SelectItem key={list.id} value={list.id}>
+                            {list.name} ({list.list_people[0]?.count || 0} members)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {syncedLists.length === 0 && (
+                      <p className="text-sm text-red-600">
+                        No synced lists available. Please sync a list first.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="sender">From</Label>
+                    <Select value={selectedSender} onValueChange={setSelectedSender} required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a sender" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {senders.map((s) => (
+                          <SelectItem key={s.id} value={`${s.name} <${s.email}>`}>
+                            {s.name} &lt;{s.email}&gt;
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {senders.length === 0 && (
+                      <p className="text-sm text-red-600">
+                        No senders configured. Add a verified sender in Settings first.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Broadcast Name</Label>
+                    <Input
+                      id="name"
+                      placeholder="e.g., Weekly Update - Nov 5"
+                      value={broadcastName}
+                      onChange={(e) => setBroadcastName(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Internal name for tracking (not shown to recipients)
                     </p>
-                  )}
-                </div>
+                  </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="sender">From</Label>
-                  <Select value={selectedSender} onValueChange={setSelectedSender} required>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Choose a sender" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {senders.map((s) => (
-                        <SelectItem key={s.id} value={`${s.name} <${s.email}>`}>
-                          {s.name} &lt;{s.email}&gt;
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {senders.length === 0 && (
-                    <p className="text-sm text-red-600">
-                      No senders configured. Add a verified sender in Settings first.
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Email Subject</Label>
+                    <Input
+                      id="subject"
+                      placeholder="e.g., Important Updates from Coach"
+                      value={broadcastSubject}
+                      onChange={(e) => setBroadcastSubject(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="content">Email Content</Label>
+                    <Textarea
+                      id="content"
+                      placeholder="Just type your email here. Line breaks and paragraphs are preserved automatically."
+                      value={broadcastContent}
+                      onChange={(e) => setBroadcastContent(e.target.value)}
+                      rows={12}
+                      required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Personalize with {"{{{FIRST_NAME|there}}}"}, {"{{{LAST_NAME}}}"}, or {"{{{EMAIL}}}"}.
                     </p>
-                  )}
+                  </div>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="name">Broadcast Name</Label>
-                  <Input
-                    id="name"
-                    placeholder="e.g., Weekly Update - Nov 5"
-                    value={broadcastName}
-                    onChange={(e) => setBroadcastName(e.target.value)}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Internal name for tracking (not shown to recipients)
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="subject">Email Subject</Label>
-                  <Input
-                    id="subject"
-                    placeholder="e.g., Important Updates from Coach"
-                    value={broadcastSubject}
-                    onChange={(e) => setBroadcastSubject(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="content">Email Content</Label>
-                  <Textarea
-                    id="content"
-                    placeholder="Just type your email here. Line breaks and paragraphs are preserved automatically."
-                    value={broadcastContent}
-                    onChange={(e) => setBroadcastContent(e.target.value)}
-                    rows={12}
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Use {"{{{FIRST_NAME|there}}}"}, {"{{{LAST_NAME}}}"}, and {"{{{RESEND_UNSUBSCRIBE_URL}}}"} for personalization. Triple braces with optional defaults.
-                  </p>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
+              </ScrollArea>
+              <div className="shrink-0 flex items-center justify-between border-t px-6 py-4">
+                <div className="flex items-center gap-2">
+                  <Switch
                     id="sendNow"
                     checked={sendNow}
-                    onChange={(e) => setSendNow(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300"
-                    aria-label="Send immediately"
+                    onCheckedChange={setSendNow}
                   />
-                  <Label htmlFor="sendNow" className="cursor-pointer">
-                    Send immediately (uncheck to save as draft)
+                  <Label htmlFor="sendNow" className="cursor-pointer text-sm">
+                    Send now
                   </Label>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCreateModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={createLoading || !selectedListId || !selectedSender}>
+                    {createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {sendNow ? "Send Broadcast" : "Save as Draft"}
+                  </Button>
+                </div>
               </div>
-              <DialogFooter>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setCreateModalOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createLoading || !selectedListId || !selectedSender}>
-                  {createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {sendNow ? "Create & Send" : "Save as Draft"}
-                </Button>
-              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>
