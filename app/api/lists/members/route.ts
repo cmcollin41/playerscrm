@@ -9,26 +9,74 @@ import resend from "@/lib/resend"
 
 export const maxDuration = 60
 
+async function getAuthenticatedProfile(supabase: any) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) return null
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("account_id")
+    .eq("id", user.id)
+    .single()
+
+  return profile
+}
+
+async function ensureSegment(supabase: any, list: any) {
+  if (list.resend_segment_id) return list.resend_segment_id
+
+  const segmentResult = await createResendSegment(list.name)
+  if (segmentResult.success && segmentResult.data) {
+    const segmentId = segmentResult.data.id
+    await supabase
+      .from("lists")
+      .update({ resend_segment_id: segmentId })
+      .eq("id", list.id)
+    return segmentId
+  }
+  return null
+}
+
+async function syncContactToResend(
+  supabase: any,
+  person: { id: string; email: string; first_name?: string; last_name?: string },
+  segmentId: string,
+  listPersonId: string
+) {
+  if (!person.email || !segmentId) return false
+
+  const contactResult = await syncPersonToResend(person, segmentId)
+
+  if (contactResult.success && contactResult.data?.id) {
+    await supabase
+      .from("list_people")
+      .update({ resend_contact_id: contactResult.data.id })
+      .eq("id", listPersonId)
+    return true
+  }
+
+  const addResult = await addContactToSegment(person.email, segmentId)
+  if (addResult.success) {
+    await supabase
+      .from("list_people")
+      .update({ resend_contact_id: person.email })
+      .eq("id", listPersonId)
+    return true
+  }
+
+  return false
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient()
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("account_id")
-      .eq("id", user.id)
-      .single()
+    const profile = await getAuthenticatedProfile(supabase)
 
     if (!profile?.account_id) {
-      return NextResponse.json({ error: "No account found" }, { status: 404 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { listId, personIds } = await req.json()
@@ -48,17 +96,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "List not found" }, { status: 404 })
     }
 
-    let segmentId = list.resend_segment_id
-    if (!segmentId) {
-      const segmentResult = await createResendSegment(list.name)
-      if (segmentResult.success && segmentResult.data) {
-        segmentId = segmentResult.data.id
-        await supabase
-          .from("lists")
-          .update({ resend_segment_id: segmentId })
-          .eq("id", listId)
-      }
-    }
+    const segmentId = await ensureSegment(supabase, list)
 
     const { data: people } = await supabase
       .from("people")
@@ -80,6 +118,18 @@ export async function POST(req: Request) {
 
       if (insertError) {
         if (insertError.code === "23505") {
+          // Already in list — still sync to Resend if not yet synced
+          const { data: existingLp } = await supabase
+            .from("list_people")
+            .select("id, resend_contact_id")
+            .eq("list_id", listId)
+            .eq("person_id", person.id)
+            .single()
+
+          if (existingLp && !existingLp.resend_contact_id && segmentId) {
+            await syncContactToResend(supabase, person, segmentId, existingLp.id)
+          }
+
           results.push({ personId: person.id, status: "already_exists" })
         } else {
           results.push({ personId: person.id, status: "error", error: insertError.message })
@@ -87,23 +137,8 @@ export async function POST(req: Request) {
         continue
       }
 
-      if (segmentId && person.email) {
-        const contactResult = await syncPersonToResend(person, segmentId)
-
-        if (contactResult.success && contactResult.data?.id) {
-          await supabase
-            .from("list_people")
-            .update({ resend_contact_id: contactResult.data.id })
-            .eq("id", lp.id)
-        } else {
-          const addResult = await addContactToSegment(person.email, segmentId)
-          if (addResult.success) {
-            await supabase
-              .from("list_people")
-              .update({ resend_contact_id: person.email })
-              .eq("id", lp.id)
-          }
-        }
+      if (segmentId) {
+        await syncContactToResend(supabase, person, segmentId, lp.id)
       }
 
       results.push({ personId: person.id, status: "added" })
@@ -120,26 +155,67 @@ export async function POST(req: Request) {
   }
 }
 
-export async function DELETE(req: Request) {
+/**
+ * PATCH — Retry Resend sync for an existing list member
+ */
+export async function PATCH(req: Request) {
   try {
     const supabase = await createClient()
+    const profile = await getAuthenticatedProfile(supabase)
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
+    if (!profile?.account_id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("account_id")
-      .eq("id", user.id)
+    const { listPersonId } = await req.json()
+
+    if (!listPersonId) {
+      return NextResponse.json({ error: "listPersonId is required" }, { status: 400 })
+    }
+
+    const { data: lp } = await supabase
+      .from("list_people")
+      .select("*, people(id, first_name, last_name, email), list:lists(id, name, resend_segment_id, account_id)")
+      .eq("id", listPersonId)
       .single()
 
+    if (!lp || (lp as any).list?.account_id !== profile.account_id) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+
+    const list = lp.list as any
+    const person = lp.people as any
+
+    if (!person?.email) {
+      return NextResponse.json({ error: "Person has no email address" }, { status: 400 })
+    }
+
+    const segmentId = await ensureSegment(supabase, list)
+
+    if (!segmentId) {
+      return NextResponse.json({ error: "Failed to create Resend segment" }, { status: 500 })
+    }
+
+    const synced = await syncContactToResend(supabase, person, segmentId, listPersonId)
+
+    if (!synced) {
+      return NextResponse.json({ error: "Failed to sync contact to Resend" }, { status: 500 })
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (error: any) {
+    console.error("Error syncing list member:", error)
+    return NextResponse.json({ error: error.message || "An error occurred" }, { status: 500 })
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const supabase = await createClient()
+    const profile = await getAuthenticatedProfile(supabase)
+
     if (!profile?.account_id) {
-      return NextResponse.json({ error: "No account found" }, { status: 404 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { listPersonId, email } = await req.json()
@@ -177,7 +253,7 @@ export async function DELETE(req: Request) {
           segmentId,
         })
       } catch {
-        // Non-critical — contact may not exist in Resend
+        // Non-critical
       }
     }
 

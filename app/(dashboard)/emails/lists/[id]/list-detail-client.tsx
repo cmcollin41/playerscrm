@@ -228,13 +228,13 @@ export default function ListDetailClient({
     ? Math.round((broadcastStats.totalClicked / broadcastStats.totalSent) * 100)
     : 0
 
-  const handleSyncMember = async (listPersonId: string, personId: string) => {
+  const handleSyncMember = async (listPersonId: string) => {
     setSyncingId(listPersonId)
     try {
       const response = await fetch("/api/lists/members", {
-        method: "POST",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listId: list.id, personIds: [personId] }),
+        body: JSON.stringify({ listPersonId }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Failed to sync")
@@ -737,7 +737,7 @@ export default function ListDetailClient({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleSyncMember(lp.id, lp.people.id)}
+                              onClick={() => handleSyncMember(lp.id)}
                               disabled={syncingId === lp.id}
                               className="h-7 gap-1.5 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-50 px-2"
                             >
