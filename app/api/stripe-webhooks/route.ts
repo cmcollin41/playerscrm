@@ -79,46 +79,79 @@ const updateSupabase = async (event: any, supabase: any) => {
   if (event.type.startsWith('invoice.')) {
     const stripeInvoice = event.data.object;
     const status = getStatusFromInvoiceEvent(event.type);
-    
-    // First update the invoice record
+    const mappedStatus = status === 'succeeded' ? 'paid' : status;
+
+    let invoiceId = stripeInvoice.metadata?.invoice_id;
+
+    // Fallback: if metadata.invoice_id is missing, look up by stripe_invoice_id
+    if (!invoiceId && stripeInvoice.id) {
+      console.log(`No invoice_id in metadata, looking up by stripe_invoice_id: ${stripeInvoice.id}`);
+      const { data: matchedInvoice } = await supabase
+        .from("invoices")
+        .select("id")
+        .eq("metadata->>stripe_invoice_id", stripeInvoice.id)
+        .maybeSingle();
+
+      if (matchedInvoice) {
+        invoiceId = matchedInvoice.id;
+        console.log(`Found invoice via stripe_invoice_id fallback: ${invoiceId}`);
+      }
+    }
+
+    if (!invoiceId) {
+      console.log("Could not resolve Supabase invoice ID for Stripe invoice:", stripeInvoice.id);
+      return;
+    }
+
     const { error: invoiceError } = await supabase
       .from("invoices")
       .update({
-        status: status === 'succeeded' ? 'paid' : status,
+        status: mappedStatus,
         metadata: {
-          ...stripeInvoice,
-          last_event: event.type
+          stripe_invoice_id: stripeInvoice.id,
+          last_event: event.type,
+          updated_at: new Date().toISOString(),
         }
       })
-      .eq("id", stripeInvoice.metadata.invoice_id)
-      .single();
+      .eq("id", invoiceId);
 
     if (invoiceError) {
       console.log("Error updating invoice status:", invoiceError);
       throw new Error(invoiceError);
     }
 
-    // If payment was successful, create a payment record
-    if (status === 'succeeded') {
-      const { error: paymentError } = await supabase
-        .from("payments")
-        .insert({
-          invoice_id: stripeInvoice.metadata.invoice_id,
-          person_id: stripeInvoice.metadata.person_id,
-          account_id: stripeInvoice.metadata.account_id,
-          amount: stripeInvoice.amount_paid / 100, // Convert from cents
-          status: 'succeeded',
-          payment_method: 'stripe',
-          metadata: {
-            stripe_invoice_id: stripeInvoice.id,
-            stripe_payment_intent_id: stripeInvoice.payment_intent,
-            payment_method_details: stripeInvoice.payment_method_details
-          }
-        });
+    console.log(`Invoice ${invoiceId} updated to status: ${mappedStatus}`);
 
-      if (paymentError) {
-        console.log("Error creating payment record:", paymentError);
-        throw new Error(paymentError);
+    // If payment was successful, create a payment record (avoid duplicates)
+    if (status === 'succeeded') {
+      const { data: existingPayment } = await supabase
+        .from("payments")
+        .select("id")
+        .eq("invoice_id", invoiceId)
+        .eq("status", "succeeded")
+        .maybeSingle();
+
+      if (!existingPayment) {
+        const { error: paymentError } = await supabase
+          .from("payments")
+          .insert({
+            invoice_id: invoiceId,
+            person_id: stripeInvoice.metadata?.person_id || null,
+            account_id: stripeInvoice.metadata?.account_id || null,
+            amount: stripeInvoice.amount_paid / 100,
+            status: 'succeeded',
+            payment_method: 'stripe',
+            payment_intent_id: typeof stripeInvoice.payment_intent === 'string'
+              ? stripeInvoice.payment_intent
+              : stripeInvoice.payment_intent?.id || null,
+          });
+
+        if (paymentError) {
+          console.log("Error creating payment record:", paymentError);
+          throw new Error(paymentError);
+        }
+      } else {
+        console.log(`Payment record already exists for invoice ${invoiceId}, skipping`);
       }
     }
 

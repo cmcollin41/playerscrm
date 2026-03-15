@@ -4,6 +4,7 @@ import { MainNav } from "@/components/navigation/main-nav";
 import { UserNav } from "@/components/navigation/user-nav";
 import Link from "next/link";
 import Image from "next/image";
+import type { UserRole } from "@/types/schema.types";
 
 
 export default async function DashboardLayout({
@@ -11,9 +12,33 @@ export default async function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
-
-
   const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let userRole: UserRole = "general"
+  let userInitials = ""
+  let userPhoto: string | undefined
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, first_name, last_name, people_id, people(photo)")
+      .eq("id", user.id)
+      .single()
+
+    if (profile?.role) userRole = profile.role as UserRole
+
+    const first = (profile?.first_name as string) || ""
+    const last = (profile?.last_name as string) || ""
+    if (first || last) {
+      userInitials = `${first.charAt(0)}${last.charAt(0)}`.toUpperCase()
+    }
+
+    userPhoto = (profile?.people as any)?.photo || undefined
+  }
 
   return (
     <>
@@ -24,9 +49,9 @@ export default async function DashboardLayout({
               <Link href="/">
                 <Image src="/logo.svg" width={50} height={50} alt="Bulldog Logo" />
               </Link>
-              <MainNav className="mx-6" />
+              <MainNav className="mx-6" userRole={userRole} />
               <div className="ml-auto flex items-center space-x-4">
-                <UserNav />
+                <UserNav userRole={userRole} userInitials={userInitials} userPhoto={userPhoto} />
               </div>
             </div>
           </div>

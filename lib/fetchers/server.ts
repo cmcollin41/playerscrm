@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getDomainQuery } from "../utils";
+import type { UserRole } from "@/types/schema.types";
 
 export async function getAccount() {
   const supabase = await createClient();
@@ -9,7 +10,6 @@ export async function getAccount() {
   } = await supabase.auth.getUser();
 
   try {
-    // First get the profile with account
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("*, accounts(*)")
@@ -18,7 +18,6 @@ export async function getAccount() {
 
     if (profileError) throw profileError;
 
-    // Then fetch senders for this account
     if (profile.accounts?.id) {
       const { data: senders, error: sendersError } = await supabase
         .from("senders")
@@ -35,6 +34,51 @@ export async function getAccount() {
     return {
       error: error.message,
     };
+  }
+}
+
+export async function getAccountWithProfile() {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) return { account: null, profile: null }
+
+  try {
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("*, accounts(*)")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError) throw profileError;
+
+    if (profile.accounts?.id) {
+      const { data: senders, error: sendersError } = await supabase
+        .from("senders")
+        .select("*")
+        .eq("account_id", profile.accounts.id);
+
+      if (!sendersError && senders) {
+        profile.accounts.senders = senders;
+      }
+    }
+
+    return {
+      account: profile.accounts,
+      profile: {
+        id: profile.id,
+        role: profile.role as UserRole,
+        email: profile.email,
+        first_name: profile.first_name,
+        last_name: profile.last_name,
+        account_id: profile.account_id,
+      },
+    };
+  } catch (error: any) {
+    return { account: null, profile: null, error: error.message };
   }
 }
 

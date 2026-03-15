@@ -1,11 +1,15 @@
-import Link from "next/link";
+import Link from "next/link"
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
+import type { UserRole } from "@/types/schema.types"
 
-export function MainNav({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLElement>) {
+interface MainNavProps extends React.HTMLAttributes<HTMLElement> {
+  userRole?: UserRole
+}
+
+export function MainNav({ className, userRole = "general", ...props }: MainNavProps) {
+  const isAdmin = userRole === "admin"
+
   return (
     <nav
       className={cn(
@@ -32,24 +36,30 @@ export function MainNav({
       >
         Teams
       </Link>
-      <Link
-        href="/invoices"
-        className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
-      >
-        Invoices
-      </Link>
-      <Link
-        href="/emails"
-        className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
-      >
-        Emails
-      </Link>
-      <Link
-        href="/settings"
-        className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
-      >
-        Settings
-      </Link>
+      {isAdmin && (
+        <Link
+          href="/invoices"
+          className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
+        >
+          Invoices
+        </Link>
+      )}
+      {isAdmin && (
+        <Link
+          href="/emails"
+          className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
+        >
+          Emails
+        </Link>
+      )}
+      {isAdmin && (
+        <Link
+          href="/settings"
+          className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
+        >
+          Settings
+        </Link>
+      )}
     </nav>
-  );
+  )
 }

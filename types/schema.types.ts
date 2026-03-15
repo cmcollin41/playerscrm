@@ -173,3 +173,21 @@ export interface Senders {
   resend_domain_id?: string;
   accounts?: Accounts;
 }
+
+export type UserRole = 'admin' | 'general'
+
+export interface Profiles {
+  id: string /* primary key, matches auth.users.id */;
+  created_at: string;
+  username?: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  account_id?: string /* foreign key to accounts.id */;
+  role: UserRole;
+  people_id?: string /* foreign key to people.id */;
+  stripe_customer_id?: string;
+  current_account_id?: string /* foreign key to accounts.id */;
+  accounts?: Accounts;
+  people?: People;
+}

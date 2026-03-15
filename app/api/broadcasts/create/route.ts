@@ -18,12 +18,19 @@ export async function POST(req: Request) {
 
     const { data: profile } = await supabase
       .from("profiles")
-      .select("account_id")
+      .select("account_id, role")
       .eq("id", user.id)
       .single()
 
     if (!profile?.account_id) {
       return NextResponse.json({ error: "No account found" }, { status: 404 })
+    }
+
+    if (profile.role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden: admin access required" },
+        { status: 403 }
+      )
     }
 
     const body = await req.json()

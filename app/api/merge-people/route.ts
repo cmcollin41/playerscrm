@@ -5,7 +5,6 @@ export async function POST(req: Request) {
   try {
     const supabase = await createClient();
 
-    // Verify user is authenticated
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -19,7 +18,6 @@ export async function POST(req: Request) {
 
     const { primaryPersonId, secondaryPersonId, mergedData } = await req.json();
 
-    // Validate input
     if (!primaryPersonId || !secondaryPersonId || !mergedData) {
       return NextResponse.json(
         { error: "Missing required fields" },
@@ -34,10 +32,9 @@ export async function POST(req: Request) {
       );
     }
 
-    // Verify both people exist and belong to user's account
     const { data: profile } = await supabase
       .from("profiles")
-      .select("account_id")
+      .select("account_id, role")
       .eq("id", user.id)
       .single();
 
@@ -45,6 +42,13 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "User profile not found" },
         { status: 404 }
+      );
+    }
+
+    if (profile.role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden: admin access required" },
+        { status: 403 }
       );
     }
 

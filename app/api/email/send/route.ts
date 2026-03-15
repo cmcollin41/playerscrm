@@ -83,16 +83,22 @@ export async function POST(req: Request) {
       )
     }
 
-    // Verify user has access to this account
     const { data: profile } = await supabase
       .from("profiles")
-      .select("account_id")
+      .select("account_id, role")
       .eq("id", user.id)
       .single()
 
     if (profile?.account_id !== account_id) {
       return NextResponse.json(
         { error: "Unauthorized access to account" },
+        { status: 403 }
+      )
+    }
+
+    if (profile.role !== "admin") {
+      return NextResponse.json(
+        { error: "Forbidden: admin access required" },
         { status: 403 }
       )
     }
