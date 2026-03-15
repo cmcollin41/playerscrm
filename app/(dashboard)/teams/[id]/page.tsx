@@ -13,8 +13,9 @@ import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, DollarSign, CheckCircle, AlertCircle } from "lucide-react";
+import { Users, DollarSign, CheckCircle, AlertCircle, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 const LEVEL_LABELS: Record<string, string> = {
   bantam: "Bantam",
@@ -116,6 +117,16 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       rosters: team?.rosters
     });
     setTeam(team);
+  }
+
+  const removeStaff = async (staffId: string) => {
+    const { error } = await supabase.from("staff").delete().eq("id", staffId)
+    if (error) {
+      toast.error("Failed to remove staff member")
+      return
+    }
+    toast.success("Staff member removed")
+    fetchTeam()
   }
 
   useEffect(() => {
@@ -354,24 +365,35 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
           <CardContent>
             <div className="flex flex-wrap gap-3">
               {team.staff.map((staffMember: any, index: number) => (
-                <Link
+                <div
                   key={index}
-                  href={`/people/${staffMember.people?.id}`}
-                  className="flex items-center gap-2 rounded-lg border bg-gray-50 px-3 py-2 transition-colors hover:bg-gray-100 hover:border-gray-300"
+                  className="group relative flex items-center gap-2 rounded-lg border bg-gray-50 px-3 py-2 transition-colors hover:bg-gray-100 hover:border-gray-300"
                 >
-                  <Avatar className="h-8 w-8">
-                    {staffMember.people?.photo && (
-                      <AvatarImage src={staffMember.people.photo} alt={staffMember.people.name} />
-                    )}
-                    <AvatarFallback className="text-xs">
-                      {getInitials(
-                        staffMember.people?.first_name,
-                        staffMember.people?.last_name,
+                  <Link
+                    href={`/people/${staffMember.people?.id}`}
+                    className="flex items-center gap-2"
+                  >
+                    <Avatar className="h-8 w-8">
+                      {staffMember.people?.photo && (
+                        <AvatarImage src={staffMember.people.photo} alt={staffMember.people.name} />
                       )}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm font-medium">{staffMember.people.name}</span>
-                </Link>
+                      <AvatarFallback className="text-xs">
+                        {getInitials(
+                          staffMember.people?.first_name,
+                          staffMember.people?.last_name,
+                        )}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm font-medium">{staffMember.people.name}</span>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => removeStaff(staffMember.id)}
+                    className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-red-100 hover:text-red-600 group-hover:opacity-100"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
               ))}
             </div>
           </CardContent>

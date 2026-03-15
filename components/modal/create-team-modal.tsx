@@ -11,6 +11,7 @@ import { DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useState } from "react";
+import { Switch } from "@/components/ui/switch";
 import { Loader2, Camera, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -30,6 +31,7 @@ export default function CreateTeamModal({ account }: { account: any }) {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [level, setLevel] = useState("bantam");
+  const [isPublic, setIsPublic] = useState(false);
 
   const supabase = createClient();
   const {
@@ -95,6 +97,7 @@ export default function CreateTeamModal({ account }: { account: any }) {
           coach: data.coach,
           level,
           icon: imagePreview,
+          is_public: isPublic,
         },
       ]);
 
@@ -181,6 +184,20 @@ export default function CreateTeamModal({ account }: { account: any }) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+          <div className="space-y-0.5">
+            <Label htmlFor="is_public" className="text-base">Public Team</Label>
+            <p className="text-sm text-muted-foreground">
+              Show this team on your public website and API
+            </p>
+          </div>
+          <Switch
+            id="is_public"
+            checked={isPublic}
+            onCheckedChange={setIsPublic}
+          />
         </div>
 
         <DialogFooter>

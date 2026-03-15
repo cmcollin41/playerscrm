@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react";
+import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { useForm, useFieldArray } from "react-hook-form";
-import { useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
-import LoadingDots from "@/components/icons/loading-dots";
-import { PlusIcon, XIcon, Upload, ImageIcon } from "lucide-react";
-import Image from "next/image";
+import { useForm, useFieldArray } from "react-hook-form"
+import { useRouter } from "next/navigation"
+import { cn } from "@/lib/utils"
+import LoadingDots from "@/components/icons/loading-dots"
+import { PlusIcon, XIcon, Upload, ImageIcon, Trash2 } from "lucide-react"
+import Image from "next/image"
 import {
   Sheet,
   SheetContent,
@@ -15,8 +15,8 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
+} from "@/components/ui/sheet"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -33,7 +33,6 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import {
   Form,
@@ -51,6 +50,18 @@ import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import useProfile from "@/lib/hooks/use-profile"
 
 
 interface PersonSheetProps {
@@ -157,14 +168,16 @@ export default function PersonSheet({
   mode = 'create',
   fromRelationships
 }: PersonSheetProps) {
-  const router = useRouter();
-  const supabase = createClient();
-  const [tags, setTags] = useState<any>([]);
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const router = useRouter()
+  const supabase = createClient()
+  const { isAdmin } = useProfile()
+  const [tags, setTags] = useState<any>([])
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [open, setOpen] = useState(false)
   const [searchValue, setSearchValue] = useState("")
   const [people, setPeople] = useState<any[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [selectedMonth, setSelectedMonth] = useState<Date | undefined>(undefined)
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
@@ -414,12 +427,37 @@ export default function PersonSheet({
     }
   };
 
-  console.log('Form state:', {
-    isDirty: form.formState.isDirty,
-    isSubmitting: form.formState.isSubmitting,
-    isValid: form.formState.isValid,
-    errors: form.formState.errors
-  })
+  const handleDelete = async () => {
+    if (!person?.id) return
+
+    try {
+      setIsDeleting(true)
+
+      const { error: relError } = await supabase
+        .from("relationships")
+        .delete()
+        .or(`person_id.eq.${person.id},relation_id.eq.${person.id}`)
+
+      if (relError) throw new Error(`Failed to remove relationships: ${relError.message}`)
+
+      const { error: deleteError } = await supabase
+        .from("people")
+        .delete()
+        .eq("id", person.id)
+
+      if (deleteError) throw new Error(`Failed to delete person: ${deleteError.message}`)
+
+      toast.success("Person deleted successfully")
+      setOpen(false)
+      router.push("/people")
+      router.refresh()
+    } catch (err) {
+      console.error("Delete error:", err)
+      toast.error(err instanceof Error ? err.message : "Failed to delete person")
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -428,20 +466,19 @@ export default function PersonSheet({
           {cta}
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="flex h-full w-full flex-col p-2 sm:max-w-md bg-white">
+      <SheetContent side="right" className="flex h-full w-full flex-col overflow-hidden p-0 sm:max-w-md bg-white">
         <Form {...form}>
           <form 
             onSubmit={form.handleSubmit(handleSubmit)} 
             className="flex flex-col h-full"
           >
-            <div className="flex h-full flex-col">
-              <SheetHeader className="p-3">
-                <SheetTitle>{title}</SheetTitle>
-                <SheetDescription>{description}</SheetDescription>
-              </SheetHeader>
+            <SheetHeader className="shrink-0 border-b px-4 py-3">
+              <SheetTitle>{title}</SheetTitle>
+              <SheetDescription>{description}</SheetDescription>
+            </SheetHeader>
 
-              <ScrollArea className="flex-1">
-                <div className="space-y-6 p-3">
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="space-y-6 px-4 py-4">
                   {form.formState.errors.root && (
                     <div className="rounded-md bg-red-50 p-4 text-sm text-red-500">
                       {form.formState.errors.root.message}
@@ -925,29 +962,66 @@ export default function PersonSheet({
                       </Button>
                     </div>
                   )}
-                </div>
-              </ScrollArea>
-
-              <div className="sticky bottom-0 bg-white p-6 border-t mt-auto">
-                {error && (
-                  <div className="text-red-500 mb-4 text-sm">{error}</div>
-                )}
-                <Button 
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="w-full !bg-black hover:bg-gray-900 text-white"
-                >
-                  {isSubmitting ? (
-                    <LoadingDots color="white" />
-                  ) : (
-                    person ? "Update Person" : "Create Person"
-                  )}
-                </Button>
               </div>
+            </ScrollArea>
+
+            <div className="shrink-0 border-t bg-white px-4 py-3 space-y-3">
+              {error && (
+                <div className="text-red-500 text-sm">{error}</div>
+              )}
+              <Button 
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full !bg-black hover:bg-gray-900 text-white"
+              >
+                {isSubmitting ? (
+                  <LoadingDots color="white" />
+                ) : (
+                  person ? "Update Person" : "Create Person"
+                )}
+              </Button>
+              {mode === "edit" && person && isAdmin && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? (
+                        <LoadingDots color="red" />
+                      ) : (
+                        <>
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete Person
+                        </>
+                      )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete {person.first_name} {person.last_name}?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will permanently delete this person and all their associated data including relationships, roster entries, and invoices. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDelete}
+                        className="bg-red-600 hover:bg-red-700 text-white"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
           </form>
         </Form>
       </SheetContent>
     </Sheet>
-  );
+  )
 }

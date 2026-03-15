@@ -42,6 +42,7 @@ export default function EditTeamModal({ team }: { team?: any }) {
   } = useForm();
 
   const isActive = watch("is_active");
+  const isPublic = watch("is_public");
   const [level, setLevel] = useState(team?.level || "bantam");
 
   useEffect(() => {
@@ -49,10 +50,12 @@ export default function EditTeamModal({ team }: { team?: any }) {
       setValue("name", team.name);
       setValue("coach", team.coach);
       setValue("is_active", team.is_active);
+      setValue("is_public", team.is_public ?? false);
       setLevel(team.level || "bantam");
       setImagePreview(team.icon || null);
     } else {
       setValue("is_active", true);
+      setValue("is_public", false);
     }
   }, [team, setValue]);
 
@@ -107,6 +110,7 @@ export default function EditTeamModal({ team }: { team?: any }) {
         name: data.name,
         coach: data.coach,
         is_active: data.is_active,
+        is_public: data.is_public,
         level,
         icon: imagePreview,
       };
@@ -212,6 +216,20 @@ export default function EditTeamModal({ team }: { team?: any }) {
             onCheckedChange={(checked) => setValue("is_active", checked)}
           />
           <Label htmlFor="is_active">Active</Label>
+        </div>
+
+        <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+          <div className="space-y-0.5">
+            <Label htmlFor="is_public" className="text-base">Public Team</Label>
+            <p className="text-sm text-muted-foreground">
+              Show this team on your public website and API
+            </p>
+          </div>
+          <Switch
+            id="is_public"
+            checked={isPublic}
+            onCheckedChange={(checked) => setValue("is_public", checked)}
+          />
         </div>
 
         <DialogFooter>
