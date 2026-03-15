@@ -85,6 +85,24 @@ export default async function Dashboard() {
 
   const totalEmailsSent = emails?.length || 0;
 
+  const monthlyMap: Record<string, { month: string; sortKey: string; collected: number; outstanding: number }> = {}
+  sentOrPaidInvoices.forEach(inv => {
+    const date = new Date(inv.created_at)
+    const sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+    const monthLabel = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
+    if (!monthlyMap[sortKey]) {
+      monthlyMap[sortKey] = { month: monthLabel, sortKey, collected: 0, outstanding: 0 }
+    }
+    if (inv.status === 'paid') {
+      monthlyMap[sortKey].collected += inv.amount || 0
+    } else {
+      monthlyMap[sortKey].outstanding += inv.amount || 0
+    }
+  })
+  const monthlyRevenue = Object.values(monthlyMap)
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    .map(({ month, collected, outstanding }) => ({ month, collected, outstanding }))
+
   // Get recent activity
   const recentActivity = [
     ...(teams?.slice(0, 3).map((team) => ({
@@ -120,6 +138,7 @@ export default async function Dashboard() {
     paidAmount,
     pendingAmount,
     totalEmailsSent,
+    monthlyRevenue,
     recentActivity,
   };
 
