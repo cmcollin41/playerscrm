@@ -222,7 +222,7 @@ const updateSupabase = async (event: any, supabase: any) => {
   }
 };
 
-// Update status mapping function
+// Valid statuses: draft, sent, paid, void, overdue
 function getStatusFromInvoiceEvent(eventType: string): string {
   switch (eventType) {
     case 'invoice.created':
@@ -233,9 +233,9 @@ function getStatusFromInvoiceEvent(eventType: string): string {
     case 'invoice.payment_succeeded':
       return 'succeeded';
     case 'invoice.payment_failed':
-      return 'failed';
+      return 'overdue';
     default:
-      return 'pending';
+      return 'sent';
   }
 }
 

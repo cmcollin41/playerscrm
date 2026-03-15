@@ -192,9 +192,8 @@ function mapStripeStatus(stripeStatus: string): string | null {
     case "draft":
       return "draft"
     case "void":
-      return "void"
     case "uncollectible":
-      return "failed"
+      return "void"
     default:
       return null
   }
