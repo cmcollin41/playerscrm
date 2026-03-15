@@ -90,35 +90,54 @@ export async function POST(req: Request) {
       )
     }
 
-    // Get recipient email — if the person is a dependent, look up their parent/guardian
-    let recipientEmail = invoice.person?.email
-    let recipientName = invoice.person?.first_name || invoice.person?.name || "there"
+    // Build list of recipients — if the person is a dependent, send to all primary contacts
+    interface Recipient {
+      email: string
+      name: string
+      person_id: string
+    }
 
-    if (!recipientEmail && invoice.person?.dependent) {
-      const { data: relationship } = await supabase
+    const recipients: Recipient[] = []
+
+    if (invoice.person?.email) {
+      recipients.push({
+        email: invoice.person.email,
+        name: invoice.person.first_name || invoice.person.name || "there",
+        person_id: invoice.person.id,
+      })
+    }
+
+    if (invoice.person?.dependent) {
+      const { data: relationships } = await supabase
         .from("relationships")
         .select("person_id")
         .eq("relation_id", invoice.person.id)
         .eq("primary", true)
-        .single()
 
-      if (relationship) {
-        const { data: guardian } = await supabase
+      if (relationships && relationships.length > 0) {
+        const guardianIds = relationships.map((r: any) => r.person_id)
+        const { data: guardians } = await supabase
           .from("people")
-          .select("email, first_name, name")
-          .eq("id", relationship.person_id)
-          .single()
+          .select("id, email, first_name, name")
+          .in("id", guardianIds)
 
-        if (guardian?.email) {
-          recipientEmail = guardian.email
-          recipientName = guardian.first_name || guardian.name || recipientName
+        if (guardians) {
+          for (const guardian of guardians) {
+            if (guardian.email && !recipients.some(r => r.email === guardian.email)) {
+              recipients.push({
+                email: guardian.email,
+                name: guardian.first_name || guardian.name || "there",
+                person_id: guardian.id,
+              })
+            }
+          }
         }
       }
     }
 
-    if (!recipientEmail) {
+    if (recipients.length === 0) {
       return NextResponse.json(
-        { error: "No email address found for recipient or their guardian" },
+        { error: "No email address found for recipient or their guardian(s)" },
         { status: 400 }
       )
     }
@@ -172,61 +191,63 @@ export async function POST(req: Request) {
       currency: "USD",
     }).format(invoice.amount || 0)
 
-    // Prepare email content
+    // Send personalized email to each recipient
     const emailSubject = `Invoice ${invoice.invoice_number || invoice.id.slice(0, 8)} from ${invoice.account.name}`
-    
-    const emailHtml = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>${emailSubject}</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-            .content { padding: 20px 0; }
-            .invoice-details { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; }
-            .button { display: inline-block; padding: 12px 24px; background-color: #16a34a; color: #ffffff; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: 600; }
-            .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 14px; color: #6c757d; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1 style="margin: 0; font-size: 24px;">${invoice.account.name}</h1>
-            <p style="margin: 10px 0 0 0; color: #6c757d;">Invoice</p>
-          </div>
-          
-          <div class="content">
-            <p>Hello ${recipientName},</p>
-            
-            <p>You have an invoice from <strong>${invoice.account.name}</strong>:</p>
-            
-            <div class="invoice-details">
-              <p style="margin: 5px 0;"><strong>Invoice Number:</strong> ${invoice.invoice_number || invoice.id.slice(0, 8)}</p>
-              <p style="margin: 5px 0;"><strong>Amount Due:</strong> ${formattedAmount}</p>
-              ${invoice.due_date ? `<p style="margin: 5px 0;"><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>` : ""}
-              ${invoice.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${invoice.description}</p>` : ""}
+    let sentCount = 0
+    let failedCount = 0
+
+    for (const recipient of recipients) {
+      const emailHtml = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>${emailSubject}</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+              .content { padding: 20px 0; }
+              .invoice-details { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; }
+              .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 14px; color: #6c757d; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1 style="margin: 0; font-size: 24px;">${invoice.account.name}</h1>
+              <p style="margin: 10px 0 0 0; color: #6c757d;">Invoice</p>
             </div>
             
-            <a href="${paymentLink}" class="button" style="display: inline-block; padding: 12px 24px; background-color: #16a34a; color: #ffffff !important; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: 600;">Pay Invoice</a>
+            <div class="content">
+              <p>Hello ${recipient.name},</p>
+              
+              <p>You have an invoice from <strong>${invoice.account.name}</strong>:</p>
+              
+              <div class="invoice-details">
+                <p style="margin: 5px 0;"><strong>Invoice Number:</strong> ${invoice.invoice_number || invoice.id.slice(0, 8)}</p>
+                <p style="margin: 5px 0;"><strong>Amount Due:</strong> ${formattedAmount}</p>
+                ${invoice.due_date ? `<p style="margin: 5px 0;"><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>` : ""}
+                ${invoice.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${invoice.description}</p>` : ""}
+              </div>
+              
+              <a href="${paymentLink}" style="display: inline-block; padding: 12px 24px; background-color: #16a34a; color: #ffffff !important; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: 600;">Pay Invoice</a>
+              
+              <p>Or copy and paste this link into your browser:<br>
+              <a href="${paymentLink}">${paymentLink}</a></p>
+              
+              <p>If you have any questions about this invoice, please contact ${invoice.account.name}.</p>
+            </div>
             
-            <p>Or copy and paste this link into your browser:<br>
-            <a href="${paymentLink}">${paymentLink}</a></p>
-            
-            <p>If you have any questions about this invoice, please contact ${invoice.account.name}.</p>
-          </div>
-          
-          <div class="footer">
-            <p>This is an automated message from ${invoice.account.name}.</p>
-          </div>
-        </body>
-      </html>
-    `
+            <div class="footer">
+              <p>This is an automated message from ${invoice.account.name}.</p>
+            </div>
+          </body>
+        </html>
+      `
 
-    const emailText = `
+      const emailText = `
 Invoice from ${invoice.account.name}
 
-Hello ${recipientName},
+Hello ${recipient.name},
 
 You have an invoice from ${invoice.account.name}:
 
@@ -239,36 +260,44 @@ To pay this invoice, please visit:
 ${paymentLink}
 
 If you have any questions about this invoice, please contact ${invoice.account.name}.
-    `.trim()
+      `.trim()
 
-    // Send via unified email service
-    const result = await sendTransactionalEmail({
-      sender,
-      to: recipientEmail,
-      subject: emailSubject,
-      html: emailHtml,
-      text: emailText,
-      account_id: invoice.account_id,
-      person_id: invoice.person_id,
-      metadata: {
-        type: "invoice",
-        invoice_id: invoice.id,
-        invoice_number: invoice.invoice_number,
-        amount: invoice.amount,
-      },
-    })
+      const result = await sendTransactionalEmail({
+        sender,
+        to: recipient.email,
+        subject: emailSubject,
+        html: emailHtml,
+        text: emailText,
+        account_id: invoice.account_id,
+        person_id: recipient.person_id,
+        metadata: {
+          type: "invoice",
+          invoice_id: invoice.id,
+          invoice_number: invoice.invoice_number,
+          amount: invoice.amount,
+        },
+      })
 
-    if (!result.success) {
+      if (result.success) {
+        sentCount++
+      } else {
+        failedCount++
+        console.error(`Failed to send invoice to ${recipient.email}:`, result.error)
+      }
+    }
+
+    if (sentCount === 0) {
       return NextResponse.json(
-        { error: "Failed to send invoice email", details: result.error },
+        { error: "Failed to send invoice email to any recipient" },
         { status: 500 }
       )
     }
 
     return NextResponse.json({
       success: true,
-      message: "Invoice email sent successfully",
-      data: result.data,
+      message: `Invoice email sent to ${sentCount} recipient${sentCount !== 1 ? "s" : ""}${failedCount > 0 ? ` (${failedCount} failed)` : ""}`,
+      sent_count: sentCount,
+      failed_count: failedCount,
     })
   } catch (error: any) {
     console.error("Error in /api/invoices/resend:", error)
