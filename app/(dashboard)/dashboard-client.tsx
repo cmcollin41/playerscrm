@@ -110,10 +110,10 @@ export function DashboardClient({ profile, stats, account }: DashboardClientProp
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              ${stats.totalInvoiceAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              ${stats.paidAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground">
-              ${stats.paidAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} collected
+              ${stats.totalInvoiceAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })} total billed
             </p>
           </CardContent>
         </Card>

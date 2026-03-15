@@ -113,7 +113,10 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
     const paid = invoices.filter(inv => inv.status === "paid").length
     const draft = invoices.filter(inv => inv.status === "draft").length
     const overdue = invoices.filter(inv => isOverdue(inv)).length
-    const totalAmount = invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0)
+    const sentOrPaid = sent + paid
+    const totalAmount = invoices
+      .filter(inv => inv.status === "sent" || inv.status === "paid")
+      .reduce((sum, inv) => sum + (inv.amount || 0), 0)
     const paidAmount = invoices
       .filter(inv => inv.status === "paid")
       .reduce((sum, inv) => sum + (inv.amount || 0), 0)
@@ -121,7 +124,7 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
       .filter(inv => isOverdue(inv))
       .reduce((sum, inv) => sum + (inv.amount || 0), 0)
 
-    return { total, sent, paid, draft, overdue, totalAmount, paidAmount, overdueAmount }
+    return { total, sent, paid, draft, overdue, sentOrPaid, totalAmount, paidAmount, overdueAmount }
   }, [invoices])
 
   const filteredInvoices = useMemo(() => {
@@ -235,13 +238,13 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Invoices</CardTitle>
+            <CardTitle className="text-sm font-medium">Invoices Sent</CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.total}</div>
+            <div className="text-2xl font-bold">{stats.sentOrPaid}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.draft} draft, {stats.sent} sent, {stats.paid} paid
+              {stats.sent} awaiting payment, {stats.paid} paid{stats.draft > 0 ? `, ${stats.draft} draft` : ""}
             </p>
           </CardContent>
         </Card>
@@ -281,10 +284,10 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats.total > 0 ? Math.round((stats.paid / stats.total) * 100) : 0}%
+              {stats.sentOrPaid > 0 ? Math.round((stats.paid / stats.sentOrPaid) * 100) : 0}%
             </div>
             <p className="text-xs text-muted-foreground">
-              {stats.paid} of {stats.total} invoices paid
+              {stats.paid} of {stats.sentOrPaid} invoices paid
             </p>
           </CardContent>
         </Card>

@@ -74,12 +74,13 @@ export default async function Dashboard() {
   const totalRosterSpots = teams?.reduce((acc, team) => acc + (team.rosters?.length || 0), 0) || 0;
   const totalStaff = teams?.reduce((acc, team) => acc + (team.staff?.length || 0), 0) || 0;
   
-  const totalInvoices = invoices?.length || 0;
-  const totalInvoiceAmount = invoices?.reduce((sum, inv) => sum + (inv.amount || 0), 0) || 0;
-  const paidInvoices = invoices?.filter(inv => inv.status === 'paid').length || 0;
-  const paidAmount = invoices
-    ?.filter(inv => inv.status === 'paid')
-    .reduce((sum, inv) => sum + (inv.amount || 0), 0) || 0;
+  const sentOrPaidInvoices = invoices?.filter(inv => inv.status === 'sent' || inv.status === 'paid') || [];
+  const totalInvoices = sentOrPaidInvoices.length;
+  const totalInvoiceAmount = sentOrPaidInvoices.reduce((sum, inv) => sum + (inv.amount || 0), 0);
+  const paidInvoices = sentOrPaidInvoices.filter(inv => inv.status === 'paid').length;
+  const paidAmount = sentOrPaidInvoices
+    .filter(inv => inv.status === 'paid')
+    .reduce((sum, inv) => sum + (inv.amount || 0), 0);
   const pendingAmount = totalInvoiceAmount - paidAmount;
 
   const totalEmailsSent = emails?.length || 0;
