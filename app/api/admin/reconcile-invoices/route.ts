@@ -81,87 +81,85 @@ export async function POST(req: Request) {
       error?: string
     }> = []
 
-    await Promise.allSettled(
-      batch.map(async (inv) => {
-        const stripeInvoiceId = (inv.metadata as any)?.stripe_invoice_id
-        const stripeAccountId = (inv.metadata as any)?.stripe_account_id
-        if (!stripeInvoiceId || !stripeAccountId) return
+    for (const inv of batch) {
+      const stripeInvoiceId = (inv.metadata as any)?.stripe_invoice_id
+      const stripeAccountId = (inv.metadata as any)?.stripe_account_id
+      if (!stripeInvoiceId || !stripeAccountId) continue
 
-        checkedCount++
+      checkedCount++
 
-        try {
-          const stripeInvoice = await stripe.invoices.retrieve(
-            stripeInvoiceId,
-            { stripeAccount: stripeAccountId }
-          )
+      try {
+        const stripeInvoice = await stripe.invoices.retrieve(
+          stripeInvoiceId,
+          { stripeAccount: stripeAccountId }
+        )
 
-          const newStatus = mapStripeStatus(stripeInvoice.status || "")
+        const newStatus = mapStripeStatus(stripeInvoice.status || "")
 
-          if (newStatus && newStatus !== inv.status) {
-            const { error: updateError } = await supabase
-              .from("invoices")
-              .update({
-                status: newStatus,
-                metadata: {
-                  ...(inv.metadata as object),
-                  last_event: `reconciliation:${stripeInvoice.status}`,
-                  reconciled_at: new Date().toISOString(),
-                },
-              })
-              .eq("id", inv.id)
-
-            if (updateError) {
-              throw new Error(`Supabase update failed: ${updateError.message}`)
-            }
-
-            if (
-              newStatus === "paid" &&
-              stripeInvoice.amount_paid &&
-              stripeInvoice.amount_paid > 0
-            ) {
-              const { data: existingPayment } = await supabase
-                .from("payments")
-                .select("id")
-                .eq("invoice_id", inv.id)
-                .eq("status", "succeeded")
-                .maybeSingle()
-
-              if (!existingPayment) {
-                await supabase.from("payments").insert({
-                  invoice_id: inv.id,
-                  person_id: inv.person_id,
-                  account_id: inv.account_id,
-                  amount: stripeInvoice.amount_paid / 100,
-                  status: "succeeded",
-                  payment_method: "stripe",
-                  payment_intent_id:
-                    typeof stripeInvoice.payment_intent === "string"
-                      ? stripeInvoice.payment_intent
-                      : stripeInvoice.payment_intent?.id || null,
-                })
-              }
-            }
-
-            updatedCount++
-            results.push({
-              invoiceId: inv.id,
-              stripeId: stripeInvoiceId,
-              oldStatus: inv.status,
-              newStatus,
+        if (newStatus && newStatus !== inv.status) {
+          const { error: updateError } = await supabase
+            .from("invoices")
+            .update({
+              status: newStatus,
+              metadata: {
+                ...(inv.metadata as object),
+                last_event: `reconciliation:${stripeInvoice.status}`,
+                reconciled_at: new Date().toISOString(),
+              },
             })
+            .eq("id", inv.id)
+
+          if (updateError) {
+            throw new Error(`Supabase update failed: ${updateError.message}`)
           }
-        } catch (err: any) {
-          errorCount++
+
+          if (
+            newStatus === "paid" &&
+            stripeInvoice.amount_paid &&
+            stripeInvoice.amount_paid > 0
+          ) {
+            const { data: existingPayment } = await supabase
+              .from("payments")
+              .select("id")
+              .eq("invoice_id", inv.id)
+              .eq("status", "succeeded")
+              .maybeSingle()
+
+            if (!existingPayment) {
+              await supabase.from("payments").insert({
+                invoice_id: inv.id,
+                person_id: inv.person_id,
+                account_id: inv.account_id,
+                amount: stripeInvoice.amount_paid / 100,
+                status: "succeeded",
+                payment_method: "stripe",
+                payment_intent_id:
+                  typeof stripeInvoice.payment_intent === "string"
+                    ? stripeInvoice.payment_intent
+                    : stripeInvoice.payment_intent?.id || null,
+              })
+            }
+          }
+
+          updatedCount++
           results.push({
             invoiceId: inv.id,
             stripeId: stripeInvoiceId,
             oldStatus: inv.status,
-            newStatus: null,
-            error: err.message,
+            newStatus,
           })
         }
-      })
-    )
+      } catch (err: any) {
+        errorCount++
+        results.push({
+          invoiceId: inv.id,
+          stripeId: stripeInvoiceId,
+          oldStatus: inv.status,
+          newStatus: null,
+          error: err.message,
+        })
+      }
+    }
 
     const nextOffset = offset + batch.length
     const done = nextOffset >= (count || 0)

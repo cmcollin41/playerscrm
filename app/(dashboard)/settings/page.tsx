@@ -306,26 +306,53 @@ export default function SettingsPage() {
                 Updated: <strong>{reconcileResult.totalUpdated}</strong> &middot;
                 Errors: <strong>{reconcileResult.totalErrors}</strong>
               </p>
-              {reconcileResult.results?.length > 0 && (
-                <ul className="mt-2 space-y-1">
-                  {reconcileResult.results
-                    .filter((r: any) => r.newStatus)
-                    .slice(0, 10)
-                    .map((r: any) => (
-                      <li key={r.invoiceId}>
-                        {r.invoiceId.slice(0, 8)}… {r.oldStatus} → {r.newStatus}
+              {reconcileResult.results?.filter((r: any) => r.newStatus).length > 0 && (
+                <>
+                  <p className="mt-3 text-xs font-medium text-gray-700">Updated:</p>
+                  <ul className="mt-1 space-y-1">
+                    {reconcileResult.results
+                      .filter((r: any) => r.newStatus)
+                      .slice(0, 10)
+                      .map((r: any) => (
+                        <li key={r.invoiceId}>
+                          {r.invoiceId.slice(0, 8)}… {r.oldStatus} → {r.newStatus}
+                        </li>
+                      ))}
+                    {reconcileResult.results.filter((r: any) => r.newStatus)
+                      .length > 10 && (
+                      <li className="text-gray-400">
+                        …and{" "}
+                        {reconcileResult.results.filter((r: any) => r.newStatus)
+                          .length - 10}{" "}
+                        more
                       </li>
-                    ))}
-                  {reconcileResult.results.filter((r: any) => r.newStatus)
-                    .length > 10 && (
-                    <li className="text-gray-400">
-                      …and{" "}
-                      {reconcileResult.results.filter((r: any) => r.newStatus)
-                        .length - 10}{" "}
-                      more
-                    </li>
-                  )}
-                </ul>
+                    )}
+                  </ul>
+                </>
+              )}
+              {reconcileResult.results?.filter((r: any) => r.error).length > 0 && (
+                <>
+                  <p className="mt-3 text-xs font-medium text-red-600">Errors:</p>
+                  <ul className="mt-1 space-y-1">
+                    {reconcileResult.results
+                      .filter((r: any) => r.error)
+                      .slice(0, 5)
+                      .map((r: any) => (
+                        <li key={r.invoiceId} className="text-red-500">
+                          {r.invoiceId.slice(0, 8)}… — {r.error}
+                        </li>
+                      ))}
+                    {reconcileResult.results.filter((r: any) => r.error)
+                      .length > 5 && (
+                      <li className="text-gray-400">
+                        …and{" "}
+                        {reconcileResult.results.filter((r: any) => r.error)
+                          .length - 5}{" "}
+                        more with same error
+                      </li>
+                    )}
+                  </ul>
+                </>
               )}
             </div>
           )}
