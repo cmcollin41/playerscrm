@@ -28,7 +28,14 @@ export default function SettingsPage() {
   const [stripeConnected, setStripeConnected] = useState<string | undefined>()
   const [stripeAccount, setStripeAccount] = useState<any>()
   const [reconciling, setReconciling] = useState(false)
-  const [reconcileResult, setReconcileResult] = useState<any>(null)
+  const [reconcileResult, setReconcileResult] = useState<{
+    totalChecked: number
+    totalUpdated: number
+    totalErrors: number
+    total: number
+    done: boolean
+    results: any[]
+  } | null>(null)
 
   useEffect(() => {
     const getUser = async () => {
@@ -108,18 +115,49 @@ export default function SettingsPage() {
   async function handleReconcile() {
     setReconciling(true)
     setReconcileResult(null)
+
+    let offset = 0
+    let totalChecked = 0
+    let totalUpdated = 0
+    let totalErrors = 0
+    let total = 0
+    const allResults: any[] = []
+
     try {
-      const res = await fetch("/api/admin/reconcile-invoices", {
-        method: "POST",
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        toast.error(data.error || "Reconciliation failed")
-        return
+      while (true) {
+        const res = await fetch("/api/admin/reconcile-invoices", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ offset }),
+        })
+        const data = await res.json()
+
+        if (!res.ok) {
+          toast.error(data.error || "Reconciliation failed")
+          return
+        }
+
+        totalChecked += data.checked
+        totalUpdated += data.updated
+        totalErrors += data.errors
+        total = data.total
+        allResults.push(...(data.results || []))
+
+        setReconcileResult({
+          totalChecked,
+          totalUpdated,
+          totalErrors,
+          total,
+          done: data.done,
+          results: allResults,
+        })
+
+        if (data.done || !data.nextOffset) break
+        offset = data.nextOffset
       }
-      setReconcileResult(data)
-      if (data.updated > 0) {
-        toast.success(`Updated ${data.updated} invoice${data.updated === 1 ? "" : "s"} from Stripe`)
+
+      if (totalUpdated > 0) {
+        toast.success(`Updated ${totalUpdated} invoice${totalUpdated === 1 ? "" : "s"} from Stripe`)
       } else {
         toast("All invoices are already in sync with Stripe")
       }
@@ -261,9 +299,12 @@ export default function SettingsPage() {
           {reconcileResult && (
             <div className="mt-4 rounded-md border border-gray-100 bg-gray-50 p-3 text-xs text-gray-600">
               <p>
-                Checked: <strong>{reconcileResult.checked}</strong> &middot;
-                Updated: <strong>{reconcileResult.updated}</strong> &middot;
-                Errors: <strong>{reconcileResult.errors}</strong>
+                {!reconcileResult.done && (
+                  <span className="mr-2 text-amber-600">Processing…</span>
+                )}
+                Progress: <strong>{reconcileResult.totalChecked}</strong> / {reconcileResult.total} &middot;
+                Updated: <strong>{reconcileResult.totalUpdated}</strong> &middot;
+                Errors: <strong>{reconcileResult.totalErrors}</strong>
               </p>
               {reconcileResult.results?.length > 0 && (
                 <ul className="mt-2 space-y-1">
