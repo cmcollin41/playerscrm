@@ -89,7 +89,7 @@ export async function POST(req: Request) {
       .eq("id", user.id)
       .single()
 
-    if (profile?.account_id !== account_id) {
+    if (!profile || profile.account_id !== account_id) {
       return NextResponse.json(
         { error: "Unauthorized access to account" },
         { status: 403 }

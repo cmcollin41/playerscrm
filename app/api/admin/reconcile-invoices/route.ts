@@ -76,7 +76,8 @@ export async function POST() {
       invoicesByAccount.set(stripeAcct, list)
     }
 
-    for (const [stripeAccountId, invoices] of invoicesByAccount) {
+    const accountEntries = Array.from(invoicesByAccount.entries())
+    for (const [stripeAccountId, invoices] of accountEntries) {
       for (let i = 0; i < invoices.length; i += BATCH_SIZE) {
         const batch = invoices.slice(i, i + BATCH_SIZE)
 
