@@ -121,7 +121,7 @@ export default function SettingsPage() {
       if (data.updated > 0) {
         toast.success(`Updated ${data.updated} invoice${data.updated === 1 ? "" : "s"} from Stripe`)
       } else {
-        toast.info("All invoices are already in sync with Stripe")
+        toast("All invoices are already in sync with Stripe")
       }
     } catch {
       toast.error("Failed to run reconciliation")
