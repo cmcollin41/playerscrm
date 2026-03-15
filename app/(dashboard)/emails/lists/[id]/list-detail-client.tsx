@@ -136,8 +136,8 @@ export default function ListDetailClient({
   const supabase = createClient()
 
   const [searchQuery, setSearchQuery] = useState("")
-  const [syncLoading, setSyncLoading] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [syncingId, setSyncingId] = useState<string | null>(null)
 
   // Add people state
   const [addOpen, setAddOpen] = useState(false)
@@ -227,33 +227,35 @@ export default function ListDetailClient({
     ? Math.round((broadcastStats.totalClicked / broadcastStats.totalSent) * 100)
     : 0
 
-  const handleSync = async () => {
-    setSyncLoading(true)
+  const handleSyncMember = async (listPersonId: string, personId: string) => {
+    setSyncingId(listPersonId)
     try {
-      const response = await fetch("/api/lists/sync-to-resend", {
+      const response = await fetch("/api/lists/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listId: list.id }),
+        body: JSON.stringify({ listId: list.id, personIds: [personId] }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Failed to sync")
-      toast.success(`Synced ${data.synced} contacts to Resend`)
+      toast.success("Contact synced to Resend")
       router.refresh()
     } catch (error: any) {
-      toast.error(error.message || "Failed to sync")
+      toast.error(error.message || "Failed to sync contact")
     } finally {
-      setSyncLoading(false)
+      setSyncingId(null)
     }
   }
 
-  const handleRemovePerson = async (listPersonId: string, personName: string) => {
+  const handleRemovePerson = async (listPersonId: string, personName: string, email?: string) => {
     setRemovingId(listPersonId)
     try {
-      const { error } = await supabase
-        .from("list_people")
-        .delete()
-        .eq("id", listPersonId)
-      if (error) throw error
+      const response = await fetch("/api/lists/members", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listPersonId, email }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Failed to remove")
       toast.success(`Removed ${personName} from list`)
       router.refresh()
     } catch (error: any) {
@@ -266,10 +268,13 @@ export default function ListDetailClient({
   const handleAddPerson = async (personId: string) => {
     setAddLoading(true)
     try {
-      const { error } = await supabase
-        .from("list_people")
-        .insert({ list_id: list.id, person_id: personId })
-      if (error) throw error
+      const response = await fetch("/api/lists/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listId: list.id, personIds: [personId] }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Failed to add")
 
       const person = allPeople.find((p) => p.id === personId)
       toast.success(`Added ${person?.first_name} ${person?.last_name} to list`)
@@ -277,11 +282,7 @@ export default function ListDetailClient({
       setAddOpen(false)
       router.refresh()
     } catch (error: any) {
-      if (error.code === "23505") {
-        toast.error("This person is already in the list")
-      } else {
-        toast.error(error.message || "Failed to add person")
-      }
+      toast.error(error.message || "Failed to add person")
     } finally {
       setAddLoading(false)
     }
@@ -346,11 +347,6 @@ export default function ListDetailClient({
           <div className="space-y-1">
             <div className="flex items-center gap-3">
               <h1 className="text-3xl font-bold tracking-tight">{list.name}</h1>
-              {list.resend_segment_id ? (
-                <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Synced</Badge>
-              ) : (
-                <Badge variant="secondary">Not Synced</Badge>
-              )}
             </div>
             {list.description && (
               <p className="text-muted-foreground">{list.description}</p>
@@ -361,20 +357,8 @@ export default function ListDetailClient({
           </div>
           <div className="flex items-center gap-2">
             <Button
-              onClick={handleSync}
-              disabled={syncLoading}
-              variant="outline"
-            >
-              {syncLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="mr-2 h-4 w-4" />
-              )}
-              Sync to Resend
-            </Button>
-            <Button
               onClick={() => setShowBroadcastForm(!showBroadcastForm)}
-              disabled={!list.resend_segment_id || list.list_people.length === 0}
+              disabled={list.list_people.length === 0}
             >
               <Send className="mr-2 h-4 w-4" />
               New Broadcast
@@ -745,7 +729,20 @@ export default function ListDetailClient({
                           ) : lp.resend_contact_id ? (
                             <Badge variant="outline" className="text-xs bg-green-50 text-green-700">Synced</Badge>
                           ) : (
-                            <Badge variant="outline" className="text-xs text-muted-foreground">Not synced</Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleSyncMember(lp.id, lp.people.id)}
+                              disabled={syncingId === lp.id}
+                              className="h-7 gap-1.5 text-xs text-amber-700 hover:text-amber-800 hover:bg-amber-50 px-2"
+                            >
+                              {syncingId === lp.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <RefreshCw className="h-3 w-3" />
+                              )}
+                              Sync
+                            </Button>
                           )}
                         </TableCell>
                         <TableCell>
@@ -753,7 +750,7 @@ export default function ListDetailClient({
                             variant="ghost"
                             size="sm"
                             onClick={() =>
-                              handleRemovePerson(lp.id, `${lp.people.first_name} ${lp.people.last_name}`)
+                              handleRemovePerson(lp.id, `${lp.people.first_name} ${lp.people.last_name}`, lp.people.email)
                             }
                             disabled={removingId === lp.id}
                             className="text-red-600 hover:text-red-700 hover:bg-red-50 h-8 w-8 p-0"

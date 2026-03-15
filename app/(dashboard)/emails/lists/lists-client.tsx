@@ -197,18 +197,15 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
     setAddPeopleLoading(true)
 
     try {
-      const { error } = await supabase
-        .from("list_people")
-        .insert(
-          selectedPeopleIds.map((personId) => ({
-            list_id: selectedListId,
-            person_id: personId,
-          }))
-        )
+      const response = await fetch("/api/lists/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listId: selectedListId, personIds: selectedPeopleIds }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Failed to add people")
 
-      if (error) throw error
-
-      toast.success(`Added ${selectedPeopleIds.length} people to list`)
+      toast.success(`Added ${data.added} people to list`)
       setAddPeopleModalOpen(false)
       setSelectedPeopleIds([])
       router.refresh()
