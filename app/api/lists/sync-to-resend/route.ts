@@ -81,26 +81,30 @@ export async function POST(req: Request) {
       listPeople.map(async (lp) => {
         if (!lp.people?.email) return null
 
-        // Create contact with the segment assignment in one call
         const contactResult = await syncPersonToResend(lp.people, segmentId)
 
-        if (!contactResult.success || !contactResult.data) {
-          // Contact may already exist — try adding to segment by email fallback
-          const addResult = await addContactToSegment(lp.people.email, segmentId)
-          if (!addResult.success) {
-            throw new Error(`Failed to sync ${lp.people.email}`)
-          }
-          return lp.people.email
+        if (contactResult.success && contactResult.data?.id) {
+          await supabase
+            .from("list_people")
+            .update({ resend_contact_id: contactResult.data.id })
+            .eq("id", lp.id)
+
+          return contactResult.data.id
         }
 
-        const contactId = contactResult.data.id
+        // Contact may already exist — add to segment by email
+        const addResult = await addContactToSegment(lp.people.email, segmentId)
+        if (!addResult.success) {
+          throw new Error(`Failed to sync ${lp.people.email}`)
+        }
 
+        // Mark as synced even via fallback path
         await supabase
           .from("list_people")
-          .update({ resend_contact_id: contactId })
+          .update({ resend_contact_id: lp.people.email })
           .eq("id", lp.id)
 
-        return contactId
+        return lp.people.email
       })
     )
 

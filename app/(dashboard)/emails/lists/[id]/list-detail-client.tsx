@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
@@ -65,6 +65,7 @@ import {
   ChevronsUpDown,
   X,
   Megaphone,
+  UserX,
 } from "lucide-react"
 import { getInitials } from "@/lib/utils"
 
@@ -143,6 +144,34 @@ export default function ListDetailClient({
   const [addSearchQuery, setAddSearchQuery] = useState("")
   const [addLoading, setAddLoading] = useState(false)
 
+  // Unsubscribed contacts state
+  const [unsubscribed, setUnsubscribed] = useState<{ id: string; email: string; first_name: string; last_name: string }[]>([])
+  const [unsubLoading, setUnsubLoading] = useState(false)
+
+  const fetchUnsubscribed = useCallback(async () => {
+    if (!list.resend_segment_id) return
+    setUnsubLoading(true)
+    try {
+      const response = await fetch("/api/lists/unsubscribed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ segmentId: list.resend_segment_id }),
+      })
+      const data = await response.json()
+      if (response.ok && data.unsubscribed) {
+        setUnsubscribed(data.unsubscribed)
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setUnsubLoading(false)
+    }
+  }, [list.resend_segment_id])
+
+  useEffect(() => {
+    fetchUnsubscribed()
+  }, [fetchUnsubscribed])
+
   // Broadcast form state
   const [showBroadcastForm, setShowBroadcastForm] = useState(false)
   const [broadcastName, setBroadcastName] = useState("")
@@ -160,6 +189,11 @@ export default function ListDetailClient({
   const availablePeople = useMemo(
     () => allPeople.filter((p) => !memberIds.has(p.id)),
     [allPeople, memberIds]
+  )
+
+  const unsubscribedEmails = useMemo(
+    () => new Set(unsubscribed.map((c) => c.email?.toLowerCase())),
+    [unsubscribed]
   )
 
   const filteredMembers = useMemo(() => {
@@ -706,7 +740,9 @@ export default function ListDetailClient({
                           {formatDistanceToNow(new Date(lp.created_at), { addSuffix: true })}
                         </TableCell>
                         <TableCell>
-                          {lp.resend_contact_id ? (
+                          {unsubscribedEmails.has(lp.people.email?.toLowerCase()) ? (
+                            <Badge variant="outline" className="text-xs bg-red-50 text-red-700">Unsubscribed</Badge>
+                          ) : lp.resend_contact_id ? (
                             <Badge variant="outline" className="text-xs bg-green-50 text-green-700">Synced</Badge>
                           ) : (
                             <Badge variant="outline" className="text-xs text-muted-foreground">Not synced</Badge>
@@ -754,6 +790,60 @@ export default function ListDetailClient({
           </div>
         </CardContent>
       </Card>
+
+      {/* Unsubscribed */}
+      {(unsubscribed.length > 0 || unsubLoading) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <UserX className="h-5 w-5 text-red-500" />
+              Unsubscribed ({unsubLoading ? "..." : unsubscribed.length})
+            </CardTitle>
+            <CardDescription>
+              People who have unsubscribed from this list
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {unsubLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {unsubscribed.map((contact) => (
+                      <TableRow key={contact.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              <AvatarFallback className="text-xs">
+                                {getInitials(contact.first_name || "", contact.last_name || "")}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="font-medium text-muted-foreground">
+                              {contact.first_name} {contact.last_name}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {contact.email}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
