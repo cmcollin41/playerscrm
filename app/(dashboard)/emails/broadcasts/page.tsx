@@ -52,6 +52,11 @@ export default async function BroadcastsPage() {
     .eq("account_id", profile.account_id)
     .order("name", { ascending: true })
 
+  const { data: senders } = await supabase
+    .from("senders")
+    .select("*")
+    .eq("account_id", profile.account_id)
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-2">
@@ -64,6 +69,7 @@ export default async function BroadcastsPage() {
       <BroadcastsClient 
         broadcasts={broadcasts || []} 
         lists={lists || []}
+        senders={senders || []}
         account={profile.accounts}
         accountId={profile.account_id} 
       />

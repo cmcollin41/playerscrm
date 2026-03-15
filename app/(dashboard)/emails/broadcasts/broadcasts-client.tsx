@@ -88,9 +88,16 @@ interface List {
   list_people: Array<{ count: number }>
 }
 
+interface Sender {
+  id: string
+  name: string
+  email: string
+}
+
 interface BroadcastsClientProps {
   broadcasts: Broadcast[]
   lists: List[]
+  senders: Sender[]
   account: any
   accountId: string
 }
@@ -128,7 +135,7 @@ const getStatusBadge = (status: string) => {
   )
 }
 
-export default function BroadcastsClient({ broadcasts, lists, account, accountId }: BroadcastsClientProps) {
+export default function BroadcastsClient({ broadcasts, lists, senders, account, accountId }: BroadcastsClientProps) {
   const router = useRouter()
   const [globalFilter, setGlobalFilter] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -144,6 +151,7 @@ export default function BroadcastsClient({ broadcasts, lists, account, accountId
   const [broadcastSubject, setBroadcastSubject] = useState("")
   const [broadcastContent, setBroadcastContent] = useState("")
   const [selectedListId, setSelectedListId] = useState("")
+  const [selectedSender, setSelectedSender] = useState("")
   const [sendNow, setSendNow] = useState(false)
 
   const handleCreateBroadcast = async (e: React.FormEvent) => {
@@ -159,7 +167,7 @@ export default function BroadcastsClient({ broadcasts, lists, account, accountId
           name: broadcastName,
           subject: broadcastSubject,
           content: broadcastContent,
-          sender: `${account.name} <${account.email || "noreply@example.com"}>`,
+          sender: selectedSender,
           sendNow,
         }),
       })
@@ -176,6 +184,7 @@ export default function BroadcastsClient({ broadcasts, lists, account, accountId
       setBroadcastSubject("")
       setBroadcastContent("")
       setSelectedListId("")
+      setSelectedSender("")
       setSendNow(false)
       router.refresh()
     } catch (error: any) {
@@ -394,6 +403,27 @@ export default function BroadcastsClient({ broadcasts, lists, account, accountId
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor="sender">From</Label>
+                  <Select value={selectedSender} onValueChange={setSelectedSender} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a sender" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {senders.map((s) => (
+                        <SelectItem key={s.id} value={`${s.name} <${s.email}>`}>
+                          {s.name} &lt;{s.email}&gt;
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {senders.length === 0 && (
+                    <p className="text-sm text-red-600">
+                      No senders configured. Add a verified sender in Settings first.
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
                   <Label htmlFor="name">Broadcast Name</Label>
                   <Input
                     id="name"
@@ -419,18 +449,17 @@ export default function BroadcastsClient({ broadcasts, lists, account, accountId
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="content">Email Content (HTML)</Label>
+                  <Label htmlFor="content">Email Content</Label>
                   <Textarea
                     id="content"
-                    placeholder="<h1>Hi {{FIRST_NAME}}</h1><p>Your message here...</p><p><a href='{{RESEND_UNSUBSCRIBE_URL}}'>Unsubscribe</a></p>"
+                    placeholder="Just type your email here. Line breaks and paragraphs are preserved automatically."
                     value={broadcastContent}
                     onChange={(e) => setBroadcastContent(e.target.value)}
                     rows={12}
-                    className="font-mono text-sm"
                     required
                   />
                   <p className="text-xs text-muted-foreground">
-                    Use {"{{FIRST_NAME}}"}, {"{{LAST_NAME}}"}, and {"{{RESEND_UNSUBSCRIBE_URL}}"} for personalization
+                    Use {"{{{FIRST_NAME|there}}}"}, {"{{{LAST_NAME}}}"}, and {"{{{RESEND_UNSUBSCRIBE_URL}}}"} for personalization. Triple braces with optional defaults.
                   </p>
                 </div>
 
@@ -456,7 +485,7 @@ export default function BroadcastsClient({ broadcasts, lists, account, accountId
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={createLoading || !selectedListId}>
+                <Button type="submit" disabled={createLoading || !selectedListId || !selectedSender}>
                   {createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {sendNow ? "Create & Send" : "Save as Draft"}
                 </Button>

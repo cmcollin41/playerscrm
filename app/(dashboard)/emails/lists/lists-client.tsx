@@ -26,7 +26,21 @@ import {
 import { Label } from "@/components/ui/label"
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
-import { Mail, Users, ArrowUpDown, Loader2, RefreshCw, Trash2, UserPlus } from "lucide-react"
+import { Mail, Users, ArrowUpDown, Loader2, RefreshCw, Trash2, UserPlus, X, Check, ChevronsUpDown } from "lucide-react"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import { cn } from "@/lib/utils"
 import {
   ColumnDef,
   ColumnFiltersState,
@@ -104,6 +118,8 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
   const [selectedListId, setSelectedListId] = useState<string | null>(null)
   const [selectedPeopleIds, setSelectedPeopleIds] = useState<string[]>([])
   const [addPeopleLoading, setAddPeopleLoading] = useState(false)
+  const [peopleSearchOpen, setPeopleSearchOpen] = useState(false)
+  const [peopleSearchQuery, setPeopleSearchQuery] = useState("")
 
   // Sync to Resend
   const [syncingListId, setSyncingListId] = useState<string | null>(null)
@@ -273,7 +289,7 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
         id: "actions",
         header: "Actions",
         cell: ({ row }) => (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
             <Button
               variant="outline"
               size="sm"
@@ -527,7 +543,12 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
                 <TableBody>
                   {table.getRowModel().rows?.length ? (
                     table.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
+                      <TableRow
+                        key={row.id}
+                        data-state={row.getIsSelected() && "selected"}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => router.push(`/emails/lists/${row.original.id}`)}
+                      >
                         {row.getVisibleCells().map((cell) => (
                           <TableCell key={cell.id}>
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -600,56 +621,117 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
       </Card>
 
       {/* Add People Modal */}
-      <Dialog open={addPeopleModalOpen} onOpenChange={setAddPeopleModalOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
+      <Dialog open={addPeopleModalOpen} onOpenChange={(open) => {
+        setAddPeopleModalOpen(open)
+        if (!open) {
+          setSelectedPeopleIds([])
+          setPeopleSearchQuery("")
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Add People to List</DialogTitle>
             <DialogDescription>
-              Select people to add to this list. Already added members are not shown.
+              Search and select people to add to this list.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4 overflow-y-auto max-h-[50vh]">
+          <div className="space-y-4 py-2">
             {availablePeople.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 All people are already in this list
               </p>
             ) : (
-              <div className="space-y-2">
-                {availablePeople.map((person) => (
-                  <div
-                    key={person.id}
-                    className="flex items-center space-x-2 p-3 hover:bg-gray-50 rounded-md"
-                  >
-                    <Checkbox
-                      id={person.id}
-                      checked={selectedPeopleIds.includes(person.id)}
-                      onCheckedChange={(checked) => {
-                        if (checked) {
-                          setSelectedPeopleIds([...selectedPeopleIds, person.id])
-                        } else {
-                          setSelectedPeopleIds(
-                            selectedPeopleIds.filter((id) => id !== person.id)
-                          )
-                        }
-                      }}
-                    />
-                    <label
-                      htmlFor={person.id}
-                      className="flex-1 cursor-pointer text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              <>
+                <Popover open={peopleSearchOpen} onOpenChange={setPeopleSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={peopleSearchOpen}
+                      className="w-full justify-between text-sm"
                     >
-                      <div>
-                        {person.first_name} {person.last_name}
-                        {person.dependent && (
-                          <Badge variant="outline" className="ml-2 text-xs">
-                            Dependent
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="text-sm text-muted-foreground">{person.email}</div>
-                    </label>
+                      Search for people...
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    className="w-[--radix-popover-trigger-width] p-0"
+                    side="bottom"
+                    align="start"
+                    sideOffset={4}
+                  >
+                    <Command shouldFilter={false}>
+                      <CommandInput
+                        placeholder="Type a name..."
+                        value={peopleSearchQuery}
+                        onValueChange={setPeopleSearchQuery}
+                      />
+                      <CommandList>
+                        <CommandEmpty>No people found.</CommandEmpty>
+                        <CommandGroup>
+                          {availablePeople
+                            .filter((p) => {
+                              if (!peopleSearchQuery) return true
+                              const name = `${p.first_name} ${p.last_name}`.toLowerCase()
+                              const email = (p.email || "").toLowerCase()
+                              const q = peopleSearchQuery.toLowerCase()
+                              return name.includes(q) || email.includes(q)
+                            })
+                            .filter((p) => !selectedPeopleIds.includes(p.id))
+                            .slice(0, 20)
+                            .map((person) => (
+                              <div
+                                key={person.id}
+                                onClick={() => {
+                                  setSelectedPeopleIds((prev) => [...prev, person.id])
+                                  setPeopleSearchQuery("")
+                                }}
+                                className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              >
+                                <div className="flex-1 min-w-0">
+                                  <div className="font-medium truncate">
+                                    {person.first_name} {person.last_name}
+                                    {person.dependent && (
+                                      <span className="ml-1.5 text-xs text-muted-foreground">(Dependent)</span>
+                                    )}
+                                  </div>
+                                  {person.email && (
+                                    <div className="text-xs text-muted-foreground truncate">{person.email}</div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+
+                {selectedPeopleIds.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedPeopleIds.map((id) => {
+                      const person = people.find((p) => p.id === id)
+                      if (!person) return null
+                      return (
+                        <Badge
+                          key={id}
+                          variant="secondary"
+                          className="flex items-center gap-1 py-1 px-2.5"
+                        >
+                          {person.first_name} {person.last_name}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPeopleIds((prev) => prev.filter((pid) => pid !== id))}
+                            className="ml-0.5 rounded-full hover:bg-gray-300/50 p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )
+                    })}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
             )}
           </div>
           <DialogFooter>

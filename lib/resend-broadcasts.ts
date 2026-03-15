@@ -1,15 +1,4 @@
 import resend from "./resend"
-import { createClient } from "@/lib/supabase/server"
-
-/**
- * Resend Broadcasts Integration
- * 
- * This module handles:
- * - Syncing lists to Resend segments
- * - Syncing people to Resend contacts
- * - Creating and sending broadcasts
- * - Tracking broadcast delivery
- */
 
 export interface ResendContact {
   email: string
@@ -25,10 +14,12 @@ export interface BroadcastOptions {
   html: string
   text?: string
   name?: string
+  sendImmediately?: boolean
 }
 
 /**
- * Sync a person to Resend as a contact
+ * Sync a person to Resend as a global contact, optionally adding them to a segment.
+ * In Resend v6+, contacts are global — they can belong to multiple segments.
  */
 export async function syncPersonToResend(
   person: {
@@ -37,38 +28,27 @@ export async function syncPersonToResend(
     first_name?: string
     last_name?: string
   },
-  audienceId?: string
+  segmentId?: string
 ) {
   try {
-    // Get or create default audience if not provided
-    let targetAudienceId = audienceId
-
-    if (!targetAudienceId) {
-      const { data: audiences } = await resend.audiences.list()
-      if (audiences && audiences.data && audiences.data.length > 0) {
-        targetAudienceId = audiences.data[0].id
-      } else {
-        // Create a default audience
-        const { data: newAudience } = await resend.audiences.create({
-          name: "Default Audience",
-        })
-        if (newAudience) {
-          targetAudienceId = newAudience.id
-        }
-      }
-    }
-
-    if (!targetAudienceId) {
-      return { success: false, error: new Error("No audience ID available") }
-    }
-
-    const { data, error } = await resend.contacts.create({
-      audienceId: targetAudienceId,
+    const createOptions: {
+      email: string
+      firstName: string
+      lastName: string
+      unsubscribed: boolean
+      segments?: { id: string }[]
+    } = {
       email: person.email,
       firstName: person.first_name || "",
       lastName: person.last_name || "",
       unsubscribed: false,
-    })
+    }
+
+    if (segmentId) {
+      createOptions.segments = [{ id: segmentId }]
+    }
+
+    const { data, error } = await resend.contacts.create(createOptions)
 
     if (error) {
       console.error("Error syncing contact to Resend:", error)
@@ -83,62 +63,75 @@ export async function syncPersonToResend(
 }
 
 /**
- * Create or get an audience in Resend
- * Note: Resend's API uses "audiences" not "segments"
+ * Create a segment in Resend (previously called "audience")
  */
-export async function createResendSegment(name: string, description?: string) {
+export async function createResendSegment(name: string) {
   try {
-    const { data, error } = await resend.audiences.create({
-      name,
-    })
+    const { data, error } = await resend.segments.create({ name })
 
     if (error) {
-      console.error("Error creating Resend audience:", error)
+      console.error("Error creating Resend segment:", error)
       return { success: false, error }
     }
 
     return { success: true, data }
   } catch (error) {
-    console.error("Error creating Resend audience:", error)
+    console.error("Error creating Resend segment:", error)
     return { success: false, error }
   }
 }
 
 /**
- * Add a contact to an audience
+ * Add an existing contact to a segment.
+ * Accepts either a contactId or an email address.
  */
-export async function addContactToSegment(contactId: string, segmentId: string) {
+export async function addContactToSegment(
+  contactIdOrEmail: string,
+  segmentId: string
+) {
   try {
-    const { data, error } = await resend.contacts.update({
-      id: contactId,
-      audienceId: segmentId,
-    })
+    const isEmail = contactIdOrEmail.includes("@")
+    const options = isEmail
+      ? { email: contactIdOrEmail, segmentId }
+      : { contactId: contactIdOrEmail, segmentId }
+
+    const { data, error } = await resend.contacts.segments.add(options)
 
     if (error) {
-      console.error("Error adding contact to audience:", error)
+      console.error("Error adding contact to segment:", error)
       return { success: false, error }
     }
 
     return { success: true, data }
   } catch (error) {
-    console.error("Error adding contact to audience:", error)
+    console.error("Error adding contact to segment:", error)
     return { success: false, error }
   }
 }
 
 /**
- * Create a broadcast (doesn't send it yet)
+ * Create a broadcast targeting a segment.
+ * If sendImmediately is true, uses `send: true` to send in one step.
  */
 export async function createBroadcast(options: BroadcastOptions) {
   try {
-    const { data, error } = await resend.broadcasts.create({
-      audienceId: options.segmentId,
+    const payload: Record<string, unknown> = {
+      segmentId: options.segmentId,
       from: options.from,
       subject: options.subject,
       html: options.html,
-      text: options.text,
       name: options.name,
-    })
+    }
+
+    if (options.text) {
+      payload.text = options.text
+    }
+
+    if (options.sendImmediately) {
+      payload.send = true
+    }
+
+    const { data, error } = await resend.broadcasts.create(payload as any)
 
     if (error) {
       console.error("Error creating broadcast:", error)
@@ -153,7 +146,7 @@ export async function createBroadcast(options: BroadcastOptions) {
 }
 
 /**
- * Send a broadcast immediately
+ * Send a previously-created draft broadcast
  */
 export async function sendBroadcast(broadcastId: string) {
   try {
@@ -189,45 +182,3 @@ export async function getBroadcast(broadcastId: string) {
     return { success: false, error }
   }
 }
-
-/**
- * Sync all people from an account to Resend contacts
- */
-export async function syncAccountPeopleToResend(accountId: string) {
-  const supabase = await createClient()
-
-  try {
-    // Get all people with emails
-    const { data: people, error } = await supabase
-      .from("people")
-      .select("id, email, first_name, last_name")
-      .eq("account_id", accountId)
-      .not("email", "is", null)
-
-    if (error) {
-      console.error("Error fetching people:", error)
-      return { success: false, error }
-    }
-
-    // Sync each person to Resend
-    const results = await Promise.allSettled(
-      people.map((person) => syncPersonToResend(person))
-    )
-
-    const successful = results.filter((r) => r.status === "fulfilled").length
-    const failed = results.filter((r) => r.status === "rejected").length
-
-    return {
-      success: true,
-      data: {
-        total: people.length,
-        successful,
-        failed,
-      },
-    }
-  } catch (error) {
-    console.error("Error syncing people to Resend:", error)
-    return { success: false, error }
-  }
-}
-

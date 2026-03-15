@@ -8,7 +8,7 @@ import { Metadata } from "next";
 import { ModalProvider } from "@/components/modal/provider";
 
 
-const title = "Athletes® App";
+const title = "Provo Basketball";
 const description = "A CRM for your athletes and parents.";
 
 const image = "/og-image.png";
@@ -16,7 +16,7 @@ const image = "/og-image.png";
 export const metadata: Metadata = {
   title,
   description,
-  icons: ["https://athletes.app/favicon.ico"],
+  icons: ["/logo.svg"],
   openGraph: {
     title,
     description,
@@ -27,9 +27,9 @@ export const metadata: Metadata = {
     title,
     description,
     images: [image],
-    creator: "@athletesapp",
+    creator: "@provobasketball",
   },
-  metadataBase: new URL("https://athletes.app"),
+  metadataBase: new URL("https://app.provobasketball.com"),
 };
 
 export default async function RootLayout(props: { children: React.ReactNode }) {

@@ -6,13 +6,12 @@ import {
   addContactToSegment,
 } from "@/lib/resend-broadcasts"
 
-export const maxDuration = 60 // Maximum for Vercel hobby plan
+export const maxDuration = 60
 
 export async function POST(req: Request) {
   try {
     const supabase = await createClient()
 
-    // Get the current user
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -21,7 +20,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get user's profile
     const { data: profile } = await supabase
       .from("profiles")
       .select("account_id")
@@ -34,7 +32,6 @@ export async function POST(req: Request) {
 
     const { listId } = await req.json()
 
-    // Get the list
     const { data: list } = await supabase
       .from("lists")
       .select("*")
@@ -46,11 +43,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "List not found" }, { status: 404 })
     }
 
-    // Create or use existing Resend segment
     let segmentId = list.resend_segment_id
 
     if (!segmentId) {
-      const segmentResult = await createResendSegment(list.name, list.description)
+      const segmentResult = await createResendSegment(list.name)
 
       if (!segmentResult.success || !segmentResult.data) {
         return NextResponse.json(
@@ -61,14 +57,12 @@ export async function POST(req: Request) {
 
       segmentId = segmentResult.data.id
 
-      // Update list with segment ID
       await supabase
         .from("lists")
         .update({ resend_segment_id: segmentId })
         .eq("id", listId)
     }
 
-    // Get all people in this list
     const { data: listPeople } = await supabase
       .from("list_people")
       .select("*, people(*)")
@@ -83,28 +77,24 @@ export async function POST(req: Request) {
       })
     }
 
-    // Sync each person to Resend and add to segment
     const results = await Promise.allSettled(
       listPeople.map(async (lp) => {
         if (!lp.people?.email) return null
 
-        // Sync person to Resend contacts
-        const contactResult = await syncPersonToResend(lp.people)
+        // Create contact with the segment assignment in one call
+        const contactResult = await syncPersonToResend(lp.people, segmentId)
 
         if (!contactResult.success || !contactResult.data) {
-          throw new Error(`Failed to sync ${lp.people.email}`)
+          // Contact may already exist — try adding to segment by email fallback
+          const addResult = await addContactToSegment(lp.people.email, segmentId)
+          if (!addResult.success) {
+            throw new Error(`Failed to sync ${lp.people.email}`)
+          }
+          return lp.people.email
         }
 
         const contactId = contactResult.data.id
 
-        // Add contact to segment
-        const segmentResult = await addContactToSegment(contactId, segmentId)
-
-        if (!segmentResult.success) {
-          throw new Error(`Failed to add ${lp.people.email} to segment`)
-        }
-
-        // Update list_people with resend_contact_id
         await supabase
           .from("list_people")
           .update({ resend_contact_id: contactId })
@@ -132,4 +122,3 @@ export async function POST(req: Request) {
     )
   }
 }
-

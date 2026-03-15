@@ -2,18 +2,12 @@ import { NextResponse } from "next/server"
 import resend from "@/lib/resend"
 import { createClient } from "@/lib/supabase/server"
 
-export const maxDuration = 60 // Maximum for Vercel hobby plan
+export const maxDuration = 60
 
-/**
- * Bulk sync all people from an account to Resend contacts
- * 
- * This is useful for initial setup or re-syncing contacts
- */
 export async function POST(req: Request) {
   try {
     const supabase = await createClient()
 
-    // Get authenticated user
     const {
       data: { user },
       error: authError,
@@ -26,7 +20,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // Get user's profile and account
     const { data: profile } = await supabase
       .from("profiles")
       .select("account_id")
@@ -40,7 +33,6 @@ export async function POST(req: Request) {
       )
     }
 
-    // Get all people with emails from this account
     const { data: people, error: peopleError } = await supabase
       .from("people")
       .select("id, email, first_name, last_name")
@@ -63,30 +55,6 @@ export async function POST(req: Request) {
       })
     }
 
-    // Get or create the default audience for this account
-    const { data: audiences } = await resend.audiences.list()
-    let audienceId: string
-
-    if (audiences && audiences.data && audiences.data.length > 0) {
-      // Use the first (default) audience
-      audienceId = audiences.data[0].id
-    } else {
-      // Create a default audience
-      const { data: newAudience, error: audienceError } = await resend.audiences.create({
-        name: "Default Audience",
-      })
-
-      if (audienceError || !newAudience) {
-        return NextResponse.json(
-          { error: "Failed to create audience", details: audienceError },
-          { status: 500 }
-        )
-      }
-
-      audienceId = newAudience.id
-    }
-
-    // Sync each person to Resend
     let synced = 0
     let failed = 0
     let skipped = 0
@@ -94,7 +62,6 @@ export async function POST(req: Request) {
     for (const person of people) {
       try {
         const { data, error } = await resend.contacts.create({
-          audienceId,
           email: person.email!,
           firstName: person.first_name || "",
           lastName: person.last_name || "",
@@ -102,7 +69,6 @@ export async function POST(req: Request) {
         })
 
         if (error) {
-          // If contact already exists, count as skipped
           if (error.message?.includes("already exists")) {
             skipped++
             continue
@@ -115,7 +81,6 @@ export async function POST(req: Request) {
 
         synced++
 
-        // Update person record with Resend contact ID
         if (data?.id) {
           await supabase
             .from("people")
@@ -127,7 +92,6 @@ export async function POST(req: Request) {
             .eq("id", person.id)
         }
 
-        // Add small delay to avoid rate limiting
         await new Promise((resolve) => setTimeout(resolve, 50))
       } catch (error) {
         console.error(`Error syncing person ${person.id}:`, error)
@@ -153,4 +117,3 @@ export async function POST(req: Request) {
     )
   }
 }
-

@@ -4,17 +4,10 @@ import { createClient } from "@/lib/supabase/server"
 
 export const maxDuration = 60
 
-/**
- * Sync a person to Resend as a contact
- * 
- * This endpoint syncs people from your database to Resend contacts
- * for better audience management and deliverability tracking
- */
 export async function POST(req: Request) {
   try {
     const supabase = await createClient()
 
-    // Get authenticated user
     const {
       data: { user },
       error: authError,
@@ -37,33 +30,8 @@ export async function POST(req: Request) {
       )
     }
 
-    // Get or create the default audience
-    const { data: audiences } = await resend.audiences.list()
-    let audienceId: string
-
-    if (audiences && audiences.data && audiences.data.length > 0) {
-      // Use the first (default) audience
-      audienceId = audiences.data[0].id
-    } else {
-      // Create a default audience
-      const { data: newAudience, error: audienceError } = await resend.audiences.create({
-        name: "Default Audience",
-      })
-
-      if (audienceError || !newAudience) {
-        return NextResponse.json(
-          { error: "Failed to create audience", details: audienceError },
-          { status: 500 }
-        )
-      }
-
-      audienceId = newAudience.id
-    }
-
-    // Create or update contact in Resend
     try {
       const { data, error } = await resend.contacts.create({
-        audienceId,
         email,
         firstName: first_name || "",
         lastName: last_name || "",
@@ -71,9 +39,7 @@ export async function POST(req: Request) {
       })
 
       if (error) {
-        // If contact already exists, that's okay
         if (error.message?.includes("already exists")) {
-          console.log(`Contact already exists for ${email}`)
           return NextResponse.json({
             success: true,
             message: "Contact already exists in Resend",
@@ -88,7 +54,6 @@ export async function POST(req: Request) {
         )
       }
 
-      // Update person record with Resend contact ID if person_id provided
       if (person_id && data?.id) {
         await supabase
           .from("people")
@@ -120,4 +85,3 @@ export async function POST(req: Request) {
     )
   }
 }
-

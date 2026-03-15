@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { createBroadcast, sendBroadcast } from "@/lib/resend-broadcasts"
+import { createBroadcast } from "@/lib/resend-broadcasts"
 
 export const maxDuration = 60
 
@@ -8,7 +8,6 @@ export async function POST(req: Request) {
   try {
     const supabase = await createClient()
 
-    // Get the current user
     const {
       data: { user },
     } = await supabase.auth.getUser()
@@ -17,7 +16,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get user's profile
     const { data: profile } = await supabase
       .from("profiles")
       .select("account_id")
@@ -28,21 +26,23 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "No account found" }, { status: 404 })
     }
 
-    // Get account details
-    const { data: account } = await supabase
-      .from("accounts")
-      .select("*")
-      .eq("id", profile.account_id)
-      .single()
-
-    if (!account) {
-      return NextResponse.json({ error: "Account not found" }, { status: 404 })
-    }
-
     const body = await req.json()
     const { list_id, name, subject, content, sender, sendNow } = body
 
-    // Get the list and its Resend segment ID
+    if (!sender) {
+      return NextResponse.json(
+        { error: "Sender is required. Please select a verified sender." },
+        { status: 400 }
+      )
+    }
+
+    if (!subject || !content) {
+      return NextResponse.json(
+        { error: "Subject and content are required." },
+        { status: 400 }
+      )
+    }
+
     const { data: list } = await supabase
       .from("lists")
       .select("*, list_people(count)")
@@ -61,19 +61,37 @@ export async function POST(req: Request) {
       )
     }
 
-    // Get sender email from account
-    const senderEmail = sender || `${account.name} <${account.email}>`
+    const isHtml = /<[a-z][\s\S]*>/i.test(content)
+    const bodyHtml = isHtml
+      ? content
+      : content
+          .split(/\n\n+/)
+          .map((block: string) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
+          .join("")
 
-    // Create broadcast in Resend
+    const unsubscribeFooter = `
+      <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e5e5;text-align:center;">
+        <p style="font-size:12px;color:#737373;margin:0;">
+          You're receiving this because you're on the <strong>${list.name}</strong> list.
+        </p>
+        <p style="font-size:12px;color:#737373;margin:4px 0 0;">
+          <a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#737373;text-decoration:underline;">Unsubscribe</a> from this list.
+        </p>
+      </div>`
+
+    const htmlContent = bodyHtml + unsubscribeFooter
+
     const resendResult = await createBroadcast({
       segmentId: list.resend_segment_id,
-      from: senderEmail,
+      from: sender,
       subject,
-      html: content,
-      name,
+      html: htmlContent,
+      name: name || subject,
+      sendImmediately: !!sendNow,
     })
 
     if (!resendResult.success || !resendResult.data) {
+      console.error("Resend createBroadcast failed:", resendResult.error)
       return NextResponse.json(
         { error: "Failed to create broadcast in Resend", details: resendResult.error },
         { status: 500 }
@@ -82,7 +100,6 @@ export async function POST(req: Request) {
 
     const resendBroadcastId = resendResult.data.id
 
-    // Create broadcast record in our database
     const { data: broadcast, error: broadcastError } = await supabase
       .from("broadcasts")
       .insert({
@@ -90,11 +107,12 @@ export async function POST(req: Request) {
         list_id: list.id,
         resend_broadcast_id: resendBroadcastId,
         resend_segment_id: list.resend_segment_id,
-        name,
+        name: name || subject,
         subject,
         content,
-        sender: senderEmail,
-        status: sendNow ? "sending" : "draft",
+        sender,
+        status: sendNow ? "sent" : "draft",
+        sent_at: sendNow ? new Date().toISOString() : null,
         total_recipients: list.list_people?.[0]?.count || 0,
       })
       .select()
@@ -106,33 +124,6 @@ export async function POST(req: Request) {
         { error: "Failed to create broadcast record" },
         { status: 500 }
       )
-    }
-
-    // Send immediately if requested
-    if (sendNow) {
-      const sendResult = await sendBroadcast(resendBroadcastId)
-
-      if (!sendResult.success) {
-        // Update status to failed
-        await supabase
-          .from("broadcasts")
-          .update({ status: "failed" })
-          .eq("id", broadcast.id)
-
-        return NextResponse.json(
-          { error: "Failed to send broadcast", details: sendResult.error },
-          { status: 500 }
-        )
-      }
-
-      // Update status to sent
-      await supabase
-        .from("broadcasts")
-        .update({
-          status: "sent",
-          sent_at: new Date().toISOString(),
-        })
-        .eq("id", broadcast.id)
     }
 
     return NextResponse.json({
@@ -148,4 +139,3 @@ export async function POST(req: Request) {
     )
   }
 }
-
