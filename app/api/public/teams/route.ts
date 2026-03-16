@@ -4,10 +4,12 @@ import { NextRequest, NextResponse } from "next/server"
 interface PublicTeamRef {
   id: string
   name: string | null
+  slug: string | null
 }
 
 interface PublicPlayer {
   id: string
+  slug: string | null
   first_name: string | null
   last_name: string | null
   name: string | null
@@ -27,6 +29,7 @@ interface PublicPlayer {
 
 interface PublicStaff {
   id: string
+  slug: string | null
   first_name: string | null
   last_name: string | null
   name: string | null
@@ -80,6 +83,7 @@ export async function GET(request: NextRequest) {
           photo,
           people(
             id,
+            slug,
             first_name,
             last_name,
             name,
@@ -99,6 +103,7 @@ export async function GET(request: NextRequest) {
           ),
           people(
             id,
+            slug,
             first_name,
             last_name,
             name,
@@ -130,7 +135,7 @@ export async function GET(request: NextRequest) {
         const person = Array.isArray(r.people) ? r.people[0] : r.people
         const personId = person?.id
         if (!personId || person?.is_public !== true) continue
-        const ref = { id: team.id, name: team.name }
+        const ref = { id: team.id, name: team.name, slug: team.slug ?? null }
         const existing = personToTeams.get(personId) ?? []
         if (!existing.some((t) => t.id === team.id)) {
           personToTeams.set(personId, [...existing, ref])
@@ -149,11 +154,12 @@ export async function GET(request: NextRequest) {
         year: a.year ?? null,
       })),
       staff: (team.staff ?? []).map((s: any) => ({
-        id: s.people?.id,
-        first_name: s.people?.first_name ?? null,
-        last_name: s.people?.last_name ?? null,
-        name: s.people?.name ?? null,
-        photo: s.photo ?? s.people?.photo ?? null,
+        id: (Array.isArray(s.people) ? s.people[0] : s.people)?.id,
+        slug: (Array.isArray(s.people) ? s.people[0] : s.people)?.slug ?? null,
+        first_name: (Array.isArray(s.people) ? s.people[0] : s.people)?.first_name ?? null,
+        last_name: (Array.isArray(s.people) ? s.people[0] : s.people)?.last_name ?? null,
+        name: (Array.isArray(s.people) ? s.people[0] : s.people)?.name ?? null,
+        photo: s.photo ?? (Array.isArray(s.people) ? s.people[0] : s.people)?.photo ?? null,
       })),
       players: (team.rosters ?? [])
         .filter((r: any) => {
@@ -164,6 +170,7 @@ export async function GET(request: NextRequest) {
           const p = Array.isArray(r.people) ? r.people[0] : r.people
           return {
           id: p?.id,
+          slug: p?.slug ?? null,
           first_name: p?.first_name ?? null,
           last_name: p?.last_name ?? null,
           name: p?.name ?? null,

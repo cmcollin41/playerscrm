@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Camera, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { slugify, ensureUniqueSlug } from "@/lib/slug";
 
 const TEAM_LEVELS = [
   { value: "bantam", label: "Bantam" },
@@ -90,6 +91,15 @@ export default function CreateTeamModal({ account }: { account: any }) {
   const onSubmit = async (data: any) => {
     setIsLoading(true);
     try {
+      const baseSlug = slugify(data.name || "team");
+      const { data: existing } = await supabase
+        .from("teams")
+        .select("slug")
+        .eq("account_id", account.id)
+        .not("slug", "is", null);
+      const existingSlugs = (existing ?? []).map((t: { slug: string }) => t.slug).filter(Boolean);
+      const slug = baseSlug ? ensureUniqueSlug(baseSlug, existingSlugs) : null;
+
       const { error } = await supabase.from("teams").insert([
         {
           account_id: account.id,
@@ -98,6 +108,7 @@ export default function CreateTeamModal({ account }: { account: any }) {
           level,
           icon: imagePreview,
           is_public: isPublic,
+          slug,
         },
       ]);
 

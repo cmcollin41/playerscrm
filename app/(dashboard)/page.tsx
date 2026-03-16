@@ -16,7 +16,7 @@ export default async function Dashboard() {
 
   const account = await getAccount();
 
-  // Fetch teams with roster counts
+  // Fetch teams with roster counts (newest first for recent activity)
   const { data: teams } = await supabase
     .from("teams")
     .select(
@@ -40,7 +40,8 @@ export default async function Dashboard() {
         )
       `,
     )
-    .eq("account_id", account.id);
+    .eq("account_id", account.id)
+    .order("created_at", { ascending: false });
 
   // Fetch people
   const { data: people } = await supabase

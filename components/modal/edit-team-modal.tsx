@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Loader2, Camera, X } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
+import { slugify, ensureUniqueSlug } from "@/lib/slug";
 
 const TEAM_LEVELS = [
   { value: "bantam", label: "Bantam" },
@@ -106,6 +107,17 @@ export default function EditTeamModal({ team }: { team?: any }) {
   const onSubmit = async (data: any) => {
     setIsLoading(true);
     try {
+      const baseSlug = slugify(data.name || "team");
+      const { data: existing } = await supabase
+        .from("teams")
+        .select("id, slug")
+        .eq("account_id", team?.account_id || "");
+      const existingSlugs = (existing ?? [])
+        .filter((t: { id: string; slug: string }) => t.id !== team?.id)
+        .map((t: { slug: string }) => t.slug)
+        .filter(Boolean);
+      const slug = baseSlug ? ensureUniqueSlug(baseSlug, existingSlugs) : null;
+
       const teamData = {
         name: data.name,
         coach: data.coach,
@@ -113,6 +125,7 @@ export default function EditTeamModal({ team }: { team?: any }) {
         is_public: data.is_public,
         level,
         icon: imagePreview,
+        slug,
       };
 
       let error;

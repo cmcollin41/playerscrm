@@ -63,6 +63,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import useProfile from "@/lib/hooks/use-profile"
+import { slugify, ensureUniqueSlug } from "@/lib/slug"
 
 
 interface PersonSheetProps {
@@ -324,9 +325,24 @@ export default function PersonSheet({
       setIsSubmitting(true);
       setError(null);
 
-      // Prepare person data
+      if (!account?.id) {
+        throw new Error("Account ID is missing");
+      }
+
+      const baseSlug = slugify(`${values.firstName} ${values.lastName}`.trim() || "person");
+      const { data: existing } = await supabase
+        .from("people")
+        .select("id, slug")
+        .eq("account_id", account.id)
+        .not("slug", "is", null);
+      const existingSlugs = (existing ?? [])
+        .filter((p: { id: string }) => p.id !== person?.id)
+        .map((p: { slug: string }) => p.slug)
+        .filter(Boolean);
+      const slug = baseSlug ? ensureUniqueSlug(baseSlug, existingSlugs) : null;
+
       const personData = {
-        account_id: account?.id,
+        account_id: account.id,
         first_name: values.firstName,
         last_name: values.lastName,
         name: `${values.firstName} ${values.lastName}`,
@@ -339,11 +355,8 @@ export default function PersonSheet({
         photo: values.photo || null,
         is_public: values.isPublic,
         bio: values.bio || null,
+        slug,
       };
-
-      if (!account?.id) {
-        throw new Error("Account ID is missing");
-      }
 
       // Create or update person
       const { data: savedPerson, error: personError } = await supabase
