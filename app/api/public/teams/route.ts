@@ -127,8 +127,9 @@ export async function GET(request: NextRequest) {
     const personToTeams = new Map<string, PublicTeamRef[]>()
     for (const team of teams ?? []) {
       for (const r of team.rosters ?? []) {
-        const personId = r.people?.id
-        if (!personId || r.people?.is_public !== true) continue
+        const person = Array.isArray(r.people) ? r.people[0] : r.people
+        const personId = person?.id
+        if (!personId || person?.is_public !== true) continue
         const ref = { id: team.id, name: team.name }
         const existing = personToTeams.get(personId) ?? []
         if (!existing.some((t) => t.id === team.id)) {
@@ -155,18 +156,23 @@ export async function GET(request: NextRequest) {
         photo: s.photo ?? s.people?.photo ?? null,
       })),
       players: (team.rosters ?? [])
-        .filter((r: any) => r.people?.is_public === true)
-        .map((r: any) => ({
-          id: r.people?.id,
-          first_name: r.people?.first_name ?? null,
-          last_name: r.people?.last_name ?? null,
-          name: r.people?.name ?? null,
-          photo: r.photo ?? r.people?.photo ?? null,
+        .filter((r: any) => {
+          const p = Array.isArray(r.people) ? r.people[0] : r.people
+          return p?.is_public === true
+        })
+        .map((r: any) => {
+          const p = Array.isArray(r.people) ? r.people[0] : r.people
+          return {
+          id: p?.id,
+          first_name: p?.first_name ?? null,
+          last_name: p?.last_name ?? null,
+          name: p?.name ?? null,
+          photo: r.photo ?? p?.photo ?? null,
           height: r.height ?? null,
-          weight_lbs: r.people?.weight_lbs ?? null,
-          grad_year: r.people?.grad_year ?? null,
-          hometown: r.people?.hometown ?? null,
-          bio: r.people?.bio ?? null,
+          weight_lbs: p?.weight_lbs ?? null,
+          grad_year: p?.grad_year ?? null,
+          hometown: p?.hometown ?? null,
+          bio: p?.bio ?? null,
           season_bio: r.bio ?? null,
           jersey_number: r.jersey_number ?? null,
           position: r.position ?? null,
@@ -174,8 +180,9 @@ export async function GET(request: NextRequest) {
           awards: (r.roster_awards ?? []).map((a: any) => ({
             title: a.title,
           })),
-          teams: personToTeams.get(r.people?.id) ?? [],
-        })),
+          teams: personToTeams.get(p?.id) ?? [],
+        }
+        }),
     }))
 
     return NextResponse.json(
