@@ -125,7 +125,7 @@ export type Person = {
 
 const createColumns = (
   team: any, 
-  onEditRoster: (roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null; bio: string | null; personId: string; height: string | null }, personName: string) => void,
+  onEditRoster: (roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null; bio: string | null; personId: string; height: string | null; photo: string | null }, personName: string) => void,
   onResendInvoice: (invoiceId: string) => void,
   resendingInvoiceId: string | null
 ): ColumnDef<Person>[] => [
@@ -151,17 +151,21 @@ const createColumns = (
   {
     accessorKey: "name",
     header: "Name",
-    cell: ({ row }) => (
-      <div className="flex items-center gap-3">
-        <Avatar className="h-8 w-8">
-          {row.original.photo && <AvatarImage src={row.original.photo} alt={row.getValue("name") as string} />}
-          <AvatarFallback className="text-xs">
-            {getInitials(row.original.first_name, row.original.last_name)}
-          </AvatarFallback>
-        </Avatar>
-        <div className="font-medium">{row.getValue("name")}</div>
-      </div>
-    ),
+    cell: ({ row }) => {
+      const roster = team.rosters?.find((r: any) => r.person_id === row.original.id)
+      const photoUrl = roster?.photo || row.original.photo
+      return (
+        <div className="flex items-center gap-3">
+          <Avatar className="h-8 w-8">
+            {photoUrl && <AvatarImage src={photoUrl} alt={row.getValue("name") as string} />}
+            <AvatarFallback className="text-xs">
+              {getInitials(row.original.first_name, row.original.last_name)}
+            </AvatarFallback>
+          </Avatar>
+          <div className="font-medium">{row.getValue("name")}</div>
+        </div>
+      )
+    },
   },
   {
     accessorKey: "jersey_number",
@@ -327,6 +331,7 @@ const createColumns = (
               bio: roster?.bio ?? null,
               personId: person.id,
               height: roster?.height ?? null,
+              photo: roster?.photo ?? null,
             }, person.name)}
             className="h-8 px-3 text-xs"
             title="Edit Roster Entry"
@@ -414,10 +419,11 @@ export function TeamTable({
   const [editingBio, setEditingBio] = useState<string | null>(null);
   const [editingPersonId, setEditingPersonId] = useState<string>("");
   const [editingHeight, setEditingHeight] = useState<string | null>(null);
+  const [editingPhoto, setEditingPhoto] = useState<string | null>(null);
   const [editingPersonName, setEditingPersonName] = useState<string>("");
 
   const handleEditRoster = (
-    roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null; bio: string | null; personId: string; height: string | null },
+    roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null; bio: string | null; personId: string; height: string | null; photo: string | null },
     personName: string
   ) => {
     setEditingRosterId(roster.id);
@@ -428,6 +434,7 @@ export function TeamTable({
     setEditingBio(roster.bio);
     setEditingPersonId(roster.personId);
     setEditingHeight(roster.height);
+    setEditingPhoto(roster.photo);
     setEditingPersonName(personName);
     setEditModalOpen(true);
   };
@@ -534,6 +541,8 @@ export function TeamTable({
         currentBio={editingBio}
         personId={editingPersonId}
         currentHeight={editingHeight}
+        currentPhoto={editingPhoto}
+        accountId={account?.id ?? ""}
         personName={editingPersonName}
         onRefresh={onRefresh}
       />

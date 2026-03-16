@@ -34,6 +34,13 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -185,7 +192,9 @@ export function TeamTable({ data, account }: { data: Team[]; account: any }) {
   const supabase = createClient();
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([
+    { id: "level", value: "bantam" },
+  ]);
 
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
@@ -315,6 +324,24 @@ export function TeamTable({ data, account }: { data: Team[]; account: any }) {
           }
           className="max-w-sm"
         />
+        <Select
+          value={(table.getColumn("level")?.getFilterValue() as string) ?? "all"}
+          onValueChange={(value) =>
+            table.getColumn("level")?.setFilterValue(value === "all" ? undefined : value)
+          }
+        >
+          <SelectTrigger className="w-[140px]">
+            <SelectValue placeholder="Level" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All levels</SelectItem>
+            {Object.entries(LEVEL_LABELS).map(([value, label]) => (
+              <SelectItem key={value} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="flex items-center justify-between">

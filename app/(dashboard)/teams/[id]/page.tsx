@@ -8,12 +8,13 @@ import GenericButton from "@/components/modal-buttons/generic-button";
 import EditTeamModal from "@/components/modal/edit-team-modal";
 import { useEffect, useState, use } from "react";
 import { AddToStaffModal } from "@/components/modal/add-to-staff-modal";
+import { EditStaffModal } from "@/components/modal/edit-staff-modal";
 import { AddToRosterModal } from "@/components/modal/add-to-roster-modal";
 import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, DollarSign, CheckCircle, AlertCircle, X, Plus, Trophy } from "lucide-react";
+import { Users, DollarSign, CheckCircle, AlertCircle, X, Plus, Trophy, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -153,6 +154,18 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
       fetchTeam()
     }
     setIsAddingAward(false)
+  }
+
+  const [editStaffOpen, setEditStaffOpen] = useState(false)
+  const [editingStaff, setEditingStaff] = useState<{ id: string; personName: string; photo: string | null } | null>(null)
+
+  const openEditStaff = (staffMember: any) => {
+    setEditingStaff({
+      id: staffMember.id,
+      personName: staffMember.people?.name || "Staff",
+      photo: staffMember.photo ?? null,
+    })
+    setEditStaffOpen(true)
   }
 
   const removeAward = async (awardId: string) => {
@@ -315,10 +328,25 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
               accountId={account?.id}
               onSuccess={fetchTeam}
             />
-            <AddToStaffModal 
-              team={team} 
+            <AddToStaffModal
+              team={team}
+              accountId={account?.id ?? ""}
               onSuccess={fetchTeam}
             />
+            {editingStaff && (
+              <EditStaffModal
+                open={editStaffOpen}
+                onOpenChange={(open) => {
+                  setEditStaffOpen(open)
+                  if (!open) setEditingStaff(null)
+                }}
+                staffId={editingStaff.id}
+                personName={editingStaff.personName}
+                currentPhoto={editingStaff.photo}
+                accountId={account?.id ?? ""}
+                onRefresh={fetchTeam}
+              />
+            )}
             <GenericButton
               cta="Edit Team"
               size={undefined}
@@ -410,8 +438,8 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
                     className="flex items-center gap-2"
                   >
                     <Avatar className="h-8 w-8">
-                      {staffMember.people?.photo && (
-                        <AvatarImage src={staffMember.people.photo} alt={staffMember.people.name} />
+                      {(staffMember.photo || staffMember.people?.photo) && (
+                        <AvatarImage src={staffMember.photo || staffMember.people?.photo} alt={staffMember.people?.name} />
                       )}
                       <AvatarFallback className="text-xs">
                         {getInitials(
@@ -424,8 +452,15 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
                   </Link>
                   <button
                     type="button"
+                    onClick={() => openEditStaff(staffMember)}
+                    className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-gray-200 group-hover:opacity-100"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => removeStaff(staffMember.id)}
-                    className="ml-1 flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-red-100 hover:text-red-600 group-hover:opacity-100"
+                    className="ml-0.5 flex h-5 w-5 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-red-100 hover:text-red-600 group-hover:opacity-100"
                   >
                     <X className="h-3 w-3" />
                   </button>

@@ -30,6 +30,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Button } from "@/components/ui/button";
+import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -60,9 +61,11 @@ interface Person {
 
 export function AddToStaffModal({
   team,
+  accountId,
   onSuccess,
 }: {
   team: { id: string };
+  accountId: string;
   onSuccess?: () => void;
 }) {
   const { refresh } = useRouter();
@@ -72,6 +75,7 @@ export function AddToStaffModal({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [comboboxOpen, setComboboxOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
 
   const form = useForm<FormValues>({
@@ -100,6 +104,7 @@ export function AddToStaffModal({
       {
         team_id: team.id,
         person_id: data.person,
+        photo: photoPreview || null,
       },
     ])
 
@@ -110,6 +115,7 @@ export function AddToStaffModal({
 
     setDialogOpen(false)
     form.reset()
+    setPhotoPreview(null)
     toast.success("Staff member added to team")
     
     // Call the success callback if provided, otherwise use router.refresh()
@@ -212,6 +218,29 @@ export function AddToStaffModal({
                 </FormItem>
               )}
             />
+
+            {selectedPerson && (
+              <div className="space-y-1">
+                <ImageDropzone
+                  value={photoPreview}
+                  onChange={setPhotoPreview}
+                  onFileSelect={async (file) => {
+                    const ext = file.name.split(".").pop();
+                    const fileName = `staff/${accountId}/${crypto.randomUUID()}.${ext}`;
+                    const { data, error } = await supabase.storage
+                      .from("headshots")
+                      .upload(fileName, file, { upsert: true });
+                    if (error) throw error;
+                    const { data: urlData } = supabase.storage.from("headshots").getPublicUrl(data.path);
+                    toast.success("Image uploaded");
+                    return urlData.publicUrl;
+                  }}
+                  onError={(msg) => toast.error(msg)}
+                  placeholder="Drop image or click to upload"
+                />
+                <p className="text-xs text-muted-foreground">Overrides person photo for this team</p>
+              </div>
+            )}
 
             <DialogFooter>
               <Button

@@ -38,6 +38,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { ImageDropzone } from "@/components/ui/image-dropzone"
 import { Check, ChevronsUpDown, Plus, X, Trophy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
@@ -99,8 +100,9 @@ export function AddToRosterModal({
   const [comboboxOpen, setComboboxOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [awards, setAwards] = useState<{ id: string; title: string }[]>([])
+  const [awards, setAwards] = useState<{ title: string }[]>([])
   const [newAwardTitle, setNewAwardTitle] = useState("")
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -133,20 +135,7 @@ export function AddToRosterModal({
     }
   }, [supabase, accountId, dialogOpen])
 
-  const selectedPersonId = form.watch("person")
-  const selectedPerson = people.find((p) => p.id === selectedPersonId)
-
-  useEffect(() => {
-    if (!selectedPersonId) return
-    const fetchPersonDetails = async () => {
-      const { data: personAwards } = await supabase
-        .from("person_awards")
-        .select("id, title")
-        .eq("person_id", selectedPersonId)
-      setAwards(personAwards ?? [])
-    }
-    fetchPersonDetails()
-  }, [selectedPersonId, supabase])
+  const selectedPerson = people.find((p) => p.id === form.watch("person"))
 
   const filteredPeople = people.filter((person) => {
     const name = person.name || `${person.first_name} ${person.last_name}`
@@ -182,7 +171,15 @@ export function AddToRosterModal({
         rosterData.height = data.height
       }
 
-      const { error } = await supabase.from("rosters").insert([rosterData])
+      if (photoPreview) {
+        rosterData.photo = photoPreview
+      }
+
+      const { data: insertedRoster, error } = await supabase
+        .from("rosters")
+        .insert([rosterData])
+        .select("id")
+        .single()
 
       if (error) {
         // Check if it's a duplicate error
@@ -195,8 +192,16 @@ export function AddToRosterModal({
         return
       }
 
+      if (insertedRoster?.id && awards.length > 0) {
+        await supabase.from("roster_awards").insert(
+          awards.map((a) => ({ roster_id: insertedRoster.id, title: a.title }))
+        )
+      }
+
       setDialogOpen(false)
       form.reset()
+      setAwards([])
+      setPhotoPreview(null)
       toast.success("Roster member added to team")
       
       // Call the success callback if provided
@@ -399,77 +404,78 @@ export function AddToRosterModal({
               />
             </div>
 
-            {selectedPersonId && (
-              <div className="space-y-2">
-                <FormLabel>Awards</FormLabel>
-                {awards.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {awards.map((award) => (
-                      <Badge key={award.id} variant="secondary" className="gap-1 pr-1">
-                        <Trophy className="h-3 w-3 text-yellow-600" />
-                        {award.title}
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            await supabase.from("person_awards").delete().eq("id", award.id)
-                            setAwards((prev) => prev.filter((a) => a.id !== award.id))
-                          }}
-                          className="ml-0.5 rounded-full p-0.5 hover:bg-red-100 hover:text-red-600"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-                <div className="flex items-center gap-2">
-                  <Input
-                    placeholder="Award title (e.g. All-State)"
-                    value={newAwardTitle}
-                    onChange={(e) => setNewAwardTitle(e.target.value)}
-                    className="flex-1"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault()
-                        if (!newAwardTitle.trim()) return
-                        const addAward = async () => {
-                          const { data, error } = await supabase
-                            .from("person_awards")
-                            .insert({ person_id: selectedPersonId, title: newAwardTitle.trim() })
-                            .select("id, title")
-                            .single()
-                          if (!error && data) {
-                            setAwards((prev) => [data, ...prev])
-                            setNewAwardTitle("")
-                          }
-                        }
-                        addAward()
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    disabled={!newAwardTitle.trim()}
-                    onClick={async () => {
-                      if (!newAwardTitle.trim()) return
-                      const { data, error } = await supabase
-                        .from("person_awards")
-                        .insert({ person_id: selectedPersonId, title: newAwardTitle.trim() })
-                        .select("id, title")
-                        .single()
-                      if (!error && data) {
-                        setAwards((prev) => [data, ...prev])
+            <div className="space-y-1">
+              <ImageDropzone
+                value={photoPreview}
+                onChange={setPhotoPreview}
+                onFileSelect={async (file) => {
+                  const ext = file.name.split(".").pop()
+                  const fileName = `rosters/${accountId}/${crypto.randomUUID()}.${ext}`
+                  const { data, error } = await supabase.storage
+                    .from("headshots")
+                    .upload(fileName, file, { upsert: true })
+                  if (error) throw error
+                  const { data: urlData } = supabase.storage.from("headshots").getPublicUrl(data.path)
+                  toast.success("Image uploaded")
+                  return urlData.publicUrl
+                }}
+                onError={(msg) => toast.error(msg)}
+                placeholder="Drop image or click to upload"
+              />
+              <p className="text-xs text-muted-foreground">Overrides person photo for this roster</p>
+            </div>
+
+            <div className="space-y-2">
+              <FormLabel>Awards</FormLabel>
+              {awards.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {awards.map((award, i) => (
+                    <Badge key={i} variant="secondary" className="gap-1 pr-1">
+                      <Trophy className="h-3 w-3 text-yellow-600" />
+                      {award.title}
+                      <button
+                        type="button"
+                        onClick={() => setAwards((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="ml-0.5 rounded-full p-0.5 hover:bg-red-100 hover:text-red-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Input
+                  placeholder="Award title (e.g. All-State)"
+                  value={newAwardTitle}
+                  onChange={(e) => setNewAwardTitle(e.target.value)}
+                  className="flex-1 min-w-[140px]"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      if (newAwardTitle.trim()) {
+                        setAwards((prev) => [...prev, { title: newAwardTitle.trim() }])
                         setNewAwardTitle("")
                       }
-                    }}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={!newAwardTitle.trim()}
+                  onClick={() => {
+                    if (newAwardTitle.trim()) {
+                      setAwards((prev) => [...prev, { title: newAwardTitle.trim() }])
+                      setNewAwardTitle("")
+                    }
+                  }}
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
               </div>
-            )}
+            </div>
 
             <FormField
               control={form.control}

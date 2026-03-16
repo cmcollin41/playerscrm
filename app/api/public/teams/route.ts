@@ -1,6 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextRequest, NextResponse } from "next/server"
 
+interface PublicTeamRef {
+  id: string
+  name: string | null
+}
+
 interface PublicPlayer {
   id: string
   first_name: string | null
@@ -17,6 +22,7 @@ interface PublicPlayer {
   position: string | null
   grade: string | null
   awards: PublicAward[]
+  teams: PublicTeamRef[]
 }
 
 interface PublicStaff {
@@ -71,6 +77,7 @@ export async function GET(request: NextRequest) {
         ),
         staff(
           id,
+          photo,
           people(
             id,
             first_name,
@@ -80,11 +87,16 @@ export async function GET(request: NextRequest) {
           )
         ),
         rosters(
+          id,
+          photo,
           jersey_number,
           position,
           grade,
           bio,
           height,
+          roster_awards(
+            title
+          ),
           people(
             id,
             first_name,
@@ -95,10 +107,7 @@ export async function GET(request: NextRequest) {
             grad_year,
             hometown,
             bio,
-            is_public,
-            person_awards(
-              title
-            )
+            is_public
           )
         )
       `)
@@ -113,6 +122,19 @@ export async function GET(request: NextRequest) {
         { error: "Failed to fetch teams" },
         { status: 500 }
       )
+    }
+
+    const personToTeams = new Map<string, PublicTeamRef[]>()
+    for (const team of teams ?? []) {
+      for (const r of team.rosters ?? []) {
+        const personId = r.people?.id
+        if (!personId || r.people?.is_public !== true) continue
+        const ref = { id: team.id, name: team.name }
+        const existing = personToTeams.get(personId) ?? []
+        if (!existing.some((t) => t.id === team.id)) {
+          personToTeams.set(personId, [...existing, ref])
+        }
+      }
     }
 
     const publicTeams: PublicTeam[] = (teams ?? []).map((team: any) => ({
@@ -130,7 +152,7 @@ export async function GET(request: NextRequest) {
         first_name: s.people?.first_name ?? null,
         last_name: s.people?.last_name ?? null,
         name: s.people?.name ?? null,
-        photo: s.people?.photo ?? null,
+        photo: s.photo ?? s.people?.photo ?? null,
       })),
       players: (team.rosters ?? [])
         .filter((r: any) => r.people?.is_public === true)
@@ -139,7 +161,7 @@ export async function GET(request: NextRequest) {
           first_name: r.people?.first_name ?? null,
           last_name: r.people?.last_name ?? null,
           name: r.people?.name ?? null,
-          photo: r.people?.photo ?? null,
+          photo: r.photo ?? r.people?.photo ?? null,
           height: r.height ?? null,
           weight_lbs: r.people?.weight_lbs ?? null,
           grad_year: r.people?.grad_year ?? null,
@@ -149,9 +171,10 @@ export async function GET(request: NextRequest) {
           jersey_number: r.jersey_number ?? null,
           position: r.position ?? null,
           grade: r.grade ?? null,
-          awards: (r.people?.person_awards ?? []).map((a: any) => ({
+          awards: (r.roster_awards ?? []).map((a: any) => ({
             title: a.title,
           })),
+          teams: personToTeams.get(r.people?.id) ?? [],
         })),
     }))
 

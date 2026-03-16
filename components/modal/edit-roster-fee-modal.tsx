@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { ImageDropzone } from "@/components/ui/image-dropzone";
 import { Plus, X, Trophy } from "lucide-react";
 import {
   Select,
@@ -47,6 +48,8 @@ interface EditRosterFeeModalProps {
   currentBio?: string | null;
   personId: string;
   currentHeight?: string | null;
+  currentPhoto?: string | null;
+  accountId: string;
   personName: string;
   onRefresh?: () => void | Promise<void>;
 }
@@ -62,6 +65,8 @@ export default function EditRosterFeeModal({
   currentBio,
   personId,
   currentHeight,
+  currentPhoto,
+  accountId,
   personName,
   onRefresh,
 }: EditRosterFeeModalProps) {
@@ -76,6 +81,7 @@ export default function EditRosterFeeModal({
   const [height, setHeight] = useState<string>("");
   const [awards, setAwards] = useState<{ id: string; title: string }[]>([]);
   const [newAwardTitle, setNewAwardTitle] = useState("");
+  const [photo, setPhoto] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -103,16 +109,17 @@ export default function EditRosterFeeModal({
       setGrade(currentGrade || "");
       setBio(currentBio || "");
       setHeight(currentHeight || "");
+      setPhoto(currentPhoto || "");
 
-      if (personId) {
+      if (rosterId) {
         supabase
-          .from("person_awards")
+          .from("roster_awards")
           .select("id, title")
-          .eq("person_id", personId)
+          .eq("roster_id", rosterId)
           .then(({ data }) => setAwards(data ?? []));
       }
     }
-  }, [open, currentFeeId, currentJerseyNumber, currentPosition, currentGrade, currentBio, currentHeight, personId, supabase]);
+  }, [open, currentFeeId, currentJerseyNumber, currentPosition, currentGrade, currentBio, currentHeight, currentPhoto, rosterId, supabase]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,6 +139,7 @@ export default function EditRosterFeeModal({
       updateData.grade = grade && grade !== "none_clear" ? grade : null;
       updateData.bio = bio || null;
       updateData.height = height || null;
+      updateData.photo = photo || null;
 
       const { error } = await supabase
         .from("rosters")
@@ -207,6 +215,27 @@ export default function EditRosterFeeModal({
             </div>
           </div>
 
+          <div className="space-y-1">
+            <ImageDropzone
+              value={photo || null}
+              onChange={(url) => setPhoto(url || "")}
+              onFileSelect={async (file) => {
+                const ext = file.name.split(".").pop();
+                const fileName = `rosters/${accountId}/${crypto.randomUUID()}.${ext}`;
+                const { data, error } = await supabase.storage
+                  .from("headshots")
+                  .upload(fileName, file, { upsert: true });
+                if (error) throw error;
+                const { data: urlData } = supabase.storage.from("headshots").getPublicUrl(data.path);
+                toast.success("Image uploaded");
+                return urlData.publicUrl;
+              }}
+              onError={(msg) => toast.error(msg)}
+              placeholder="Drop image or click to upload"
+            />
+            <p className="text-xs text-muted-foreground">Overrides person photo for this roster</p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="height">Height</Label>
             <Input
@@ -228,7 +257,7 @@ export default function EditRosterFeeModal({
                     <button
                       type="button"
                       onClick={async () => {
-                        await supabase.from("person_awards").delete().eq("id", award.id);
+                        await supabase.from("roster_awards").delete().eq("id", award.id);
                         setAwards((prev) => prev.filter((a) => a.id !== award.id));
                       }}
                       className="ml-0.5 rounded-full p-0.5 hover:bg-red-100 hover:text-red-600"
@@ -248,10 +277,10 @@ export default function EditRosterFeeModal({
                 onKeyDown={async (e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
-                    if (!newAwardTitle.trim() || !personId) return;
+                    if (!newAwardTitle.trim() || !rosterId) return;
                     const { data, error } = await supabase
-                      .from("person_awards")
-                      .insert({ person_id: personId, title: newAwardTitle.trim() })
+                      .from("roster_awards")
+                      .insert({ roster_id: rosterId, title: newAwardTitle.trim() })
                       .select("id, title")
                       .single();
                     if (!error && data) {
@@ -267,10 +296,10 @@ export default function EditRosterFeeModal({
                 variant="outline"
                 disabled={!newAwardTitle.trim()}
                 onClick={async () => {
-                  if (!newAwardTitle.trim() || !personId) return;
+                  if (!newAwardTitle.trim() || !rosterId) return;
                   const { data, error } = await supabase
-                    .from("person_awards")
-                    .insert({ person_id: personId, title: newAwardTitle.trim() })
+                    .from("roster_awards")
+                    .insert({ roster_id: rosterId, title: newAwardTitle.trim() })
                     .select("id, title")
                     .single();
                   if (!error && data) {
