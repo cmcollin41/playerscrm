@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Camera, X } from "lucide-react";
+import { Loader2, Camera, X, Plus, Trophy, Pencil } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import { slugify, ensureUniqueSlug } from "@/lib/slug";
@@ -26,12 +26,22 @@ const TEAM_LEVELS = [
   { value: "varsity", label: "Varsity" },
 ] as const
 
-export default function EditTeamModal({ team }: { team?: any }) {
+interface EditTeamModalProps {
+  team?: any
+  onRefresh?: () => void | Promise<void>
+}
+
+export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
   const { refresh } = useRouter();
   const modal = useModal();
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(team?.icon || null);
+  const [awards, setAwards] = useState<{ id: string; title: string }[]>(team?.team_awards ?? []);
+  const [newAwardTitle, setNewAwardTitle] = useState("");
+  const [isAddingAward, setIsAddingAward] = useState(false);
+  const [editingAwardId, setEditingAwardId] = useState<string | null>(null);
+  const [editingAwardTitle, setEditingAwardTitle] = useState("");
 
   const supabase = createClient();
   const {
@@ -54,11 +64,73 @@ export default function EditTeamModal({ team }: { team?: any }) {
       setValue("is_public", team.is_public ?? false);
       setLevel(team.level || "bantam");
       setImagePreview(team.icon || null);
+      setAwards(team.team_awards ?? []);
     } else {
       setValue("is_active", true);
       setValue("is_public", false);
+      setAwards([]);
     }
   }, [team, setValue]);
+
+  const addAward = async () => {
+    if (!team?.id || !newAwardTitle.trim()) return;
+    setIsAddingAward(true);
+    const { data, error } = await supabase
+      .from("team_awards")
+      .insert({ team_id: team.id, title: newAwardTitle.trim() })
+      .select()
+      .single();
+    if (error) {
+      toast.error("Failed to add award");
+    } else {
+      setAwards((prev) => [...prev, { id: data.id, title: data.title }]);
+      setNewAwardTitle("");
+      toast.success("Award added");
+      onRefresh?.();
+    }
+    setIsAddingAward(false);
+  };
+
+  const removeAward = async (awardId: string) => {
+    const { error } = await supabase.from("team_awards").delete().eq("id", awardId);
+    if (error) {
+      toast.error("Failed to remove award");
+      return;
+    }
+    setAwards((prev) => prev.filter((a) => a.id !== awardId));
+    setEditingAwardId(null);
+    toast.success("Award removed");
+    onRefresh?.();
+  };
+
+  const startEditAward = (award: { id: string; title: string }) => {
+    setEditingAwardId(award.id);
+    setEditingAwardTitle(award.title);
+  };
+
+  const saveEditAward = async () => {
+    if (!editingAwardId || !editingAwardTitle.trim()) return;
+    const { error } = await supabase
+      .from("team_awards")
+      .update({ title: editingAwardTitle.trim() })
+      .eq("id", editingAwardId);
+    if (error) {
+      toast.error("Failed to update award");
+      return;
+    }
+    setAwards((prev) =>
+      prev.map((a) => (a.id === editingAwardId ? { ...a, title: editingAwardTitle.trim() } : a))
+    );
+    setEditingAwardId(null);
+    setEditingAwardTitle("");
+    toast.success("Award updated");
+    onRefresh?.();
+  };
+
+  const cancelEditAward = () => {
+    setEditingAwardId(null);
+    setEditingAwardTitle("");
+  };
 
   const handleImageUpload = async () => {
     const input = document.createElement("input")
@@ -143,6 +215,7 @@ export default function EditTeamModal({ team }: { team?: any }) {
       } else {
         toast.success(team ? "Team updated successfully" : "Team created successfully");
         modal?.hide();
+        onRefresh?.()
         refresh();
       }
     } finally {
@@ -244,6 +317,86 @@ export default function EditTeamModal({ team }: { team?: any }) {
             onCheckedChange={(checked) => setValue("is_public", checked)}
           />
         </div>
+
+        {team?.id && (
+          <div className="space-y-2">
+            <Label className="text-base flex items-center gap-2">
+              <Trophy className="h-4 w-4" />
+              Awards
+            </Label>
+            {awards.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {awards.map((award) =>
+                  editingAwardId === award.id ? (
+                    <div key={award.id} className="flex items-center gap-1.5">
+                      <Input
+                        value={editingAwardTitle}
+                        onChange={(e) => setEditingAwardTitle(e.target.value)}
+                        className="h-8 w-40"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEditAward();
+                          if (e.key === "Escape") cancelEditAward();
+                        }}
+                        autoFocus
+                      />
+                      <Button type="button" size="sm" variant="ghost" onClick={saveEditAward}>
+                        Save
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={cancelEditAward}>
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <div
+                      key={award.id}
+                      className="group flex items-center gap-1.5 rounded-full border bg-yellow-50 px-3 py-1.5 text-sm"
+                    >
+                      <Trophy className="h-3.5 w-3.5 text-yellow-600" />
+                      <span className="font-medium">{award.title}</span>
+                      <button
+                        type="button"
+                        onClick={() => startEditAward(award)}
+                        className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-blue-100 hover:text-blue-600 group-hover:opacity-100"
+                      >
+                        <Pencil className="h-2.5 w-2.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeAward(award.id)}
+                        className="ml-0.5 flex h-4 w-4 items-center justify-center rounded-full text-muted-foreground opacity-0 transition-opacity hover:bg-red-100 hover:text-red-600 group-hover:opacity-100"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Award title (e.g. State Champions)"
+                value={newAwardTitle}
+                onChange={(e) => setNewAwardTitle(e.target.value)}
+                className="flex-1"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addAward();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                onClick={addAward}
+                disabled={!newAwardTitle.trim() || isAddingAward}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add
+              </Button>
+            </div>
+          </div>
+        )}
 
         <DialogFooter>
           <Button

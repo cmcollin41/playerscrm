@@ -81,7 +81,6 @@ export interface TeamAwards {
   id: string /* primary key */;
   team_id: string /* foreign key to teams.id */;
   title: string;
-  year?: number;
   created_at?: string;
 }
 

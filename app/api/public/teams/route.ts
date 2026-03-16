@@ -75,8 +75,7 @@ export async function GET(request: NextRequest) {
         icon,
         slug,
         team_awards(
-          title,
-          year
+          title
         ),
         staff(
           id,
@@ -151,7 +150,6 @@ export async function GET(request: NextRequest) {
       slug: team.slug,
       awards: (team.team_awards ?? []).map((a: any) => ({
         title: a.title,
-        year: a.year ?? null,
       })),
       staff: (team.staff ?? []).map((s: any) => ({
         id: (Array.isArray(s.people) ? s.people[0] : s.people)?.id,
