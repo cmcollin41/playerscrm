@@ -11,7 +11,7 @@ interface PublicPlayerTeam {
   grade: string | null
   season_bio: string | null
   photo: string | null
-  awards: { title: string }[]
+  awards: { title: string; slug: string | null; category: string | null }[]
 }
 
 interface PublicPlayerStat {
@@ -41,6 +41,9 @@ interface PublicPlayer {
   grad_year: number | null
   hometown: string | null
   bio: string | null
+  instagram: string | null
+  twitter: string | null
+  hudl_url: string | null
   teams: PublicPlayerTeam[]
   stats: PublicPlayerStat[]
 }
@@ -50,6 +53,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const accountId = searchParams.get("account_id")
     const slug = searchParams.get("slug")
+    const awardFilter = searchParams.get("award")
 
     if (!accountId) {
       return NextResponse.json(
@@ -73,7 +77,9 @@ export async function GET(request: NextRequest) {
         height,
         photo,
         roster_awards(
-          title
+          title,
+          award_type_id,
+          award_types(slug, category)
         ),
         people!inner(
           id,
@@ -87,6 +93,9 @@ export async function GET(request: NextRequest) {
           grad_year,
           hometown,
           bio,
+          instagram,
+          twitter,
+          hudl_url,
           is_public
         ),
         teams!inner(
@@ -137,7 +146,14 @@ export async function GET(request: NextRequest) {
         grade: r.grade ?? null,
         season_bio: r.bio ?? null,
         photo: r.photo ?? null,
-        awards: (r.roster_awards ?? []).map((a: any) => ({ title: a.title })),
+        awards: (r.roster_awards ?? []).map((a: any) => {
+          const awardType = Array.isArray(a.award_types) ? a.award_types[0] : a.award_types
+          return {
+            title: a.title,
+            slug: awardType?.slug ?? null,
+            category: awardType?.category ?? null,
+          }
+        }),
       }
 
       const existing = playerMap.get(person.id)
@@ -156,6 +172,9 @@ export async function GET(request: NextRequest) {
           grad_year: person.grad_year ?? null,
           hometown: person.hometown ?? null,
           bio: person.bio ?? null,
+          instagram: person.instagram ?? null,
+          twitter: person.twitter ?? null,
+          hudl_url: person.hudl_url ?? null,
           teams: [teamEntry],
           stats: [],
         })
@@ -190,6 +209,16 @@ export async function GET(request: NextRequest) {
             is_career_total: stat.is_career_total,
           })
         }
+      }
+    }
+
+    // Filter by award slug if requested
+    if (awardFilter) {
+      for (const [id, player] of playerMap) {
+        const hasAward = player.teams.some((t) =>
+          t.awards.some((a) => a.slug === awardFilter)
+        )
+        if (!hasAward) playerMap.delete(id)
       }
     }
 

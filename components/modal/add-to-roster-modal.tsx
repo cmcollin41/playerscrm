@@ -100,8 +100,9 @@ export function AddToRosterModal({
   const [comboboxOpen, setComboboxOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [awards, setAwards] = useState<{ title: string }[]>([])
+  const [awards, setAwards] = useState<{ title: string; award_type_id?: string }[]>([])
   const [newAwardTitle, setNewAwardTitle] = useState("")
+  const [awardTypes, setAwardTypes] = useState<{ id: string; name: string; slug: string; category: string }[]>([])
   const [photoPreview, setPhotoPreview] = useState<string | null>(null)
 
   const form = useForm<FormValues>({
@@ -128,6 +129,15 @@ export function AddToRosterModal({
       
       if (feesData) setFees(feesData)
       if (feesError) console.error("Error fetching fees:", feesError)
+
+      // Fetch award types for this account
+      const { data: awardTypesData } = await supabase
+        .from("award_types")
+        .select("id, name, slug, category")
+        .eq("account_id", accountId)
+        .order("sort_order", { ascending: true })
+
+      if (awardTypesData) setAwardTypes(awardTypesData)
     }
     
     if (dialogOpen && accountId) {
@@ -194,7 +204,11 @@ export function AddToRosterModal({
 
       if (insertedRoster?.id && awards.length > 0) {
         await supabase.from("roster_awards").insert(
-          awards.map((a) => ({ roster_id: insertedRoster.id, title: a.title }))
+          awards.map((a) => ({
+            roster_id: insertedRoster.id,
+            title: a.title,
+            ...(a.award_type_id ? { award_type_id: a.award_type_id } : {}),
+          }))
         )
       }
 
@@ -444,9 +458,38 @@ export function AddToRosterModal({
                   ))}
                 </div>
               )}
+              {awardTypes.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  <Select
+                    onValueChange={(value) => {
+                      if (value === "__custom__") return
+                      const type = awardTypes.find((t) => t.id === value)
+                      if (type && !awards.some((a) => a.award_type_id === type.id)) {
+                        setAwards((prev) => [
+                          ...prev,
+                          { title: type.name, award_type_id: type.id },
+                        ])
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="flex-1 min-w-[140px]">
+                      <SelectValue placeholder="Select an award..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {awardTypes
+                        .filter((t) => !awards.some((a) => a.award_type_id === t.id))
+                        .map((type) => (
+                          <SelectItem key={type.id} value={type.id}>
+                            {type.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Input
-                  placeholder="Award title (e.g. All-State)"
+                  placeholder="Custom award title"
                   value={newAwardTitle}
                   onChange={(e) => setNewAwardTitle(e.target.value)}
                   className="flex-1 min-w-[140px]"

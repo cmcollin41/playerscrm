@@ -7,6 +7,7 @@ export interface Accounts {
   logo?: string;
   stripe_id?: string;
   application_fee?: number;
+  sport?: string;
 }
 
 export interface People {
@@ -35,6 +36,9 @@ export interface People {
   hometown?: string;
   bio?: string;
   maxpreps_url?: string;
+  instagram?: string;
+  twitter?: string;
+  hudl_url?: string;
   accounts?: Accounts;
 }
 
@@ -66,11 +70,25 @@ export interface PlayerSeasonStats {
   people?: People;
 }
 
+export interface AwardTypes {
+  id: string /* primary key */;
+  created_at?: string;
+  account_id?: string /* foreign key to accounts.id, null for global defaults */;
+  slug: string;
+  name: string;
+  category: string;
+  sport: string;
+  sort_order: number;
+  accounts?: Accounts;
+}
+
 export interface RosterAwards {
   id: string /* primary key */;
   roster_id: string /* foreign key to rosters.id */;
   title: string;
+  award_type_id?: string /* foreign key to award_types.id */;
   created_at?: string;
+  award_types?: AwardTypes;
 }
 
 export interface Rosters {

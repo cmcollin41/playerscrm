@@ -10,6 +10,7 @@ import {
   ChevronRight,
   DollarSign,
   RefreshCw,
+  Trophy,
   Users,
 } from "lucide-react"
 
@@ -180,6 +181,12 @@ export default function SettingsPage() {
       icon: Users,
       title: "Users & Roles",
       description: "Manage who has access and what they can do",
+    },
+    {
+      href: "/settings/awards",
+      icon: Trophy,
+      title: "Award Types",
+      description: "Manage standardized awards for player recognition",
     },
   ]
 

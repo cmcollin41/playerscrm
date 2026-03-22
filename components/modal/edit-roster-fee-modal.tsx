@@ -79,8 +79,9 @@ export default function EditRosterFeeModal({
   const [grade, setGrade] = useState<string>("");
   const [bio, setBio] = useState<string>("");
   const [height, setHeight] = useState<string>("");
-  const [awards, setAwards] = useState<{ id: string; title: string }[]>([]);
+  const [awards, setAwards] = useState<{ id: string; title: string; award_type_id?: string }[]>([]);
   const [newAwardTitle, setNewAwardTitle] = useState("");
+  const [awardTypes, setAwardTypes] = useState<{ id: string; name: string; slug: string; category: string }[]>([]);
   const [photo, setPhoto] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
 
@@ -114,10 +115,22 @@ export default function EditRosterFeeModal({
       if (rosterId) {
         supabase
           .from("roster_awards")
-          .select("id, title")
+          .select("id, title, award_type_id")
           .eq("roster_id", rosterId)
           .then(({ data }) => setAwards(data ?? []));
       }
+
+      // Fetch award types
+      getAccount().then((account) => {
+        if (account?.id) {
+          supabase
+            .from("award_types")
+            .select("id, name, slug, category")
+            .eq("account_id", account.id)
+            .order("sort_order", { ascending: true })
+            .then(({ data }) => setAwardTypes(data ?? []));
+        }
+      });
     }
   }, [open, currentFeeId, currentJerseyNumber, currentPosition, currentGrade, currentBio, currentHeight, currentPhoto, rosterId, supabase]);
 
@@ -268,9 +281,39 @@ export default function EditRosterFeeModal({
                 ))}
               </div>
             )}
+            {awardTypes.length > 0 && (
+              <Select
+                onValueChange={async (value) => {
+                  const type = awardTypes.find((t) => t.id === value);
+                  if (!type || !rosterId) return;
+                  if (awards.some((a) => a.award_type_id === type.id)) return;
+                  const { data, error } = await supabase
+                    .from("roster_awards")
+                    .insert({ roster_id: rosterId, title: type.name, award_type_id: type.id })
+                    .select("id, title, award_type_id")
+                    .single();
+                  if (!error && data) {
+                    setAwards((prev) => [data, ...prev]);
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an award..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {awardTypes
+                    .filter((t) => !awards.some((a) => a.award_type_id === t.id))
+                    .map((type) => (
+                      <SelectItem key={type.id} value={type.id}>
+                        {type.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            )}
             <div className="flex items-center gap-2">
               <Input
-                placeholder="Award title (e.g. All-State)"
+                placeholder="Custom award title"
                 value={newAwardTitle}
                 onChange={(e) => setNewAwardTitle(e.target.value)}
                 className="flex-1"
@@ -281,7 +324,7 @@ export default function EditRosterFeeModal({
                     const { data, error } = await supabase
                       .from("roster_awards")
                       .insert({ roster_id: rosterId, title: newAwardTitle.trim() })
-                      .select("id, title")
+                      .select("id, title, award_type_id")
                       .single();
                     if (!error && data) {
                       setAwards((prev) => [data, ...prev]);
@@ -300,7 +343,7 @@ export default function EditRosterFeeModal({
                   const { data, error } = await supabase
                     .from("roster_awards")
                     .insert({ roster_id: rosterId, title: newAwardTitle.trim() })
-                    .select("id, title")
+                    .select("id, title, award_type_id")
                     .single();
                   if (!error && data) {
                     setAwards((prev) => [data, ...prev]);

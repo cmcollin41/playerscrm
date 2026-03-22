@@ -89,6 +89,9 @@ const formSchema = z.object({
   isPublic: z.boolean().default(false),
   bio: z.string().optional(),
   maxprepsUrl: z.string().optional(),
+  instagram: z.string().optional(),
+  twitter: z.string().optional(),
+  hudlUrl: z.string().optional(),
   relationships: z.array(z.object({
     relationshipId: z.string().optional(),
     id: z.string().min(1, "Person ID is required"),
@@ -200,6 +203,9 @@ export default function PersonSheet({
       isPublic: person?.is_public || false,
       bio: person?.bio || "",
       maxprepsUrl: person?.maxpreps_url || "",
+      instagram: person?.instagram || "",
+      twitter: person?.twitter || "",
+      hudlUrl: person?.hudl_url || "",
       relationships: deduplicateRelationships(fromRelationships || []).map((rel) => ({
         relationshipId: rel.id,
         id: rel.from?.id,
@@ -241,6 +247,9 @@ export default function PersonSheet({
         isPublic: false,
         bio: "",
         maxprepsUrl: "",
+        instagram: "",
+        twitter: "",
+        hudlUrl: "",
         relationships: []
       });
       setError(null);
@@ -258,6 +267,9 @@ export default function PersonSheet({
         isPublic: person.is_public || false,
         bio: person.bio || "",
         maxprepsUrl: person.maxpreps_url || "",
+        instagram: person.instagram || "",
+        twitter: person.twitter || "",
+        hudlUrl: person.hudl_url || "",
         relationships: deduplicateRelationships(fromRelationships || []).map((rel: any) => ({
           relationshipId: rel.id,
           id: rel.from?.id,
@@ -360,6 +372,9 @@ export default function PersonSheet({
         is_public: values.isPublic,
         bio: values.bio || null,
         maxpreps_url: values.maxprepsUrl || null,
+        instagram: values.instagram || null,
+        twitter: values.twitter || null,
+        hudl_url: values.hudlUrl || null,
         slug,
       };
 
@@ -431,6 +446,9 @@ export default function PersonSheet({
         isPublic: false,
         bio: "",
         maxprepsUrl: "",
+        instagram: "",
+        twitter: "",
+        hudlUrl: "",
         relationships: []
       });
 
@@ -802,6 +820,72 @@ export default function PersonSheet({
                         <FormDescription>
                           Paste the athlete&apos;s MaxPreps profile URL to sync stats
                         </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="instagram"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Instagram</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
+                              <Input
+                                placeholder="username"
+                                className="pl-7"
+                                {...field}
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value.replace(/^@/, ""))}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="twitter"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>X (Twitter)</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">@</span>
+                              <Input
+                                placeholder="username"
+                                className="pl-7"
+                                {...field}
+                                value={field.value ?? ""}
+                                onChange={(e) => field.onChange(e.target.value.replace(/^@/, ""))}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <FormField
+                    control={form.control}
+                    name="hudlUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Hudl URL</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="https://www.hudl.com/profile/..."
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
