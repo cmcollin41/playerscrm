@@ -73,6 +73,18 @@ create policy "Allow anon read award_types"
 alter table public.roster_awards
   add column if not exists award_type_id uuid null;
 
+do $$
+begin
+  if not exists (
+    select 1 from information_schema.table_constraints
+    where constraint_name = 'roster_awards_award_type_id_fkey'
+  ) then
+    alter table public.roster_awards
+      add constraint roster_awards_award_type_id_fkey
+      foreign key (award_type_id) references public.award_types(id) on delete set null;
+  end if;
+end $$;
+
 -- seed global default basketball award types
 insert into public.award_types (account_id, slug, name, category, sport, sort_order) values
   (null, '1st-team-all-state', '1st Team All-State', 'all-state', 'basketball', 10),
