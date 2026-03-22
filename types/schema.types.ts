@@ -34,7 +34,36 @@ export interface People {
   grad_year?: number;
   hometown?: string;
   bio?: string;
+  maxpreps_url?: string;
   accounts?: Accounts;
+}
+
+export interface PlayerSeasonStats {
+  id: string /* primary key */;
+  created_at?: string;
+  updated_at?: string;
+  person_id: string /* foreign key to people.id */;
+  account_id: string /* foreign key to accounts.id */;
+  sport: string;
+  season_label: string;
+  season_year_start?: number;
+  season_year_end?: number;
+  class_label?: string;
+  gp?: number;
+  ppg?: number;
+  rpg?: number;
+  apg?: number;
+  spg?: number;
+  bpg?: number;
+  fg_pct?: number;
+  three_pct?: number;
+  ft_pct?: number;
+  topg?: number;
+  mpg?: number;
+  is_career_total: boolean;
+  source: string;
+  raw_data?: any;
+  people?: People;
 }
 
 export interface RosterAwards {

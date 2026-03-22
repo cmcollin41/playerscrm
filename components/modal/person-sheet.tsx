@@ -88,6 +88,7 @@ const formSchema = z.object({
   photo: z.string().optional(),
   isPublic: z.boolean().default(false),
   bio: z.string().optional(),
+  maxprepsUrl: z.string().optional(),
   relationships: z.array(z.object({
     relationshipId: z.string().optional(),
     id: z.string().min(1, "Person ID is required"),
@@ -198,6 +199,7 @@ export default function PersonSheet({
       photo: person?.photo || "",
       isPublic: person?.is_public || false,
       bio: person?.bio || "",
+      maxprepsUrl: person?.maxpreps_url || "",
       relationships: deduplicateRelationships(fromRelationships || []).map((rel) => ({
         relationshipId: rel.id,
         id: rel.from?.id,
@@ -238,6 +240,7 @@ export default function PersonSheet({
         photo: "",
         isPublic: false,
         bio: "",
+        maxprepsUrl: "",
         relationships: []
       });
       setError(null);
@@ -254,6 +257,7 @@ export default function PersonSheet({
         photo: person.photo || "",
         isPublic: person.is_public || false,
         bio: person.bio || "",
+        maxprepsUrl: person.maxpreps_url || "",
         relationships: deduplicateRelationships(fromRelationships || []).map((rel: any) => ({
           relationshipId: rel.id,
           id: rel.from?.id,
@@ -355,6 +359,7 @@ export default function PersonSheet({
         photo: values.photo || null,
         is_public: values.isPublic,
         bio: values.bio || null,
+        maxpreps_url: values.maxprepsUrl || null,
         slug,
       };
 
@@ -424,9 +429,11 @@ export default function PersonSheet({
         tags: [],
         photo: "",
         isPublic: false,
+        bio: "",
+        maxprepsUrl: "",
         relationships: []
       });
-      
+
       // Close the sheet
       setOpen(false);
       
@@ -774,6 +781,27 @@ export default function PersonSheet({
                             {...field}
                           />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="maxprepsUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>MaxPreps URL</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="https://www.maxpreps.com/..."
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Paste the athlete&apos;s MaxPreps profile URL to sync stats
+                        </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

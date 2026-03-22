@@ -12,8 +12,9 @@ import {
 } from "@/components/ui/card";
 import { fullName } from "@/lib/utils";
 import { toast } from "sonner";
-import { BadgeCheck, Users, Receipt, UserPlus, Globe } from "lucide-react";
+import { BadgeCheck, Users, Receipt, UserPlus, Globe, BarChart3, RefreshCw } from "lucide-react";
 import LoadingCircle from "@/components/icons/loading-circle";
+import LoadingDots from "@/components/icons/loading-dots";
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -113,6 +114,8 @@ export default function PersonPage({ params }: PersonPageProps) {
   const [payments, setPayments] = useState<any[]>([])
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
+  const [playerStats, setPlayerStats] = useState<any[]>([])
+  const [isSyncing, setIsSyncing] = useState(false)
 
   async function fetchRoster() {
     const { data, error } = await supabase
@@ -142,6 +145,43 @@ export default function PersonPage({ params }: PersonPageProps) {
       roster_grade: entry.grade,
       level: entry.teams?.level,
     })));
+  }
+
+  async function fetchPlayerStats() {
+    const { data, error } = await supabase
+      .from("player_season_stats")
+      .select("*")
+      .eq("person_id", id)
+      .order("is_career_total", { ascending: true })
+      .order("season_year_start", { ascending: false })
+
+    if (error) {
+      console.error("Error fetching stats:", error)
+      return
+    }
+    setPlayerStats(data || [])
+  }
+
+  async function handleSyncStats() {
+    setIsSyncing(true)
+    try {
+      const res = await fetch("/api/maxpreps/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ person_id: id }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "Sync failed")
+      }
+      const data = await res.json()
+      setPlayerStats(data.stats || [])
+      toast.success("Stats synced from MaxPreps")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to sync stats")
+    } finally {
+      setIsSyncing(false)
+    }
   }
 
   // Add this new function to fetch payments
@@ -249,7 +289,8 @@ export default function PersonPage({ params }: PersonPageProps) {
           fetchFromRelationships(),
           getAccount(),
           fetchRoster(),
-          fetchPayments()
+          fetchPayments(),
+          fetchPlayerStats()
         ])
 
         const primaryPeople = await getPrimaryContacts(fetchedPerson)
@@ -397,7 +438,24 @@ export default function PersonPage({ params }: PersonPageProps) {
               description="Edit this person"
               account={account}
             />
-            <Button 
+            {person?.maxpreps_url && (
+              <Button
+                onClick={handleSyncStats}
+                variant="outline"
+                size="sm"
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <LoadingDots color="black" />
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Sync Stats
+                  </>
+                )}
+              </Button>
+            )}
+            <Button
               onClick={() => setInvoiceModalOpen(true)}
               variant="outline"
               size="sm"
@@ -470,9 +528,12 @@ export default function PersonPage({ params }: PersonPageProps) {
 
       {/* Tabs Section */}
       <Tabs defaultValue="teams" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="teams">
             Teams
+          </TabsTrigger>
+          <TabsTrigger value="stats">
+            Stats
           </TabsTrigger>
           <TabsTrigger value="payments">
             Invoices & Payments
@@ -541,6 +602,88 @@ export default function PersonPage({ params }: PersonPageProps) {
                   <p className="text-sm text-muted-foreground">No teams found</p>
                   <p className="text-xs text-muted-foreground mt-1">
                     This person is not on any teams yet
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="stats" className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Season Stats</CardTitle>
+              <CardDescription>
+                {person?.maxpreps_url
+                  ? "Stats synced from MaxPreps"
+                  : "Add a MaxPreps URL to this person's profile to sync stats"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {playerStats.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-2 pr-4 font-medium">Season</th>
+                        <th className="pb-2 pr-4 font-medium">Class</th>
+                        <th className="pb-2 pr-2 font-medium text-right">GP</th>
+                        <th className="pb-2 pr-2 font-medium text-right">PPG</th>
+                        <th className="pb-2 pr-2 font-medium text-right">RPG</th>
+                        <th className="pb-2 pr-2 font-medium text-right">APG</th>
+                        <th className="pb-2 pr-2 font-medium text-right">SPG</th>
+                        <th className="pb-2 pr-2 font-medium text-right">BPG</th>
+                        <th className="pb-2 pr-2 font-medium text-right">FG%</th>
+                        <th className="pb-2 pr-2 font-medium text-right">3PT%</th>
+                        <th className="pb-2 font-medium text-right">FT%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {playerStats
+                        .filter((s) => !s.is_career_total)
+                        .map((s) => (
+                          <tr key={s.id} className="border-b">
+                            <td className="py-2 pr-4">{s.season_label}</td>
+                            <td className="py-2 pr-4 text-muted-foreground">{s.class_label || "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.gp ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.ppg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.rpg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.apg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.spg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.bpg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.fg_pct != null ? `${s.fg_pct}%` : "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.three_pct != null ? `${s.three_pct}%` : "-"}</td>
+                            <td className="py-2 text-right">{s.ft_pct != null ? `${s.ft_pct}%` : "-"}</td>
+                          </tr>
+                        ))}
+                      {playerStats
+                        .filter((s) => s.is_career_total)
+                        .map((s) => (
+                          <tr key={s.id} className="border-t-2 font-semibold">
+                            <td className="py-2 pr-4">Career</td>
+                            <td className="py-2 pr-4"></td>
+                            <td className="py-2 pr-2 text-right">{s.gp ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.ppg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.rpg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.apg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.spg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.bpg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.fg_pct != null ? `${s.fg_pct}%` : "-"}</td>
+                            <td className="py-2 pr-2 text-right">{s.three_pct != null ? `${s.three_pct}%` : "-"}</td>
+                            <td className="py-2 text-right">{s.ft_pct != null ? `${s.ft_pct}%` : "-"}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <BarChart3 className="h-12 w-12 text-muted-foreground/50 mb-4" />
+                  <p className="text-sm text-muted-foreground">No stats available</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {person?.maxpreps_url
+                      ? 'Click "Sync Stats" to fetch stats from MaxPreps'
+                      : "Add a MaxPreps URL in the edit form to get started"}
                   </p>
                 </div>
               )}

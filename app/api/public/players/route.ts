@@ -14,6 +14,21 @@ interface PublicPlayerTeam {
   awards: { title: string }[]
 }
 
+interface PublicPlayerStat {
+  season_label: string
+  class_label: string | null
+  gp: number | null
+  ppg: number | null
+  rpg: number | null
+  apg: number | null
+  spg: number | null
+  bpg: number | null
+  fg_pct: number | null
+  three_pct: number | null
+  ft_pct: number | null
+  is_career_total: boolean
+}
+
 interface PublicPlayer {
   id: string
   slug: string | null
@@ -27,6 +42,7 @@ interface PublicPlayer {
   hometown: string | null
   bio: string | null
   teams: PublicPlayerTeam[]
+  stats: PublicPlayerStat[]
 }
 
 export async function GET(request: NextRequest) {
@@ -141,7 +157,39 @@ export async function GET(request: NextRequest) {
           hometown: person.hometown ?? null,
           bio: person.bio ?? null,
           teams: [teamEntry],
+          stats: [],
         })
+      }
+    }
+
+    // Batch-fetch stats for all players
+    const personIds = Array.from(playerMap.keys())
+    if (personIds.length > 0) {
+      const { data: statsData } = await supabase
+        .from("player_season_stats")
+        .select("person_id, season_label, class_label, gp, ppg, rpg, apg, spg, bpg, fg_pct, three_pct, ft_pct, is_career_total")
+        .in("person_id", personIds)
+        .order("is_career_total", { ascending: true })
+        .order("season_year_start", { ascending: false })
+
+      for (const stat of statsData ?? []) {
+        const player = playerMap.get(stat.person_id)
+        if (player) {
+          player.stats.push({
+            season_label: stat.season_label,
+            class_label: stat.class_label,
+            gp: stat.gp,
+            ppg: stat.ppg,
+            rpg: stat.rpg,
+            apg: stat.apg,
+            spg: stat.spg,
+            bpg: stat.bpg,
+            fg_pct: stat.fg_pct,
+            three_pct: stat.three_pct,
+            ft_pct: stat.ft_pct,
+            is_career_total: stat.is_career_total,
+          })
+        }
       }
     }
 
