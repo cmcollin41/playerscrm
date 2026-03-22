@@ -429,7 +429,15 @@ export default function PersonPage({ params }: PersonPageProps) {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <PersonSheet 
+            <Button
+              onClick={() => setInvoiceModalOpen(true)}
+              variant="outline"
+              size="sm"
+              className="w-9 p-0"
+            >
+              <Receipt className="h-4 w-4" />
+            </Button>
+            <PersonSheet
               person={person}
               fromRelationships={fromRelationships || []}
               mode="edit"
@@ -438,31 +446,6 @@ export default function PersonPage({ params }: PersonPageProps) {
               description="Edit this person"
               account={account}
             />
-            {person?.maxpreps_url && (
-              <Button
-                onClick={handleSyncStats}
-                variant="outline"
-                size="sm"
-                disabled={isSyncing}
-              >
-                {isSyncing ? (
-                  <LoadingDots color="black" />
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Sync Stats
-                  </>
-                )}
-              </Button>
-            )}
-            <Button
-              onClick={() => setInvoiceModalOpen(true)}
-              variant="outline"
-              size="sm"
-            >
-              <Receipt className="h-4 w-4 mr-2" />
-              Create Invoice
-            </Button>
           </div>
         </div>
       </div>
@@ -612,12 +595,33 @@ export default function PersonPage({ params }: PersonPageProps) {
         <TabsContent value="stats" className="mt-6">
           <Card>
             <CardHeader>
-              <CardTitle>Season Stats</CardTitle>
-              <CardDescription>
-                {person?.maxpreps_url
-                  ? "Stats synced from MaxPreps"
-                  : "Add a MaxPreps URL to this person's profile to sync stats"}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Season Stats</CardTitle>
+                  <CardDescription>
+                    {person?.maxpreps_url
+                      ? "Stats synced from MaxPreps"
+                      : "Add a MaxPreps URL to this person's profile to sync stats"}
+                  </CardDescription>
+                </div>
+                {person?.maxpreps_url && (
+                  <Button
+                    onClick={handleSyncStats}
+                    variant="outline"
+                    size="sm"
+                    disabled={isSyncing}
+                  >
+                    {isSyncing ? (
+                      <LoadingDots color="black" />
+                    ) : (
+                      <>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Sync Stats
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {playerStats.length > 0 ? (

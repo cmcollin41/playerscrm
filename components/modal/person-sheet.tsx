@@ -525,6 +525,7 @@ export default function PersonSheet({
                     </div>
                   )}
 
+                  {/* Toggles */}
                   <FormField
                     control={form.control}
                     name="dependent"
@@ -546,6 +547,61 @@ export default function PersonSheet({
                     )}
                   />
 
+                  <FormField
+                    control={form.control}
+                    name="isPublic"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">Public Profile</FormLabel>
+                          <FormDescription>
+                            Show this person on your public team website
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Photo */}
+                  <FormField
+                    control={form.control}
+                    name="photo"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Photo</FormLabel>
+                        <FormControl>
+                          <ImageDropzone
+                            value={field.value || null}
+                            onChange={(url) => field.onChange(url ?? "")}
+                            onFileSelect={async (file) => {
+                              const ext = file.name.split(".").pop()
+                              const fileName = `${account?.id}/${crypto.randomUUID()}.${ext}`
+                              const { data, error } = await supabase.storage
+                                .from("headshots")
+                                .upload(fileName, file, { upsert: true })
+                              if (error) throw error
+                              const { data: urlData } = supabase.storage
+                                .from("headshots")
+                                .getPublicUrl(data.path)
+                              toast.success("Photo uploaded")
+                              return urlData.publicUrl
+                            }}
+                            onError={(msg) => toast.error(msg)}
+                            placeholder="Drop image or click to upload"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Name */}
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -554,8 +610,8 @@ export default function PersonSheet({
                         <FormItem>
                           <FormLabel>First Name</FormLabel>
                           <FormControl>
-                            <Input 
-                              placeholder="Enter first name" 
+                            <Input
+                              placeholder="Enter first name"
                               {...field}
                               className={cn(
                                 form.formState.errors.firstName && "border-red-500 focus-visible:ring-red-500"
@@ -582,8 +638,32 @@ export default function PersonSheet({
                     />
                   </div>
 
+                  {/* Contact (non-dependent only) */}
                   {!form.watch("dependent") && (
-                    <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="email"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Email <span className="text-red-500">*</span></FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="Email address"
+                                type="email"
+                                {...field}
+                                value={field.value ?? ''}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  field.onChange(value === '' ? null : value);
+                                }}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+
                       <FormField
                         control={form.control}
                         name="phone"
@@ -591,9 +671,9 @@ export default function PersonSheet({
                           <FormItem>
                             <FormLabel>Phone</FormLabel>
                             <FormControl>
-                              <Input 
-                                placeholder="Enter phone number" 
-                                {...field} 
+                              <Input
+                                placeholder="Phone number"
+                                {...field}
                                 value={field.value ?? ''}
                                 onChange={(e) => {
                                   const value = e.target.value
@@ -605,43 +685,43 @@ export default function PersonSheet({
                           </FormItem>
                         )}
                       />
-
-                      {!form.watch("dependent") && (
-                        <FormField
-                          control={form.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Email {!form.watch("dependent") && <span className="text-red-500">*</span>}</FormLabel>
-                              <FormControl>
-                                <Input 
-                                  placeholder="Enter email address" 
-                                  type="email"
-                                  {...field}
-                                  value={field.value ?? ''}
-                                  onChange={(e) => {
-                                    const value = e.target.value;
-                                    field.onChange(value === '' ? null : value);
-                                  }}
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      )}
-                    </>
+                    </div>
                   )}
 
-                  <FormField
-                    control={form.control}
-                    name="birthdate"
-                    render={({ field }) => {
-                     
-
-                      return (
+                  {/* Grade & Birthdate */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="grade"
+                      render={({ field }) => (
                         <FormItem className="flex flex-col">
-                          <FormLabel>Date of birth (optional)</FormLabel>
+                          <FormLabel>Grade</FormLabel>
+                          <FormControl>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select grade..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[...Array(12)].map((_, i) => (
+                                  <SelectItem key={i} value={(i + 1).toString()}>
+                                    {i + 1}
+                                  </SelectItem>
+                                ))}
+                                <SelectItem value="Graduated">Graduated</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="birthdate"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                          <FormLabel>Date of Birth</FormLabel>
                           <Popover>
                             <PopoverTrigger asChild>
                               <FormControl>
@@ -697,94 +777,13 @@ export default function PersonSheet({
                               </div>
                             </PopoverContent>
                           </Popover>
-                          <FormDescription>
-                            Select a date of birth if known
-                          </FormDescription>
                           <FormMessage />
                         </FormItem>
-                      )
-                    }}
-                  />
+                      )}
+                    />
+                  </div>
 
-                  <FormField
-                    control={form.control}
-                    name="grade"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Grade (1 thru 12)</FormLabel>
-                        <FormControl>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select grade..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {[...Array(12)].map((_, i) => (
-                                <SelectItem key={i} value={(i + 1).toString()}>
-                                  {i + 1}
-                                </SelectItem>
-                              ))}
-                              <SelectItem value="Graduated">Graduated</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="photo"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Photo</FormLabel>
-                        <FormControl>
-                          <ImageDropzone
-                            value={field.value || null}
-                            onChange={(url) => field.onChange(url ?? "")}
-                            onFileSelect={async (file) => {
-                              const ext = file.name.split(".").pop()
-                              const fileName = `${account?.id}/${crypto.randomUUID()}.${ext}`
-                              const { data, error } = await supabase.storage
-                                .from("headshots")
-                                .upload(fileName, file, { upsert: true })
-                              if (error) throw error
-                              const { data: urlData } = supabase.storage
-                                .from("headshots")
-                                .getPublicUrl(data.path)
-                              toast.success("Photo uploaded")
-                              return urlData.publicUrl
-                            }}
-                            onError={(msg) => toast.error(msg)}
-                            placeholder="Drop image or click to upload"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="isPublic"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                        <div className="space-y-0.5">
-                          <FormLabel className="text-base">Public Profile</FormLabel>
-                          <FormDescription>
-                            Show this person on your public team website
-                          </FormDescription>
-                        </div>
-                        <FormControl>
-                          <Switch
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-
+                  {/* Bio */}
                   <FormField
                     control={form.control}
                     name="bio"
@@ -804,27 +803,7 @@ export default function PersonSheet({
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="maxprepsUrl"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>MaxPreps URL</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="https://www.maxpreps.com/..."
-                            {...field}
-                            value={field.value ?? ""}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          Paste the athlete&apos;s MaxPreps profile URL to sync stats
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
+                  {/* Social Media */}
                   <div className="grid grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
@@ -873,6 +852,25 @@ export default function PersonSheet({
                     />
                   </div>
 
+                  {/* External Links */}
+                  <FormField
+                    control={form.control}
+                    name="maxprepsUrl"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>MaxPreps URL</FormLabel>
+                        <FormControl>
+                          <Input
+                            placeholder="https://www.maxpreps.com/..."
+                            {...field}
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
                   <FormField
                     control={form.control}
                     name="hudlUrl"
@@ -891,14 +889,16 @@ export default function PersonSheet({
                     )}
                   />
 
-                  {form.watch("dependent") && (
-                    <div className="space-y-4">
-                      <div className="flex flex-col space-y-2">
-                        <FormLabel>Relationships</FormLabel>
-                        <FormDescription>
-                          Add relationships to this person
-                        </FormDescription>
-                      </div>
+                  {/* Relationships (dependent only) */}
+                  <div className="space-y-4">
+                    <div className="flex flex-col space-y-2">
+                      <FormLabel>Relationships</FormLabel>
+                      <FormDescription>
+                        {form.watch("dependent")
+                          ? "At least one relationship is required for dependents"
+                          : "Link family members or related contacts"}
+                      </FormDescription>
+                    </div>
 
                       {form.formState.errors.relationships && (
                         <p className="text-sm text-red-500">
@@ -1038,7 +1038,6 @@ export default function PersonSheet({
                         Add Relationship
                       </Button>
                     </div>
-                  )}
               </div>
             </ScrollArea>
 
