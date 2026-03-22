@@ -139,10 +139,12 @@ export async function scrapeMaxPrepsStats(
       const data = JSON.parse(nextDataMatch[1])
       const rollup = data?.props?.pageProps?.statsCardProps?.careerRollup
 
-      if (rollup?.groups) {
+      if (rollup) {
         return parseFromNextData(rollup)
       }
-    } catch (e) {
+    } catch (e: any) {
+      // If it's our own descriptive error, rethrow it
+      if (e?.message?.includes("No stats available")) throw e
       console.error("Failed to parse __NEXT_DATA__:", e)
     }
   }
@@ -162,8 +164,10 @@ function parseFromNextData(rollup: any): ScrapeResult {
     (g: any) => g.name === "Shooting"
   )
 
-  if (!gameGroup?.subgroups?.[0]?.stats) {
-    throw new Error("No Game Stats found in MaxPreps data")
+  if (!gameGroup?.subgroups?.[0]?.stats || gameGroup.subgroups[0].stats.length === 0) {
+    throw new Error(
+      "No stats available for this player on MaxPreps. Stats may not have been entered by their coach yet."
+    )
   }
 
   const gameSeasons = gameGroup.subgroups[0].stats
