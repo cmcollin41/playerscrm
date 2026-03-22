@@ -184,6 +184,20 @@ export default function PersonPage({ params }: PersonPageProps) {
     }
   }
 
+  async function handleClearStats() {
+    const { error } = await supabase
+      .from("player_season_stats")
+      .delete()
+      .eq("person_id", id)
+
+    if (error) {
+      toast.error("Failed to clear stats")
+      return
+    }
+    setPlayerStats([])
+    toast.success("Stats cleared")
+  }
+
   // Add this new function to fetch payments
   async function fetchPayments() {
     const { data, error } = await supabase
@@ -604,23 +618,35 @@ export default function PersonPage({ params }: PersonPageProps) {
                       : "Add a MaxPreps URL to this person's profile to sync stats"}
                   </CardDescription>
                 </div>
-                {person?.maxpreps_url && (
-                  <Button
-                    onClick={handleSyncStats}
-                    variant="outline"
-                    size="sm"
-                    disabled={isSyncing}
-                  >
-                    {isSyncing ? (
-                      <LoadingDots color="black" />
-                    ) : (
-                      <>
-                        <RefreshCw className="h-4 w-4 mr-2" />
-                        Sync Stats
-                      </>
-                    )}
-                  </Button>
-                )}
+                <div className="flex items-center gap-2">
+                  {playerStats.length > 0 && (
+                    <Button
+                      onClick={handleClearStats}
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-red-600"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                  {person?.maxpreps_url && (
+                    <Button
+                      onClick={handleSyncStats}
+                      variant="outline"
+                      size="sm"
+                      disabled={isSyncing}
+                    >
+                      {isSyncing ? (
+                        <LoadingDots color="black" />
+                      ) : (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Sync Stats
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent>

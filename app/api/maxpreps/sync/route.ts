@@ -56,10 +56,13 @@ export async function POST(req: Request) {
 
     const result = await scrapeMaxPrepsStats(statsUrl)
 
-    console.log("MaxPreps scrape result:", JSON.stringify(result, null, 2))
-    console.log("Stats URL used:", statsUrl)
+    // Delete existing stats for this person before inserting fresh data
+    await supabase
+      .from("player_season_stats")
+      .delete()
+      .eq("person_id", person.id)
 
-    // Upsert each season's stats
+    // Insert each season's stats
     const upsertRows = result.seasons.map((s) => {
       const years = parseSeasonYears(s.season_label)
       return {
@@ -88,17 +91,15 @@ export async function POST(req: Request) {
       }
     })
 
-    const { data: stats, error: upsertError } = await supabase
+    const { data: stats, error: insertError } = await supabase
       .from("player_season_stats")
-      .upsert(upsertRows, {
-        onConflict: "person_id,season_label,sport,is_career_total",
-      })
+      .insert(upsertRows)
       .select()
 
-    if (upsertError) {
-      console.error("Upsert error:", upsertError)
+    if (insertError) {
+      console.error("Insert error:", insertError)
       return NextResponse.json(
-        { error: `Failed to save stats: ${upsertError.message}` },
+        { error: `Failed to save stats: ${insertError.message}` },
         { status: 500 }
       )
     }
