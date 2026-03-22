@@ -214,12 +214,14 @@ export async function GET(request: NextRequest) {
 
     // Filter by award slug if requested
     if (awardFilter) {
-      for (const [personId, player] of playerMap) {
+      const idsToRemove: string[] = []
+      playerMap.forEach((player, id) => {
         const hasAward = player.teams.some((t) =>
           t.awards.some((a) => a.slug === awardFilter)
         )
-        if (!hasAward) playerMap.delete(personId)
-      }
+        if (!hasAward) idsToRemove.push(id)
+      })
+      idsToRemove.forEach((id) => playerMap.delete(id))
     }
 
     const players = Array.from(playerMap.values()).sort((a, b) => {
