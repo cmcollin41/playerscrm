@@ -74,6 +74,7 @@ interface PersonSheetProps {
   account: any;
   mode?: 'create' | 'edit' | 'dependent';
   fromRelationships?: any;
+  onSave?: () => void;
 }
 
 const formSchema = z.object({
@@ -173,7 +174,8 @@ export default function PersonSheet({
   person,
   account,
   mode = 'create',
-  fromRelationships
+  fromRelationships,
+  onSave
 }: PersonSheetProps) {
   const router = useRouter()
   const supabase = createClient()
@@ -454,9 +456,10 @@ export default function PersonSheet({
 
       // Close the sheet
       setOpen(false);
-      
+
       // Refresh the page data
       router.refresh();
+      onSave?.();
 
     } catch (err) {
       console.error('Submission error:', err);

@@ -116,6 +116,7 @@ export default function PersonPage({ params }: PersonPageProps) {
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(true);
   const [playerStats, setPlayerStats] = useState<any[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   async function fetchRoster() {
     const { data, error } = await supabase
@@ -327,7 +328,7 @@ export default function PersonPage({ params }: PersonPageProps) {
     }
 
     fetchData()
-  }, [id])
+  }, [id, refreshKey])
 
   async function hasProfile(person: any) {
     let email = "";
@@ -459,6 +460,7 @@ export default function PersonPage({ params }: PersonPageProps) {
               title={`Edit ${person?.first_name}`}
               description="Edit this person"
               account={account}
+              onSave={() => setRefreshKey((k) => k + 1)}
             />
           </div>
         </div>
