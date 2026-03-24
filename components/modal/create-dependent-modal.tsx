@@ -28,12 +28,14 @@ export default function CreateDependentModal({
   } = useForm();
 
   const onSubmit = async (data: any) => {
+    const accountId = person?.accounts?.id || person?.account_id;
+
     // Create a new person
     const { data: newPerson, error: newPersonError } = await supabase
       .from("people")
       .insert([
         {
-          account_id: person?.accounts?.id || person?.account_id,
+          account_id: accountId,
           name: `${data.first_name} ${data.last_name}`,
           first_name: data.first_name,
           last_name: data.last_name,
@@ -50,6 +52,16 @@ export default function CreateDependentModal({
     if (newPersonError) {
       console.log("ADD DEPENDENT FORM ERRORS: ", newPersonError);
       return;
+    }
+
+    // Dual-write: create account_people row
+    if (accountId && newPerson) {
+      await supabase
+        .from("account_people")
+        .upsert(
+          { account_id: accountId, person_id: newPerson.id },
+          { onConflict: "account_id,person_id" }
+        )
     }
 
     // Add guardians to the new person

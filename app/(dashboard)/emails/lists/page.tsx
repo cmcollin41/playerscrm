@@ -16,11 +16,12 @@ export default async function ListsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, accounts(*)")
+    .select("*")
     .eq("id", user.id)
     .single()
 
-  if (!profile?.account_id) {
+  const accountId = profile?.current_account_id || profile?.account_id
+  if (!accountId) {
     redirect("/login")
   }
 
@@ -40,7 +41,7 @@ export default async function ListsPage() {
         )
       )
     `)
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -50,8 +51,8 @@ export default async function ListsPage() {
   // Fetch all people for the account (for adding to lists)
   const { data: people } = await supabase
     .from("people")
-    .select("*")
-    .eq("account_id", profile.account_id)
+    .select("*, account_people!inner(account_id)")
+    .eq("account_people.account_id", accountId)
     .order("first_name", { ascending: true })
 
   return (
@@ -67,7 +68,7 @@ export default async function ListsPage() {
         lists={lists || []} 
         people={people || []}
         account={profile.accounts}
-        accountId={profile.account_id} 
+        accountId={accountId} 
       />
     </div>
   )

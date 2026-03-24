@@ -18,11 +18,12 @@ export default async function ListDetailPage({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, accounts(*)")
+    .select("*")
     .eq("id", user.id)
     .single()
 
-  if (!profile?.account_id) redirect("/login")
+  const accountId = profile?.current_account_id || profile?.account_id
+  if (!accountId) redirect("/login")
 
   const { data: list, error: listError } = await supabase
     .from("lists")
@@ -44,7 +45,7 @@ export default async function ListDetailPage({
       )
     `)
     .eq("id", id)
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .single()
 
   if (listError || !list) {
@@ -55,19 +56,19 @@ export default async function ListDetailPage({
     .from("broadcasts")
     .select("*")
     .eq("list_id", id)
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .order("created_at", { ascending: false })
 
   const { data: allPeople } = await supabase
     .from("people")
-    .select("id, first_name, last_name, email, dependent, photo")
-    .eq("account_id", profile.account_id)
+    .select("id, first_name, last_name, email, dependent, photo, account_people!inner(account_id)")
+    .eq("account_people.account_id", accountId)
     .order("first_name", { ascending: true })
 
   const { data: senders } = await supabase
     .from("senders")
     .select("*")
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
 
   return (
     <ListDetailClient
@@ -76,7 +77,7 @@ export default async function ListDetailPage({
       allPeople={allPeople || []}
       senders={senders || []}
       account={profile.accounts}
-      accountId={profile.account_id}
+      accountId={accountId}
     />
   )
 }

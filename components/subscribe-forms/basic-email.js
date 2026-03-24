@@ -50,10 +50,22 @@ const BasicEmailForm = ({
               },
             ],
             { upsert: true },
-          );
+          )
+          .select("id")
+          .single();
 
         if (formError) {
           throw formError;
+        }
+
+        // Dual-write: create account_people row
+        if (formData?.id && accountId) {
+          await supabase
+            .from("account_people")
+            .upsert(
+              { account_id: accountId, person_id: formData.id },
+              { onConflict: "account_id,person_id" }
+            )
         }
 
         // generate a random code

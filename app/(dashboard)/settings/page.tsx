@@ -46,7 +46,7 @@ export default function SettingsPage() {
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("*, accounts(*, senders(*))")
+        .select("*")
         .eq("id", user?.id)
         .single()
 
@@ -57,9 +57,17 @@ export default function SettingsPage() {
         return
       }
 
+      const activeAccountId = profile.current_account_id || profile.account_id
+
+      const { data: account } = await supabase
+        .from("accounts")
+        .select("*, senders(*)")
+        .eq("id", activeAccountId)
+        .single()
+
       setIsAdmin(true)
-      setUser(profile)
-      setStripeConnected(profile.accounts.stripe_id)
+      setUser({ ...profile, account_id: activeAccountId, accounts: account })
+      setStripeConnected(account?.stripe_id)
     }
 
     getUser()
@@ -76,10 +84,11 @@ export default function SettingsPage() {
 
         if (response.status === 200) {
           const resp = await response.json()
+          const accountId = user?.current_account_id || user?.account_id
           const { data: updateAccount, error } = await supabase
             .from("accounts")
             .update({ stripe_id: resp.connected_account_id })
-            .eq("id", user?.account_id)
+            .eq("id", accountId)
             .select()
 
           if (error) toast("Error connecting stripe.")
@@ -221,58 +230,67 @@ export default function SettingsPage() {
       </div>
 
       <div>
-        <h2 className="mb-3 text-lg font-semibold">Stripe Integration</h2>
+        <h2 className="mb-3 text-lg font-semibold">Payments</h2>
         <div className="rounded-lg border border-gray-200 bg-white p-6">
-          <span className="inline-block rounded bg-blue-400 px-3 py-1 text-xs font-medium text-white">
-            Stripe
-          </span>
-
           {!stripeConnected && (
-            <button
-              disabled={connecting}
-              className="mx-3 mb-2 mt-6 w-auto rounded bg-[#77dd77] px-4 py-2 text-black shadow"
-              onClick={() => {
-                if (window) {
-                  setConnecting(true)
-                  const url = `https://dashboard.stripe.com/oauth/authorize?response_type=code&client_id=${
-                    process.env.NEXT_PUBLIC_STRIPE_OAUTH_CLIENT_ID
-                  }&scope=read_write&state=${
-                    Math.random() * 100
-                  }&redirect_uri=${process.env.NEXT_PUBLIC_BASE_URL}/settings`
+            <div className="flex flex-col items-center text-center py-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 mb-4">
+                <DollarSign className="h-6 w-6 text-gray-400" />
+              </div>
+              <h3 className="text-base font-semibold text-gray-900">Connect a Stripe account</h3>
+              <p className="mt-2 max-w-md text-sm text-gray-500">
+                Connect your Stripe account to collect registration fees, send invoices, and accept payments directly from families. Funds are deposited straight to your bank account.
+              </p>
+              <button
+                disabled={connecting}
+                className="mt-5 inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-gray-800 disabled:opacity-50"
+                onClick={() => {
+                  if (window) {
+                    setConnecting(true)
+                    const url = `https://dashboard.stripe.com/oauth/authorize?response_type=code&client_id=${
+                      process.env.NEXT_PUBLIC_STRIPE_OAUTH_CLIENT_ID
+                    }&scope=read_write&state=${
+                      Math.random() * 100
+                    }&redirect_uri=${process.env.NEXT_PUBLIC_BASE_URL}/settings`
 
-                  window.document.location.href = url
-                }
-              }}
-            >
-              {connecting ? (
-                <LoadingDots color="#808080" />
-              ) : (
-                <span>Connect Stripe</span>
-              )}
-            </button>
+                    window.document.location.href = url
+                  }
+                }}
+              >
+                {connecting ? (
+                  <LoadingDots color="#fff" />
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" /></svg>
+                    Connect Stripe
+                  </>
+                )}
+              </button>
+            </div>
           )}
 
           {stripeConnected && (
-            <>
-              <h3 className="mt-4 text-xl font-bold text-gray-900">
-                {stripeAccount?.business_profile?.name ||
-                  stripeAccount?.business_profile?.url ||
-                  stripeAccount?.email}
-                <span className="ml-2 text-sm font-normal text-gray-500">
-                  {stripeAccount?.id}
-                </span>
-              </h3>
-              <p className="mt-1.5 text-sm text-gray-600">
-                Payouts Enabled:{" "}
-                <span className="text-gray-500">
-                  {stripeAccount?.payout_enabled ? "true" : "false"}
-                </span>
-              </p>
-              <p className="mt-1 text-sm text-gray-600">
-                Type:{" "}
-                <span className="text-gray-500">{stripeAccount?.type}</span>
-              </p>
-            </>
+            <div className="flex items-start gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-50">
+                <svg className="h-5 w-5 text-purple-600" viewBox="0 0 24 24" fill="currentColor"><path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" /></svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900">
+                  {stripeAccount?.business_profile?.name ||
+                    stripeAccount?.business_profile?.url ||
+                    stripeAccount?.email ||
+                    "Connected"}
+                </p>
+                <p className="mt-0.5 text-xs text-gray-500">{stripeAccount?.id}</p>
+                <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-1">
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${stripeAccount?.payouts_enabled ? "bg-green-500" : "bg-amber-500"}`} />
+                    Payouts {stripeAccount?.payouts_enabled ? "enabled" : "pending"}
+                  </span>
+                  <span className="capitalize">{stripeAccount?.type} account</span>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

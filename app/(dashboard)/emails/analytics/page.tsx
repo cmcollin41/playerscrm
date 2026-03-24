@@ -17,32 +17,33 @@ export default async function EmailAnalyticsPage() {
   // Get user's profile
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, accounts(id, name)")
+    .select("*")
     .eq("id", user.id)
     .single()
 
-  if (!profile?.account_id) {
+  const accountId = profile?.current_account_id || profile?.account_id
+  if (!accountId) {
     throw new Error("No account found for user")
   }
 
   // Fetch comprehensive analytics
   const { data: analytics30Days } = await supabase
     .rpc("get_email_analytics", {
-      p_account_id: profile.account_id,
+      p_account_id: accountId,
       p_days: 30,
     })
     .single()
 
   const { data: analytics7Days } = await supabase
     .rpc("get_email_analytics", {
-      p_account_id: profile.account_id,
+      p_account_id: accountId,
       p_days: 7,
     })
     .single()
 
   const { data: analyticsAllTime } = await supabase
     .rpc("get_email_analytics", {
-      p_account_id: profile.account_id,
+      p_account_id: accountId,
       p_days: 36500, // ~100 years
     })
     .single()
@@ -63,7 +64,7 @@ export default async function EmailAnalyticsPage() {
       recipient:people(first_name, last_name, email)
     `
     )
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .order("sent_at", { ascending: false })
     .limit(50)
 
@@ -71,14 +72,14 @@ export default async function EmailAnalyticsPage() {
   const { data: broadcasts } = await supabase
     .from("broadcasts")
     .select("*")
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .order("created_at", { ascending: false })
 
   // Get lists stats
   const { data: lists } = await supabase
     .from("lists")
     .select("*, list_people(count)")
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
 
   return (
     <EmailAnalyticsClient

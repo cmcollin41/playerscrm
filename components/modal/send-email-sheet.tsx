@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import RichTextEditor from "@/components/emails/rich-text-editor";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
@@ -812,14 +813,14 @@ export default function SendEmailSheet({
                       <FormItem>
                         <FormLabel>Message</FormLabel>
                         <FormControl>
-                          <Textarea
-                            placeholder="Enter your email message..."
-                            className="min-h-[300px] resize-none"
-                            {...field}
+                          <RichTextEditor
+                            content={field.value}
+                            onChange={field.onChange}
+                            placeholder="Write your email message..."
                           />
                         </FormControl>
                         <FormDescription>
-                          The main content of your email
+                          Use the toolbar to format text, add images, and insert links.
                         </FormDescription>
                         <FormMessage />
                       </FormItem>

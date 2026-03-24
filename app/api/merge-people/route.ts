@@ -32,11 +32,13 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: profile } = await supabase
+    const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("account_id, role")
+      .select("account_id, current_account_id, role")
       .eq("id", user.id)
       .single();
+
+    const profile = rawProfile ? { ...rawProfile, account_id: rawProfile.current_account_id || rawProfile.account_id } : null
 
     if (!profile?.account_id) {
       return NextResponse.json(
@@ -54,9 +56,9 @@ export async function POST(req: Request) {
 
     const { data: people, error: peopleError } = await supabase
       .from("people")
-      .select("id, account_id")
+      .select("id, account_id, account_people!inner(account_id)")
       .in("id", [primaryPersonId, secondaryPersonId])
-      .eq("account_id", profile.account_id);
+      .eq("account_people.account_id", profile.account_id);
 
     if (peopleError || !people || people.length !== 2) {
       return NextResponse.json(
@@ -186,7 +188,31 @@ export async function POST(req: Request) {
       throw new Error(`Failed to update staff entries: ${staffError.message}`);
     }
 
-    // Step 9: Update the primary person with merged data
+    // Step 9: Merge account_people rows
+    // Get all account associations for secondary person
+    const { data: secondaryAccounts } = await supabase
+      .from("account_people")
+      .select("account_id")
+      .eq("person_id", secondaryPersonId);
+
+    if (secondaryAccounts && secondaryAccounts.length > 0) {
+      // Upsert associations to primary person (ignore conflicts)
+      for (const { account_id } of secondaryAccounts) {
+        await supabase
+          .from("account_people")
+          .upsert(
+            { account_id, person_id: primaryPersonId },
+            { onConflict: "account_id,person_id" }
+          );
+      }
+      // Delete secondary person's account_people rows
+      await supabase
+        .from("account_people")
+        .delete()
+        .eq("person_id", secondaryPersonId);
+    }
+
+    // Step 10: Update the primary person with merged data
     const { error: updateError } = await supabase
       .from("people")
       .update(mergedData)

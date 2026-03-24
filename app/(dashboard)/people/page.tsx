@@ -18,11 +18,11 @@ export default async function PeoplePage() {
 
   const account = await getAccount();
 
-  // Fetch people server-side
+  // Fetch people server-side via account_people join
   const { data: people, error } = await supabase
     .from("people")
-    .select("*, relationships!relationships_person_id_fkey(*)")
-    .eq("account_id", account.id);
+    .select("*, relationships!relationships_person_id_fkey(*), account_people!inner(account_id)")
+    .eq("account_people.account_id", account.id);
 
   if (error) {
     console.error("Error fetching people:", error);

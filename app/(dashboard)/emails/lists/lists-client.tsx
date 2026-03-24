@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -26,7 +27,7 @@ import {
 import { Label } from "@/components/ui/label"
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
-import { Mail, Users, ArrowUpDown, Loader2, RefreshCw, Trash2, UserPlus, X, Check, ChevronsUpDown } from "lucide-react"
+import { Mail, Users, ArrowUpDown, Loader2, Trash2, UserPlus, X, Check, ChevronsUpDown, Send } from "lucide-react"
 import {
   Popover,
   PopoverContent,
@@ -121,25 +122,35 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
   const [peopleSearchOpen, setPeopleSearchOpen] = useState(false)
   const [peopleSearchQuery, setPeopleSearchQuery] = useState("")
 
-  // Sync to Resend
-  const [syncingListId, setSyncingListId] = useState<string | null>(null)
-
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreateLoading(true)
 
     try {
-      const { error } = await supabase
+      const { data: newList, error } = await supabase
         .from("lists")
         .insert({
           account_id: accountId,
           name: listName,
           description: listDescription || null,
         })
+        .select()
+        .single()
 
       if (error) throw error
 
-      toast.success("List created successfully")
+      // Auto-sync to Resend so the list is ready for broadcasts
+      const syncResponse = await fetch("/api/lists/sync-to-resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listId: newList.id }),
+      })
+
+      if (!syncResponse.ok) {
+        console.error("Failed to auto-sync new list to Resend")
+      }
+
+      toast.success("List created and synced to Resend")
       setCreateModalOpen(false)
       setListName("")
       setListDescription("")
@@ -166,31 +177,6 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
     }
   }
 
-  const handleSyncToResend = async (listId: string) => {
-    setSyncingListId(listId)
-
-    try {
-      const response = await fetch("/api/lists/sync-to-resend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listId }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to sync")
-      }
-
-      toast.success(`Synced ${data.synced} contacts to Resend`)
-      router.refresh()
-    } catch (error: any) {
-      toast.error(error.message || "Failed to sync to Resend")
-    } finally {
-      setSyncingListId(null)
-    }
-  }
-
   const handleAddPeople = async () => {
     if (!selectedListId || selectedPeopleIds.length === 0) return
 
@@ -205,7 +191,14 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Failed to add people")
 
-      toast.success(`Added ${data.added} people to list`)
+      // Auto-sync to Resend so new members are included
+      await fetch("/api/lists/sync-to-resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listId: selectedListId }),
+      })
+
+      toast.success(`Added ${data.added} people to list and synced to Resend`)
       setAddPeopleModalOpen(false)
       setSelectedPeopleIds([])
       router.refresh()
@@ -259,21 +252,6 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
         },
       },
       {
-        accessorKey: "resend_status",
-        header: "Resend Status",
-        cell: ({ row }) => {
-          const isSynced = !!row.original.resend_segment_id
-          return isSynced ? (
-            <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-              <RefreshCw className="h-3 w-3 mr-1" />
-              Synced
-            </Badge>
-          ) : (
-            <Badge variant="secondary">Not Synced</Badge>
-          )
-        },
-      },
-      {
         accessorKey: "created_at",
         header: "Created",
         cell: ({ row }) => (
@@ -299,19 +277,6 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
               Add People
             </Button>
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleSyncToResend(row.original.id)}
-              disabled={syncingListId === row.original.id}
-            >
-              {syncingListId === row.original.id ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-1" />
-              )}
-              Sync
-            </Button>
-            <Button
               variant="ghost"
               size="sm"
               onClick={() => handleDeleteList(row.original.id)}
@@ -323,7 +288,7 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
         ),
       },
     ],
-    [syncingListId]
+    []
   )
 
   const table = useReactTable({
@@ -362,13 +327,11 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
   // Calculate statistics
   const stats = useMemo(() => {
     const total = lists.length
-    const synced = lists.filter((list) => list.resend_segment_id).length
     const totalMembers = lists.reduce((acc, list) => acc + list.list_people.length, 0)
     const avgMembersPerList = total > 0 ? Math.round(totalMembers / total) : 0
 
     return {
       total,
-      synced,
       totalMembers,
       avgMembersPerList,
     }
@@ -388,7 +351,13 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
   return (
     <div className="space-y-6">
       {/* Header with Create Button */}
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" asChild>
+          <Link href="/emails/broadcasts">
+            <Send className="h-4 w-4 mr-2" />
+            Broadcasts
+          </Link>
+        </Button>
         <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -445,7 +414,7 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Lists</CardTitle>
@@ -454,19 +423,6 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
             <p className="text-xs text-muted-foreground">Segments created</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Synced to Resend</CardTitle>
-            <RefreshCw className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.synced}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.total > 0 ? Math.round((stats.synced / stats.total) * 100) : 0}% synced
-            </p>
           </CardContent>
         </Card>
 

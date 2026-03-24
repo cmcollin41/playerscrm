@@ -114,8 +114,8 @@ export function AddToRosterModal({
       // Fetch people
       const { data: peopleData, error: peopleError } = await supabase
         .from("people")
-        .select("id, first_name, last_name, name, grade")
-        .eq("account_id", accountId)
+        .select("id, first_name, last_name, name, grade, account_people!inner(account_id)")
+        .eq("account_people.account_id", accountId)
       
       if (peopleData) setPeople(peopleData)
       if (peopleError) console.error("Error fetching people:", peopleError)

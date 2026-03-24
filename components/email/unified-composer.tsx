@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import RichTextEditor from "@/components/emails/rich-text-editor"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Mail, Loader2 } from "lucide-react"
@@ -328,10 +329,10 @@ export default function UnifiedComposer({
                 <FormItem>
                   <FormLabel>Message</FormLabel>
                   <FormControl>
-                    <Textarea
+                    <RichTextEditor
+                      content={field.value}
+                      onChange={field.onChange}
                       placeholder="Write your message..."
-                      className="min-h-[200px]"
-                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -339,37 +340,6 @@ export default function UnifiedComposer({
               )}
             />
 
-            {/* Template Selection */}
-            <FormField
-              control={form.control}
-              name="template"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Template</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    defaultValue={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select template" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="basic">
-                        Basic (Formatted with account branding)
-                      </SelectItem>
-                      <SelectItem value="html">HTML (Raw HTML)</SelectItem>
-                      <SelectItem value="text">Text (Plain text only)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    Choose how your email should be formatted
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             {/* Actions */}
             <div className="flex justify-end gap-2 pt-4">

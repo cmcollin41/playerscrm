@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import RichTextEditor from "@/components/emails/rich-text-editor"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -277,6 +278,13 @@ export default function ListDetailClient({
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Failed to add")
 
+      // Auto-sync to Resend so the new member is included
+      await fetch("/api/lists/sync-to-resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ listId: list.id }),
+      })
+
       const person = allPeople.find((p) => p.id === personId)
       toast.success(`Added ${person?.first_name} ${person?.last_name} to list`)
       setAddSearchQuery("")
@@ -491,17 +499,14 @@ export default function ListDetailClient({
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="bc-content">Email Content *</Label>
-                  <Textarea
-                    id="bc-content"
-                    placeholder="Just type your email here. Line breaks and paragraphs are preserved automatically."
-                    value={broadcastContent}
-                    onChange={(e) => setBroadcastContent(e.target.value)}
-                    rows={8}
-                    required
+                  <Label>Email Content *</Label>
+                  <RichTextEditor
+                    content={broadcastContent}
+                    onChange={setBroadcastContent}
+                    placeholder="Write your email here..."
                   />
                   <p className="text-xs text-muted-foreground">
-                    Personalize with {"{{{FIRST_NAME|there}}}"}, {"{{{LAST_NAME}}}"}, or {"{{{EMAIL}}}"}.
+                    Use the toolbar to format text, add images, and insert links.
                   </p>
                 </div>
               </div>

@@ -12,24 +12,42 @@ export async function getAccount() {
   try {
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("*, accounts(*)")
+      .select("current_account_id, account_id")
       .eq("id", user?.id)
       .single();
 
-    if (profileError) throw profileError;
-
-    if (profile.accounts?.id) {
-      const { data: senders, error: sendersError } = await supabase
-        .from("senders")
-        .select("*")
-        .eq("account_id", profile.accounts.id);
-      
-      if (!sendersError && senders) {
-        profile.accounts.senders = senders;
-      }
+    if (profileError) {
+      console.error("getAccount: profile error", profileError);
+      throw profileError;
     }
 
-    return profile.accounts;
+    const accountId = profile.current_account_id || profile.account_id;
+    if (!accountId) {
+      console.error("getAccount: no accountId", { profile });
+      throw new Error("No account found");
+    }
+
+    const { data: account, error: accountError } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("id", accountId)
+      .single();
+
+    if (accountError) {
+      console.error("getAccount: account error", accountError, { accountId });
+      throw accountError;
+    }
+
+    const { data: senders, error: sendersError } = await supabase
+      .from("senders")
+      .select("*")
+      .eq("account_id", account.id);
+
+    if (!sendersError && senders) {
+      account.senders = senders;
+    }
+
+    return account;
   } catch (error: any) {
     return {
       error: error.message,
@@ -49,32 +67,44 @@ export async function getAccountWithProfile() {
   try {
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("*, accounts(*)")
+      .select("*")
       .eq("id", user.id)
       .single();
 
     if (profileError) throw profileError;
 
-    if (profile.accounts?.id) {
-      const { data: senders, error: sendersError } = await supabase
-        .from("senders")
-        .select("*")
-        .eq("account_id", profile.accounts.id);
+    const accountId = profile.current_account_id || profile.account_id;
 
-      if (!sendersError && senders) {
-        profile.accounts.senders = senders;
+    let account = null;
+    if (accountId) {
+      const { data: acc, error: accountError } = await supabase
+        .from("accounts")
+        .select("*")
+        .eq("id", accountId)
+        .single();
+
+      if (!accountError && acc) {
+        const { data: senders, error: sendersError } = await supabase
+          .from("senders")
+          .select("*")
+          .eq("account_id", acc.id);
+
+        if (!sendersError && senders) {
+          acc.senders = senders;
+        }
+        account = acc;
       }
     }
 
     return {
-      account: profile.accounts,
+      account,
       profile: {
         id: profile.id,
         role: profile.role as UserRole,
         email: profile.email,
         first_name: profile.first_name,
         last_name: profile.last_name,
-        account_id: profile.account_id,
+        account_id: accountId,
       },
     };
   } catch (error: any) {

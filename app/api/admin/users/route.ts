@@ -16,7 +16,7 @@ export async function GET() {
 
     const { data: callerProfile } = await supabase
       .from("profiles")
-      .select("account_id, role")
+      .select("account_id, current_account_id, role")
       .eq("id", user.id)
       .single()
 
@@ -30,7 +30,7 @@ export async function GET() {
     const { data: users, error } = await supabase
       .from("profiles")
       .select("id, email, first_name, last_name, role, created_at")
-      .eq("account_id", callerProfile.account_id)
+      .eq("account_id", (callerProfile.current_account_id || callerProfile.account_id))
       .order("created_at", { ascending: true })
 
     if (error) {
@@ -60,7 +60,7 @@ export async function PATCH(req: Request) {
 
     const { data: callerProfile } = await supabase
       .from("profiles")
-      .select("account_id, role")
+      .select("account_id, current_account_id, role")
       .eq("id", user.id)
       .single()
 
@@ -103,7 +103,7 @@ export async function PATCH(req: Request) {
       .eq("id", userId)
       .single()
 
-    if (targetProfile?.account_id !== callerProfile.account_id) {
+    if (targetProfile?.account_id !== (callerProfile.current_account_id || callerProfile.account_id)) {
       return NextResponse.json(
         { error: "User not found in your account" },
         { status: 404 }

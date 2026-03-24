@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { getAccount } from "@/lib/fetchers/client";
 
 import { TeamTable } from "./table";
 
@@ -174,28 +175,8 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
     if (!user?.id) return;
     
     const fetchAccount = async () => {
-      // First get the profile with account
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*, accounts(*)")
-        .eq("id", user.id)
-        .single();
-
-      if (profileError) throw profileError;
-      
-      // Then fetch senders for this account
-      if (profile.accounts?.id) {
-        const { data: senders, error: sendersError } = await supabase
-          .from("senders")
-          .select("*")
-          .eq("account_id", profile.accounts.id);
-        
-        if (!sendersError && senders) {
-          profile.accounts.senders = senders;
-        }
-      }
-      
-      setAccount(profile.accounts);
+      const acc = await getAccount();
+      setAccount(acc);
     };
 
     fetchAccount();

@@ -20,24 +20,29 @@ export default async function EmailsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, accounts(*)")
+    .select("*")
     .eq("id", user.id)
     .single()
 
-  if (!profile?.account_id) {
+  const accountId = profile?.current_account_id || profile?.account_id
+  if (!accountId) {
     redirect("/login")
   }
 
-  // Fetch senders for this account
-  if (profile.accounts?.id) {
-    const { data: senders } = await supabase
-      .from("senders")
-      .select("*")
-      .eq("account_id", profile.accounts.id)
-    
-    if (senders) {
-      profile.accounts.senders = senders
-    }
+  // Fetch senders and account for this account
+  const { data: account } = await supabase
+    .from("accounts")
+    .select("*")
+    .eq("id", accountId)
+    .single()
+
+  const { data: senders } = await supabase
+    .from("senders")
+    .select("*")
+    .eq("account_id", accountId)
+
+  if (account && senders) {
+    account.senders = senders
   }
 
   // Fetch all emails for the account with related data
@@ -53,7 +58,7 @@ export default async function EmailsPage() {
         dependent
       )
     `)
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -63,8 +68,8 @@ export default async function EmailsPage() {
   // Fetch all people for the account (for sending new emails)
   const { data: people } = await supabase
     .from("people")
-    .select("*")
-    .eq("account_id", profile.account_id)
+    .select("*, account_people!inner(account_id)")
+    .eq("account_people.account_id", accountId)
     .order("first_name", { ascending: true })
 
   // Fetch lists with full data for recipient selection
@@ -85,7 +90,7 @@ export default async function EmailsPage() {
         )
       )
     `)
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
 
   // Fetch teams with rosters for recipient selection
   const { data: teams } = await supabase
@@ -104,14 +109,14 @@ export default async function EmailsPage() {
         )
       )
     `)
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .eq("is_active", true)
 
   // Fetch broadcasts summary
   const { data: broadcasts } = await supabase
     .from("broadcasts")
     .select("id, status, total_sent, total_opened")
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
 
   // Calculate summaries
   const listsCount = lists?.length || 0
@@ -135,7 +140,7 @@ export default async function EmailsPage() {
         </div>
         <NewEmailButton 
           people={people || []}
-          account={profile.accounts}
+          account={account}
           teams={teams || []}
           lists={lists || []}
         />
@@ -145,8 +150,8 @@ export default async function EmailsPage() {
       <EmailsClient 
         emails={emails || []} 
         people={people || []}
-        account={profile.accounts}
-        accountId={profile.account_id}
+        account={account}
+        accountId={accountId}
         listsCount={listsCount}
         syncedListsCount={syncedListsCount}
         totalListMembers={totalListMembers}

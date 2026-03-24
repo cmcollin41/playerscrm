@@ -20,11 +20,13 @@ export async function POST(req: Request) {
       )
     }
 
-    const { data: profile } = await supabase
+    const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("account_id")
+      .select("account_id, current_account_id")
       .eq("id", user.id)
       .single()
+
+    const profile = rawProfile ? { ...rawProfile, account_id: rawProfile.current_account_id || rawProfile.account_id } : null
 
     if (!profile?.account_id) {
       return NextResponse.json(
@@ -35,8 +37,8 @@ export async function POST(req: Request) {
 
     const { data: people, error: peopleError } = await supabase
       .from("people")
-      .select("id, email, first_name, last_name")
-      .eq("account_id", profile.account_id)
+      .select("id, email, first_name, last_name, account_people!inner(account_id)")
+      .eq("account_people.account_id", profile.account_id)
       .not("email", "is", null)
 
     if (peopleError) {

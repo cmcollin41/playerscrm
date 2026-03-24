@@ -18,11 +18,12 @@ async function getAuthenticatedProfile(supabase: any) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("account_id")
+    .select("account_id, current_account_id")
     .eq("id", user.id)
     .single()
 
-  return profile
+  if (!profile) return null
+  return { ...profile, account_id: profile.current_account_id || profile.account_id }
 }
 
 async function ensureSegment(supabase: any, list: any) {

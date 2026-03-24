@@ -16,11 +16,12 @@ export default async function BroadcastsPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, accounts(*)")
+    .select("*")
     .eq("id", user.id)
     .single()
 
-  if (!profile?.account_id) {
+  const accountId = profile?.current_account_id || profile?.account_id
+  if (!accountId) {
     redirect("/login")
   }
 
@@ -35,7 +36,7 @@ export default async function BroadcastsPage() {
         list_people (count)
       )
     `)
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -49,13 +50,13 @@ export default async function BroadcastsPage() {
       *,
       list_people (count)
     `)
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .order("name", { ascending: true })
 
   const { data: senders } = await supabase
     .from("senders")
     .select("*")
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -71,7 +72,7 @@ export default async function BroadcastsPage() {
         lists={lists || []}
         senders={senders || []}
         account={profile.accounts}
-        accountId={profile.account_id} 
+        accountId={accountId} 
       />
     </div>
   )

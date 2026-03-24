@@ -23,7 +23,9 @@ export async function getUserProfile(): Promise<AuthProfile | null> {
 
   if (profileError || !profile) return null
 
-  return profile as AuthProfile
+  // Resolve active account: current_account_id takes priority over legacy account_id
+  const activeAccountId = profile.current_account_id || profile.account_id
+  return { ...profile, account_id: activeAccountId } as AuthProfile
 }
 
 export async function isAdmin(): Promise<boolean> {

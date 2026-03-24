@@ -36,6 +36,12 @@ export function MainNav({ className, userRole = "general", ...props }: MainNavPr
       >
         Teams
       </Link>
+      <Link
+        href="/events"
+        className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
+      >
+        Events
+      </Link>
       {isAdmin && (
         <Link
           href="/invoices"

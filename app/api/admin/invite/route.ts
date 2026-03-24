@@ -14,11 +14,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: callerProfile } = await supabase
+    const { data: rawCallerProfile } = await supabase
       .from("profiles")
-      .select("account_id, role, first_name, last_name")
+      .select("account_id, current_account_id, role, first_name, last_name")
       .eq("id", user.id)
       .single()
+
+    const callerProfile = rawCallerProfile ? { ...rawCallerProfile, account_id: rawCallerProfile.current_account_id || rawCallerProfile.account_id } : null
 
     if (!callerProfile?.account_id || callerProfile.role !== "admin") {
       return NextResponse.json(

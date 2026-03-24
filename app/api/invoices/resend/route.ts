@@ -77,13 +77,14 @@ export async function POST(req: Request) {
     }
 
     // Verify user has access to this invoice's account
-    const { data: profile } = await supabase
+    const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("account_id")
+      .select("account_id, current_account_id")
       .eq("id", user.id)
       .single()
 
-    if (profile?.account_id !== invoice.account_id) {
+    const activeAccountId = rawProfile?.current_account_id || rawProfile?.account_id
+    if (activeAccountId !== invoice.account_id) {
       return NextResponse.json(
         { error: "Unauthorized access to invoice" },
         { status: 403 }

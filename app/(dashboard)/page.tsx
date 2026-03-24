@@ -43,11 +43,11 @@ export default async function Dashboard() {
     .eq("account_id", account.id)
     .order("created_at", { ascending: false });
 
-  // Fetch people
+  // Fetch people via account_people join
   const { data: people } = await supabase
     .from("people")
-    .select("id, dependent")
-    .eq("account_id", account.id);
+    .select("id, dependent, account_people!inner(account_id)")
+    .eq("account_people.account_id", account.id);
 
   // Fetch invoices
   const { data: invoices } = await supabase

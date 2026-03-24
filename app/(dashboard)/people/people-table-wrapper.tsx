@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { PeopleTable } from "./table";
-import { getPrimaryContacts } from "@/lib/fetchers/client";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface PeopleTableWrapperProps {
@@ -11,63 +10,110 @@ interface PeopleTableWrapperProps {
   account: any;
 }
 
+// Resolve primary contacts from the already-fetched relationships data
+// instead of making N individual API calls
+function resolveContacts(peopleData: any[]) {
+  const peopleById = new Map(peopleData.map(p => [p.id, p]))
+
+  return peopleData.map(person => {
+    if (!person.dependent || !person.relationships?.length) {
+      return { ...person, primary_contacts: null }
+    }
+
+    // relationships are fetched via relationships_person_id_fkey,
+    // meaning person.relationships contains rows where person_id = person.id
+    // But for dependents, we need rows where relation_id = person.id (parent → child)
+    // The server query uses relationships_person_id_fkey which gives us
+    // relationships where THIS person is the person_id (i.e., this person is the parent)
+    // For dependents, we need the reverse — handled below
+
+    return { ...person, primary_contacts: null }
+  })
+}
+
 export function PeopleTableWrapper({ initialPeople, account }: PeopleTableWrapperProps) {
   const supabase = createClient();
   const [people, setPeople] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Process people with primary contacts
-  const processPeople = async (peopleData: any[]) => {
-    const peopleWithPrimaryEmailPromises = peopleData.map(async (person) => {
-      const primaryPeople = await getPrimaryContacts(person);
-      return {
-        ...person,
-        primary_contacts: primaryPeople,
-      };
-    });
-    return await Promise.all(peopleWithPrimaryEmailPromises);
-  };
+  // Build a lookup of primary contacts from relationships
+  const buildPrimaryContacts = async (peopleData: any[]) => {
+    const peopleById = new Map(peopleData.map(p => [p.id, p]))
 
-  // Initial load with server data
+    // For dependents, find their guardians via relationships where relation_id = dependent.id
+    const dependentIds = peopleData.filter(p => p.dependent).map(p => p.id)
+
+    if (dependentIds.length === 0) {
+      return peopleData.map(p => ({ ...p, primary_contacts: null }))
+    }
+
+    // Single batch query instead of 572 individual queries
+    const { data: guardianRels } = await supabase
+      .from("relationships")
+      .select("person_id, relation_id, primary")
+      .in("relation_id", dependentIds)
+      .eq("primary", true)
+
+    // Map: dependent_id → [guardian person objects]
+    const guardianMap = new Map<string, any[]>()
+    for (const rel of guardianRels || []) {
+      const guardian = peopleById.get(rel.person_id)
+      if (guardian) {
+        const existing = guardianMap.get(rel.relation_id) || []
+        existing.push(guardian)
+        guardianMap.set(rel.relation_id, existing)
+      }
+    }
+
+    return peopleData.map(p => ({
+      ...p,
+      primary_contacts: p.dependent ? (guardianMap.get(p.id) || null) : null,
+    }))
+  }
+
+  // Initial load
   useEffect(() => {
-    const loadInitialData = async () => {
-      const processed = await processPeople(initialPeople);
-      setPeople(processed);
-      setIsLoading(false);
-    };
-    loadInitialData();
-  }, []);
+    const load = async () => {
+      try {
+        const processed = await buildPrimaryContacts(initialPeople)
+        setPeople(processed)
+      } catch (err) {
+        console.error("Error processing people:", err)
+        setPeople(initialPeople.map(p => ({ ...p, primary_contacts: null })))
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    load()
+  }, [])
 
-  // Set up real-time subscription
+  // Real-time subscription
   useEffect(() => {
     const channel = supabase
       .channel("people")
       .on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "people",
-        },
+        { event: "*", schema: "public", table: "people" },
         async () => {
-          // Refetch people on changes
-          const { data: updatedPeople } = await supabase
-            .from("people")
-            .select("*, relationships!relationships_person_id_fkey(*)")
-            .eq("account_id", account.id);
+          try {
+            const { data: updatedPeople } = await supabase
+              .from("people")
+              .select("*, relationships!relationships_person_id_fkey(*), account_people!inner(account_id)")
+              .eq("account_people.account_id", account.id)
 
-          if (updatedPeople) {
-            const processed = await processPeople(updatedPeople);
-            setPeople(processed);
+            if (updatedPeople) {
+              const processed = await buildPrimaryContacts(updatedPeople)
+              setPeople(processed)
+            }
+          } catch (err) {
+            console.error("Error refetching people:", err)
           }
         },
       )
-      .subscribe();
+      .subscribe()
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [account.id]);
+    return () => { supabase.removeChannel(channel) }
+  }, [account.id])
 
   if (isLoading) {
     return (
@@ -82,9 +128,8 @@ export function PeopleTableWrapper({ initialPeople, account }: PeopleTableWrappe
           ))}
         </div>
       </div>
-    );
+    )
   }
 
   return <PeopleTable data={people} account={account} />;
 }
-

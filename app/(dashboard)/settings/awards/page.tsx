@@ -66,7 +66,7 @@ export default function AwardTypesPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("account_id, role")
+        .select("account_id, current_account_id, role")
         .eq("id", user.id)
         .single()
 
@@ -75,8 +75,9 @@ export default function AwardTypesPage() {
         return
       }
 
-      setAccountId(profile.account_id)
-      await fetchAwardTypes(profile.account_id)
+      const activeAccountId = profile.current_account_id || profile.account_id
+      setAccountId(activeAccountId)
+      await fetchAwardTypes(activeAccountId)
       setIsLoading(false)
     }
     load()

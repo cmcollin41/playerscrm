@@ -17,11 +17,12 @@ export default async function InvoicesPage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("*, accounts(*)")
+    .select("*")
     .eq("id", user.id)
     .single()
 
-  if (!profile?.account_id) {
+  const accountId = profile?.current_account_id || profile?.account_id
+  if (!accountId) {
     redirect("/login")
   }
 
@@ -51,7 +52,7 @@ export default async function InvoicesPage() {
         created_at
       )
     `)
-    .eq("account_id", profile.account_id)
+    .eq("account_id", accountId)
     .order("created_at", { ascending: false })
 
   if (error) {
@@ -72,7 +73,7 @@ export default async function InvoicesPage() {
         </Button>
       </div>
 
-      <InvoicesClient invoices={invoices || []} accountId={profile.account_id} />
+      <InvoicesClient invoices={invoices || []} accountId={accountId} />
     </div>
   )
 }

@@ -14,11 +14,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
+    const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("account_id")
+      .select("account_id, current_account_id")
       .eq("id", user.id)
       .single()
+
+    const profile = rawProfile ? { ...rawProfile, account_id: rawProfile.current_account_id || rawProfile.account_id } : null
 
     if (!profile?.account_id) {
       return NextResponse.json({ error: "No account found" }, { status: 404 })

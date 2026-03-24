@@ -22,22 +22,19 @@ export async function POST(req: Request) {
 
     const supabase = await createClient()
 
-    // Fetch person and verify ownership
+    // Fetch person and verify ownership via account_people
     const { data: person, error: personError } = await supabase
       .from("people")
-      .select("id, account_id, maxpreps_url")
+      .select("id, account_id, maxpreps_url, account_people!inner(account_id)")
       .eq("id", person_id)
+      .eq("account_people.account_id", profile.account_id)
       .single()
 
     if (personError || !person) {
       return NextResponse.json(
-        { error: "Person not found" },
+        { error: "Person not found or access denied" },
         { status: 404 }
       )
-    }
-
-    if (person.account_id !== profile.account_id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
     if (!person.maxpreps_url) {

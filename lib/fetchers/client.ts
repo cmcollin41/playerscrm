@@ -14,26 +14,8 @@ export async function getAccountWithDomain(domain: string) {
   try {
     let account;
     if (user?.id) {
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("*, accounts(*)")
-        .eq("id", user?.id)
-        .single();
-
-      if (profileError) throw profileError;
-      account = profile?.accounts;
-      
-      // Fetch senders for this account
-      if (account?.id) {
-        const { data: senders, error: sendersError } = await supabase
-          .from("senders")
-          .select("*")
-          .eq("account_id", account.id);
-        
-        if (!sendersError && senders) {
-          account.senders = senders;
-        }
-      }
+      // Use getAccount() which respects current_account_id
+      account = await getAccount();
     } else if (domain) {
       const { data: site, error: siteError } = await supabase
         .from("sites")
@@ -73,28 +55,35 @@ export async function getAccount() {
   } = await supabase.auth.getUser();
 
   try {
-    // First get the profile with account
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("*, accounts(*)")
+      .select("current_account_id, account_id")
       .eq("id", user?.id)
       .single();
 
     if (profileError) throw profileError;
 
-    // Then fetch senders for this account
-    if (profile.accounts?.id) {
-      const { data: senders, error: sendersError } = await supabase
-        .from("senders")
-        .select("*")
-        .eq("account_id", profile.accounts.id);
-      
-      if (!sendersError && senders) {
-        profile.accounts.senders = senders;
-      }
+    const accountId = profile.current_account_id || profile.account_id;
+    if (!accountId) throw new Error("No account found");
+
+    const { data: account, error: accountError } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("id", accountId)
+      .single();
+
+    if (accountError) throw accountError;
+
+    const { data: senders, error: sendersError } = await supabase
+      .from("senders")
+      .select("*")
+      .eq("account_id", account.id);
+
+    if (!sendersError && senders) {
+      account.senders = senders;
     }
 
-    return profile.accounts;
+    return account;
   } catch (error: any) {
     return {
       error: error.message,

@@ -83,11 +83,13 @@ export async function POST(req: Request) {
       )
     }
 
-    const { data: profile } = await supabase
+    const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("account_id, role")
+      .select("account_id, current_account_id, role")
       .eq("id", user.id)
       .single()
+
+    const profile = rawProfile ? { ...rawProfile, account_id: rawProfile.current_account_id || rawProfile.account_id } : null
 
     if (!profile || profile.account_id !== account_id) {
       return NextResponse.json(

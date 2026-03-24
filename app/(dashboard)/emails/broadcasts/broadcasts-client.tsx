@@ -1,9 +1,11 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import RichTextEditor from "@/components/emails/rich-text-editor"
 import {
   Table,
   TableBody,
@@ -366,7 +368,13 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
   return (
     <div className="space-y-6">
       {/* Header with Create Button */}
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-2">
+        <Button variant="outline" asChild>
+          <Link href="/emails/lists">
+            <Users className="h-4 w-4 mr-2" />
+            Lists
+          </Link>
+        </Button>
         <Dialog open={createModalOpen} onOpenChange={setCreateModalOpen}>
           <DialogTrigger asChild>
             <Button disabled={syncedLists.length === 0}>
@@ -452,17 +460,14 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="content">Email Content</Label>
-                    <Textarea
-                      id="content"
-                      placeholder="Just type your email here. Line breaks and paragraphs are preserved automatically."
-                      value={broadcastContent}
-                      onChange={(e) => setBroadcastContent(e.target.value)}
-                      rows={12}
-                      required
+                    <Label>Email Content</Label>
+                    <RichTextEditor
+                      content={broadcastContent}
+                      onChange={setBroadcastContent}
+                      placeholder="Write your email here..."
                     />
                     <p className="text-xs text-muted-foreground">
-                      Personalize with {"{{{FIRST_NAME|there}}}"}, {"{{{LAST_NAME}}}"}, or {"{{{EMAIL}}}"}.
+                      Use the toolbar to format text, add images, and insert links.
                     </p>
                   </div>
                 </div>

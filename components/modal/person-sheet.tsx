@@ -318,9 +318,9 @@ export default function PersonSheet({
     const fetchPeople = async () => {
       const { data } = await supabase
         .from('people')
-        .select('id, first_name, last_name, name')
+        .select('id, first_name, last_name, name, account_people!inner(account_id)')
         .eq('dependent', false)
-        .eq('account_id', account?.id)
+        .eq('account_people.account_id', account?.id)
 
       
       if (data) setPeople(data)
@@ -350,8 +350,8 @@ export default function PersonSheet({
       const baseSlug = slugify(`${values.firstName} ${values.lastName}`.trim() || "person");
       const { data: existing } = await supabase
         .from("people")
-        .select("id, slug")
-        .eq("account_id", account.id)
+        .select("id, slug, account_people!inner(account_id)")
+        .eq("account_people.account_id", account.id)
         .not("slug", "is", null);
       const existingSlugs = (existing ?? [])
         .filter((p: { id: string }) => p.id !== person?.id)
@@ -384,12 +384,22 @@ export default function PersonSheet({
       const { data: savedPerson, error: personError } = await supabase
         .from("people")
         .upsert([
-          person?.id 
+          person?.id
             ? { ...personData, id: person.id }
             : personData
         ])
         .select()
         .single();
+
+      // Dual-write: ensure account_people row exists
+      if (savedPerson && !personError) {
+        await supabase
+          .from("account_people")
+          .upsert(
+            { account_id: account.id, person_id: savedPerson.id, tags: values.tags },
+            { onConflict: "account_id,person_id" }
+          )
+      }
 
       if (personError) {
         if (personError.code === '23505') {

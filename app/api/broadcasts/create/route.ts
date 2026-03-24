@@ -16,11 +16,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data: profile } = await supabase
+    const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("account_id, role")
+      .select("account_id, current_account_id, role")
       .eq("id", user.id)
       .single()
+
+    const profile = rawProfile ? { ...rawProfile, account_id: rawProfile.current_account_id || rawProfile.account_id } : null
 
     if (!profile?.account_id) {
       return NextResponse.json({ error: "No account found" }, { status: 404 })
@@ -86,7 +88,29 @@ export async function POST(req: Request) {
         </p>
       </div>`
 
-    const htmlContent = bodyHtml + unsubscribeFooter
+    const htmlContent = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <style>
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; display: block; max-width: 100%; }
+    body { margin: 0; padding: 0; width: 100% !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+  </style>
+</head>
+<body style="background-color:#ffffff;margin:0;padding:0;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;padding:16px;">
+    <tr><td>
+      ${bodyHtml}
+      ${unsubscribeFooter}
+    </td></tr>
+  </table>
+</body>
+</html>`
 
     const resendResult = await createBroadcast({
       segmentId: list.resend_segment_id,
