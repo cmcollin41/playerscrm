@@ -43,13 +43,19 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   const [stripeAccount, setStripeAccount] = useState<string | null>(null)
   const [hasSelfInList, setHasSelfInList] = useState(false)
 
-  // Wait for auth session to be fully ready before querying RLS-protected tables
+  // Load family via server API (avoids RLS timing issues with browser client)
+  const loadFamily = async () => {
+    const res = await fetch(`/api/register/family?event_id=${event.id}`)
+    const data = await res.json()
+    setFamily(data.family || [])
+    setHasSelfInList(data.hasSelf)
+  }
+
+  // Check auth state
   useEffect(() => {
     let loaded = false
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // INITIAL_SESSION fires once when the client finishes restoring the session
-      // SIGNED_IN fires after magic link or fresh login
       if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
         if (loaded) return
         if (session?.user) {
@@ -58,7 +64,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
           setStep("select-kids")
           setFamilyLoading(true)
           try {
-            await loadFamily(session.user.id)
+            await loadFamily()
           } catch (err) {
             console.error("loadFamily error:", err)
           } finally {
@@ -71,77 +77,6 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
 
     return () => subscription.unsubscribe()
   }, [])
-
-  const loadFamily = async (userId: string) => {
-    // Get user's profile — also try auth email as fallback for people lookup
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    const authEmail = authUser?.email
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id, people_id, email")
-      .eq("id", userId)
-      .single()
-
-    if (!profile) return
-
-    let selfPerson: any = null
-    let allFamily: any[] = []
-
-    // Find the person record for the logged-in user
-    if (profile.people_id) {
-      const { data: self } = await supabase
-        .from("people")
-        .select("id, first_name, last_name, grade, email, dependent")
-        .eq("id", profile.people_id)
-        .single()
-      selfPerson = self
-    }
-
-    // Fallback: try profile email, then auth email
-    if (!selfPerson && (profile.email || authEmail)) {
-      const lookupEmail = profile.email || authEmail
-      const { data: self } = await supabase
-        .from("people")
-        .select("id, first_name, last_name, grade, email, dependent")
-        .eq("email", lookupEmail!)
-        .limit(1)
-        .maybeSingle()
-      selfPerson = self
-    }
-
-    setHasSelfInList(!!selfPerson)
-
-    // Get dependents via relationships (if the user has a person record)
-    if (selfPerson) {
-      const { data: relationships } = await supabase
-        .from("relationships")
-        .select("relation_id, people!relationships_relation_id_fkey(id, first_name, last_name, grade, email)")
-        .eq("person_id", selfPerson.id)
-
-      const dependents = relationships?.map((r: any) => r.people).filter(Boolean) || []
-      allFamily = [selfPerson, ...dependents]
-    }
-
-    // Deduplicate by id
-    const seen = new Set<string>()
-    allFamily = allFamily.filter(p => {
-      if (!p?.id || seen.has(p.id)) return false
-      seen.add(p.id)
-      return true
-    })
-
-    setFamily(allFamily)
-
-    // Check already registered
-    const { data: existing } = await supabase
-      .from("event_registrations")
-      .select("person_id")
-      .eq("event_id", event.id)
-
-    const registeredIds = new Set(existing?.map(r => r.person_id) || [])
-    setFamily(prev => prev.map(p => ({ ...p, alreadyRegistered: registeredIds.has(p.id) })))
-  }
 
   const handleSendMagicLink = async () => {
     if (!email) return
