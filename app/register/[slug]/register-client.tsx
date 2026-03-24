@@ -43,37 +43,29 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   const [stripeAccount, setStripeAccount] = useState<string | null>(null)
   const [hasSelfInList, setHasSelfInList] = useState(false)
 
-  // Check if user is already authenticated
+  // Wait for auth session to be fully ready before querying RLS-protected tables
   useEffect(() => {
-    let handled = false
+    let loaded = false
 
-    const initUser = async (u: any) => {
-      if (handled) return
-      handled = true
-      setUser(u)
-      setStep("select-kids")
-      setFamilyLoading(true)
-      try {
-        await loadFamily(u.id)
-      } catch (err) {
-        console.error("loadFamily error:", err)
-      } finally {
-        setFamilyLoading(false)
-      }
-    }
-
-    const checkAuth = async () => {
-      const { data: { user: u } } = await supabase.auth.getUser()
-      if (u) {
-        await initUser(u)
-      }
-      setAuthLoading(false)
-    }
-    checkAuth()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        await initUser(session.user)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // INITIAL_SESSION fires once when the client finishes restoring the session
+      // SIGNED_IN fires after magic link or fresh login
+      if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
+        if (loaded) return
+        if (session?.user) {
+          loaded = true
+          setUser(session.user)
+          setStep("select-kids")
+          setFamilyLoading(true)
+          try {
+            await loadFamily(session.user.id)
+          } catch (err) {
+            console.error("loadFamily error:", err)
+          } finally {
+            setFamilyLoading(false)
+          }
+        }
+        setAuthLoading(false)
       }
     })
 
