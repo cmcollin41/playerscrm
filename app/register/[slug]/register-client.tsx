@@ -45,26 +45,35 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
 
   // Check if user is already authenticated
   useEffect(() => {
+    let handled = false
+
+    const initUser = async (u: any) => {
+      if (handled) return
+      handled = true
+      setUser(u)
+      setStep("select-kids")
+      setFamilyLoading(true)
+      try {
+        await loadFamily(u.id)
+      } catch (err) {
+        console.error("loadFamily error:", err)
+      } finally {
+        setFamilyLoading(false)
+      }
+    }
+
     const checkAuth = async () => {
       const { data: { user: u } } = await supabase.auth.getUser()
       if (u) {
-        setUser(u)
-        setStep("select-kids")
-        setFamilyLoading(true)
-        await loadFamily(u.id)
-        setFamilyLoading(false)
+        await initUser(u)
       }
       setAuthLoading(false)
     }
     checkAuth()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user && !user) {
-        setUser(session.user)
-        setStep("select-kids")
-        setFamilyLoading(true)
-        await loadFamily(session.user.id)
-        setFamilyLoading(false)
+      if (session?.user) {
+        await initUser(session.user)
       }
     })
 
@@ -72,14 +81,15 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   }, [])
 
   const loadFamily = async (userId: string) => {
-    // Get user's profile and auth email
-    const { data: profile, error: profileErr } = await supabase
+    // Get user's profile — also try auth email as fallback for people lookup
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    const authEmail = authUser?.email
+
+    const { data: profile } = await supabase
       .from("profiles")
       .select("id, people_id, email")
       .eq("id", userId)
       .single()
-
-    console.log("loadFamily: profile", { profile, profileErr })
 
     if (!profile) return
 
@@ -88,21 +98,23 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
 
     // Find the person record for the logged-in user
     if (profile.people_id) {
-      const { data: self, error: selfErr } = await supabase
+      const { data: self } = await supabase
         .from("people")
         .select("id, first_name, last_name, grade, email, dependent")
         .eq("id", profile.people_id)
         .single()
-      console.log("loadFamily: self by people_id", { self, selfErr })
       selfPerson = self
-    } else if (profile.email) {
-      const { data: self, error: selfErr } = await supabase
+    }
+
+    // Fallback: try profile email, then auth email
+    if (!selfPerson && (profile.email || authEmail)) {
+      const lookupEmail = profile.email || authEmail
+      const { data: self } = await supabase
         .from("people")
         .select("id, first_name, last_name, grade, email, dependent")
-        .eq("email", profile.email)
+        .eq("email", lookupEmail!)
         .limit(1)
         .maybeSingle()
-      console.log("loadFamily: self by email", { self, selfErr })
       selfPerson = self
     }
 
@@ -110,17 +122,13 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
 
     // Get dependents via relationships (if the user has a person record)
     if (selfPerson) {
-      const { data: relationships, error: relErr } = await supabase
+      const { data: relationships } = await supabase
         .from("relationships")
         .select("relation_id, people!relationships_relation_id_fkey(id, first_name, last_name, grade, email)")
         .eq("person_id", selfPerson.id)
 
-      console.log("loadFamily: relationships", { count: relationships?.length, relErr })
-
       const dependents = relationships?.map((r: any) => r.people).filter(Boolean) || []
       allFamily = [selfPerson, ...dependents]
-    } else {
-      console.log("loadFamily: no selfPerson found")
     }
 
     // Deduplicate by id
