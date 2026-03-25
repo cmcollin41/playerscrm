@@ -72,6 +72,23 @@ interface InvoiceLinkRow {
   amount: number | null;
   status: string;
   roster_id: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+function parseLinkedDraftForSend(
+  invoiceLinkValue: string,
+  rows: InvoiceLinkRow[],
+): { kind: "sendable"; id: string } | { kind: "blocked"; id: string } | null {
+  if (invoiceLinkValue === "__none__") return null;
+  const row = rows.find((r) => r.id === invoiceLinkValue);
+  if (!row || row.status !== "draft") return null;
+  const meta = (row.metadata ?? {}) as Record<string, unknown>;
+  const stripeInvoiceId =
+    typeof meta.stripe_invoice_id === "string" ? meta.stripe_invoice_id : null;
+  const stripeAccountId =
+    typeof meta.stripe_account_id === "string" ? meta.stripe_account_id : null;
+  if (stripeInvoiceId && stripeAccountId) return { kind: "sendable", id: row.id };
+  return { kind: "blocked", id: row.id };
 }
 
 export interface RosterBillingPerson {
@@ -176,7 +193,7 @@ export function RosterBillingModal({
       if (rosterId && accountId) {
         const { data: invData } = await supabase
           .from("invoices")
-          .select("id, invoice_number, amount, status, roster_id")
+          .select("id, invoice_number, amount, status, roster_id, metadata")
           .eq("person_id", person.id)
           .eq("account_id", accountId)
           .neq("status", "void")
@@ -289,7 +306,34 @@ export function RosterBillingModal({
     }
   }
 
+  const linkedDraft = parseLinkedDraftForSend(invoiceLinkValue, invoicesForLink);
+
   async function handleCreateStandardInvoice() {
+    if (linkedDraft?.kind === "sendable") {
+      setCreatingInvoice(true);
+      try {
+        const res = await fetch(
+          `/api/invoices/${linkedDraft.id}/finalize-send`,
+          { method: "POST" },
+        );
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(
+            (body as { error?: string }).error || "Could not send invoice",
+          );
+        }
+        toast.success("Draft invoice finalized and emailed");
+        if (onRefresh) await onRefresh();
+        else refresh();
+        onOpenChange(false);
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : "Invoice failed");
+      } finally {
+        setCreatingInvoice(false);
+      }
+      return;
+    }
+
     if (!guardianEmail) {
       toast.error("Add a primary contact email first");
       return;
@@ -344,7 +388,9 @@ export function RosterBillingModal({
             <DialogDescription>
               {wizardStep === 1
                 ? `${personName} · ${teamName}`
-                : "Billing is saved. You can email a Stripe invoice for the amount below, or finish without sending."}
+                : linkedDraft?.kind === "sendable"
+                  ? "Billing is saved. You have a draft invoice linked — you can finalize and email that Stripe invoice, or finish without sending."
+                  : "Billing is saved. You can email a Stripe invoice for the amount below, or finish without sending."}
             </DialogDescription>
           </DialogHeader>
 
@@ -466,21 +512,43 @@ export function RosterBillingModal({
                     <p className="mt-2 text-xs text-muted-foreground">
                       Matches what you just saved for this roster ({personName},{" "}
                       {teamName}).
+                      {linkedDraft?.kind === "sendable"
+                        ? " The linked Stripe draft may list a different total; sending uses that draft as-is."
+                        : null}
                     </p>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Stripe creates the invoice, finalizes it, and{" "}
-                    <span className="font-medium text-foreground">
-                      emails it to the primary contact
-                    </span>{" "}
-                    (customer on file).
-                  </p>
-                  {!guardianEmail ? (
+                  {linkedDraft?.kind === "sendable" ? (
+                    <p className="text-sm text-muted-foreground">
+                      This uses the{" "}
+                      <span className="font-medium text-foreground">
+                        existing draft
+                      </span>{" "}
+                      in Stripe (finalize + email to the invoice customer). No
+                      second invoice is created.
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Stripe creates the invoice, finalizes it, and{" "}
+                      <span className="font-medium text-foreground">
+                        emails it to the primary contact
+                      </span>{" "}
+                      (customer on file).
+                    </p>
+                  )}
+                  {linkedDraft?.kind === "blocked" ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-500">
+                      The linked invoice is a draft without Stripe data. Use{" "}
+                      <span className="font-medium">Back</span> and unlink it,
+                      then send a new invoice—or fix the draft in Stripe.
+                    </p>
+                  ) : null}
+                  {!guardianEmail && linkedDraft?.kind !== "sendable" ? (
                     <p className="text-xs text-amber-700">
                       Add a primary contact with email before sending invoices.
                     </p>
                   ) : null}
-                  {savedOwedForInvoice == null || savedOwedForInvoice <= 0 ? (
+                  {linkedDraft?.kind !== "sendable" &&
+                  (savedOwedForInvoice == null || savedOwedForInvoice <= 0) ? (
                     <p className="text-sm text-muted-foreground">
                       There is no billable amount on file. Use{" "}
                       <span className="font-medium">Back</span> to set a fee or
@@ -493,18 +561,22 @@ export function RosterBillingModal({
                     className="w-full bg-green-700 text-white hover:bg-green-800 h-11"
                     disabled={
                       creatingInvoice ||
-                      savedOwedForInvoice == null ||
-                      savedOwedForInvoice <= 0 ||
-                      !guardianEmail
+                      linkedDraft?.kind === "blocked" ||
+                      (linkedDraft?.kind !== "sendable" &&
+                        (savedOwedForInvoice == null ||
+                          savedOwedForInvoice <= 0 ||
+                          !guardianEmail))
                     }
                     onClick={() => void handleCreateStandardInvoice()}
                   >
                     <DocumentIcon className="h-4 w-4 mr-2 shrink-0" />
                     {creatingInvoice
                       ? "Sending…"
-                      : savedOwedForInvoice != null && savedOwedForInvoice > 0
-                        ? `Email invoice for $${savedOwedForInvoice.toFixed(2)}`
-                        : "Set amount in step 1"}
+                      : linkedDraft?.kind === "sendable"
+                        ? "Email linked draft invoice"
+                        : savedOwedForInvoice != null && savedOwedForInvoice > 0
+                          ? `Email invoice for $${savedOwedForInvoice.toFixed(2)}`
+                          : "Set amount in step 1"}
                   </Button>
                 </div>
               </div>
