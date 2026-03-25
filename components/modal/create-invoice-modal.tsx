@@ -87,13 +87,24 @@ export default function CreateInvoiceModal({
           ? selectedRosterId
           : undefined
 
+      const billEmail =
+        person.email?.trim() ||
+        person.primary_contacts?.[0]?.email?.trim() ||
+        ""
+      const usesGuardianEmail =
+        !person.email?.trim() && !!person.primary_contacts?.[0]?.email?.trim()
+      const guardianId = person.primary_contacts?.[0]?.id
+
       const customerResponse = await fetch("/api/stripe-customers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: person.email || person.primary_contacts[0].email,
-          accountId: account.id
-        })
+          email: billEmail,
+          accountId: account.id,
+          ...(usesGuardianEmail && typeof guardianId === "string"
+            ? { payerPersonId: guardianId, athletePersonId: person.id }
+            : {}),
+        }),
       })
 
       if (!customerResponse.ok) {

@@ -357,6 +357,7 @@ export function RosterBillingModal({
         teamName,
         amount,
         guardianEmail,
+        payerPersonId: person.primary_contacts?.[0]?.id,
         accountId: team.account_id,
         stripeAccountId: team.accounts.stripe_id,
         person_id: person.id,
