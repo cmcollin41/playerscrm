@@ -52,22 +52,30 @@ import { RosterBillingModal } from "@/components/modal/roster-billing-modal";
 import {
   amountsDifferCents,
   effectiveRosterOwedDollars,
+  invoicesForRoster,
   linkedInvoiceForRoster,
-  rosterPaidViaFeePayment,
+  rosterIsPaid,
+  rosterPartiallyPaidViaInvoices,
+  rosterTotalPaidCollectedDollars,
+  unpaidSentInvoicesForRoster,
 } from "@/lib/roster-pricing";
 
-function paymentStatus(_person: Person, roster: any) {
-  const invoice = roster ? linkedInvoiceForRoster(roster) : undefined;
-
+function paymentStatus(
+  _person: Person,
+  roster: any,
+): "paid" | "partial" | "sent" | "draft" | "unpaid" | "none" {
   const owed = effectiveRosterOwedDollars(roster);
 
-  if (rosterPaidViaFeePayment(roster)) return "paid";
+  if (rosterIsPaid(roster)) return "paid";
 
-  if (invoice) {
-    if (invoice.status === "paid") return "paid";
-    if (invoice.status === "sent") return "sent";
-    if (invoice.status === "draft") return "draft";
-  }
+  const invs = roster ? invoicesForRoster(roster) : [];
+  if (rosterPartiallyPaidViaInvoices(roster)) return "partial";
+
+  const unpaidSent = roster ? unpaidSentInvoicesForRoster(roster) : [];
+  if (unpaidSent.length > 0) return "sent";
+
+  const draftInv = invs.find((i: { status?: string }) => i.status === "draft");
+  if (draftInv) return "draft";
 
   if (owed == null || owed <= 0) return "none";
 
@@ -236,13 +244,23 @@ const createColumns = (
     cell: ({ row }: { row: any }) => {
       const person = row.original;
       const roster = team.rosters?.find((r: any) => r.person_id === person.id);
-      const invoice = roster ? linkedInvoiceForRoster(roster) : undefined;
+      const rosterInvs = roster ? invoicesForRoster(roster) : [];
+      const invoice =
+        rosterInvs.length === 1 ? rosterInvs[0] : linkedInvoiceForRoster(roster);
+      const unpaidSent = roster ? unpaidSentInvoicesForRoster(roster) : [];
+      const resendTarget = unpaidSent[0];
+      const sendCount = resendTarget
+        ? (emailSendCounts?.[resendTarget.id] ?? 0)
+        : invoice
+          ? (emailSendCounts?.[invoice.id] ?? 0)
+          : 0;
       const status = paymentStatus(person, roster);
-      const sendCount = invoice ? (emailSendCounts?.[invoice.id] ?? 0) : 0;
       const rosterOwed = effectiveRosterOwedDollars(roster);
       const invoiceAmt =
         invoice?.amount != null ? Number(invoice.amount) : null;
+      const paidSum = roster ? rosterTotalPaidCollectedDollars(roster) : 0;
       const priceMismatch =
+        rosterInvs.length === 1 &&
         invoice &&
         rosterOwed != null &&
         invoiceAmt != null &&
@@ -264,24 +282,85 @@ const createColumns = (
         );
       }
 
+      if (status === "partial") {
+        return (
+          <div className="flex flex-col gap-1">
+            <Badge
+              variant="outline"
+              className="bg-amber-50 text-amber-900 border-amber-200 whitespace-normal text-left"
+            >
+              Partial
+              {rosterOwed != null ? (
+                <span className="ml-1 font-mono tabular-nums">
+                  ${paidSum.toFixed(2)} / ${rosterOwed.toFixed(2)}
+                </span>
+              ) : null}
+            </Badge>
+            {unpaidSent.length > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => resendTarget && onResendInvoice(resendTarget.id)}
+                disabled={resendingInvoiceId === resendTarget?.id}
+                className="h-auto px-2 py-1 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                title={
+                  unpaidSent.length > 1
+                    ? `Resend one of ${unpaidSent.length} open invoices (oldest in queue first)`
+                    : "Resend invoice"
+                }
+              >
+                <PaperAirplaneIcon className="h-3 w-3 mr-1" />
+                {resendingInvoiceId === resendTarget?.id
+                  ? "Sending..."
+                  : unpaidSent.length > 1
+                    ? `Resend (${unpaidSent.length} open)`
+                    : "Resend"}
+              </Button>
+            ) : null}
+          </div>
+        );
+      }
+
       if (status === "sent") {
-        const overdue = isInvoiceOverdue(invoice);
+        const overdue = resendTarget
+          ? isInvoiceOverdue(resendTarget)
+          : invoice
+            ? isInvoiceOverdue(invoice)
+            : false;
         return (
           <div className="flex flex-col gap-1">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => invoice && onResendInvoice(invoice.id)}
-              disabled={resendingInvoiceId === invoice?.id}
+              onClick={() =>
+                resendTarget
+                  ? onResendInvoice(resendTarget.id)
+                  : invoice && onResendInvoice(invoice.id)
+              }
+              disabled={
+                resendingInvoiceId === (resendTarget?.id ?? invoice?.id)
+              }
               className={`h-auto px-2 py-1 text-xs ${
                 overdue
                   ? "text-red-600 border-red-200 hover:bg-red-50"
                   : "text-blue-600 border-blue-200 hover:bg-blue-50"
               }`}
-              title={overdue ? "Resend overdue invoice" : "Resend invoice"}
+              title={
+                unpaidSent.length > 1
+                  ? overdue
+                    ? "Resend oldest overdue open invoice"
+                    : `Resend one of ${unpaidSent.length} open invoices`
+                  : overdue
+                    ? "Resend overdue invoice"
+                    : "Resend invoice"
+              }
             >
               <PaperAirplaneIcon className="h-3 w-3 mr-1" />
-              {resendingInvoiceId === invoice?.id ? "Sending..." : "Resend"}
+              {resendingInvoiceId === (resendTarget?.id ?? invoice?.id)
+                ? "Sending..."
+                : unpaidSent.length > 1
+                  ? `Resend (${unpaidSent.length})`
+                  : "Resend"}
             </Button>
             {sendCount > 0 && (
               <span className="text-xs text-gray-500 pl-2">
@@ -302,10 +381,13 @@ const createColumns = (
       }
 
       if (status === "draft") {
+        const draftCount = rosterInvs.filter(
+          (i: { status?: string }) => i.status === "draft",
+        ).length;
         return (
           <Badge variant="outline" className="bg-purple-50 text-purple-700">
             <FileText className="mr-1 h-3 w-3" />
-            Draft
+            Draft{draftCount > 1 ? ` (${draftCount})` : ""}
           </Badge>
         );
       }

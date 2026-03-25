@@ -156,34 +156,6 @@ export function getInitials(firstName: string, lastName: string) {
   return firstInitial + lastInitial;
 }
 
-export function hasPaidFee(person: any, roster: any) {
-  if (roster?.fees?.amount === 0) {
-    return true;
-  }
-  // Check if there is a payment for the fee by the person
-  const paymentsForPerson = roster?.fees?.payments?.filter(
-    (payment: any) => payment.person_id === person.id,
-  );
-
-  // Sort the payments by date, most recent first
-  paymentsForPerson?.sort(
-    (a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime(),
-  );
-
-  // Check if any of the payments status are 'succeeded'
-  const succeededPayment = paymentsForPerson?.find(
-    (payment: any) => payment.status === "succeeded",
-  );
-
-  // If there is a 'succeeded' payment, return true
-  if (succeededPayment) {
-    return true;
-  }
-
-  // If there is no 'succeeded' payment, return false
-  return false;
-}
-
 export const formatDate = (date: string, time: string): string => {
   // Validate the input formats for date and time
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) {

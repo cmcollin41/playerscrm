@@ -7,9 +7,10 @@ interface RouteParams {
 }
 
 /**
- * PATCH body: { fee_id: string | null, custom_amount: number | null, invoice_id: string | null }
- * Updates roster billing and invoice–roster links. Uses service role after auth + membership
- * so account members (including read-only) can save; invoice RLS otherwise requires manager+.
+ * PATCH body: { fee_id, custom_amount, invoice_id }
+ * Updates roster billing. When invoice_id is set, attaches that invoice only (other roster
+ * invoices are left in place). When invoice_id is null, clears roster_id from all invoices
+ * for this spot. Uses service role after auth + membership.
  */
 export async function PATCH(req: Request, { params }: RouteParams) {
   try {
@@ -111,14 +112,18 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: rosterErr.message }, { status: 500 });
     }
 
-    const { error: clearErr } = await admin
-      .from("invoices")
-      .update({ roster_id: null })
-      .eq("roster_id", rosterId)
-      .eq("person_id", roster.person_id);
+    // Unlink only when explicitly clearing the dropdown — do not wipe other
+    // installment invoices when attaching another (invoice_id non-null).
+    if (!invoice_id) {
+      const { error: clearErr } = await admin
+        .from("invoices")
+        .update({ roster_id: null })
+        .eq("roster_id", rosterId)
+        .eq("person_id", roster.person_id);
 
-    if (clearErr) {
-      return NextResponse.json({ error: clearErr.message }, { status: 500 });
+      if (clearErr) {
+        return NextResponse.json({ error: clearErr.message }, { status: 500 });
+      }
     }
 
     if (invoice_id) {

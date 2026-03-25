@@ -1,6 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { getAccount } from "@/lib/fetchers/server";
+import {
+  countInvoicesWithStatus,
+  filterInvoicesSentOrPaid,
+  sumAllInvoiceAmounts,
+  sumPaidInvoiceAmounts,
+} from "@/lib/invoice-aggregates";
 import { DashboardClient } from "./dashboard-client";
 
 export default async function Dashboard() {
@@ -75,29 +81,27 @@ export default async function Dashboard() {
   const totalRosterSpots = teams?.reduce((acc, team) => acc + (team.rosters?.length || 0), 0) || 0;
   const totalStaff = teams?.reduce((acc, team) => acc + (team.staff?.length || 0), 0) || 0;
   
-  const sentOrPaidInvoices = invoices?.filter(inv => inv.status === 'sent' || inv.status === 'paid') || [];
+  const sentOrPaidInvoices = filterInvoicesSentOrPaid(invoices ?? []);
   const totalInvoices = sentOrPaidInvoices.length;
-  const totalInvoiceAmount = sentOrPaidInvoices.reduce((sum, inv) => sum + (inv.amount || 0), 0);
-  const paidInvoices = sentOrPaidInvoices.filter(inv => inv.status === 'paid').length;
-  const paidAmount = sentOrPaidInvoices
-    .filter(inv => inv.status === 'paid')
-    .reduce((sum, inv) => sum + (inv.amount || 0), 0);
+  const totalInvoiceAmount = sumAllInvoiceAmounts(sentOrPaidInvoices);
+  const paidInvoices = countInvoicesWithStatus(sentOrPaidInvoices, "paid");
+  const paidAmount = sumPaidInvoiceAmounts(sentOrPaidInvoices);
   const pendingAmount = totalInvoiceAmount - paidAmount;
 
   const totalEmailsSent = emails?.length || 0;
 
   const monthlyMap: Record<string, { month: string; sortKey: string; collected: number; outstanding: number }> = {}
   sentOrPaidInvoices.forEach(inv => {
-    const date = new Date(inv.created_at)
+    const date = new Date(inv.created_at ?? 0)
     const sortKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
     const monthLabel = date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })
     if (!monthlyMap[sortKey]) {
       monthlyMap[sortKey] = { month: monthLabel, sortKey, collected: 0, outstanding: 0 }
     }
-    if (inv.status === 'paid') {
-      monthlyMap[sortKey].collected += inv.amount || 0
+    if (inv.status === "paid") {
+      monthlyMap[sortKey].collected += Number(inv.amount ?? 0);
     } else {
-      monthlyMap[sortKey].outstanding += inv.amount || 0
+      monthlyMap[sortKey].outstanding += Number(inv.amount ?? 0);
     }
   })
   const monthlyRevenue = Object.values(monthlyMap)

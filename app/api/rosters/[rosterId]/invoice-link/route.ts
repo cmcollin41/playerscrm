@@ -57,14 +57,16 @@ export async function POST(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { error: clearErr } = await admin
-      .from("invoices")
-      .update({ roster_id: null })
-      .eq("roster_id", rosterId)
-      .eq("person_id", roster.person_id);
+    if (!invoice_id) {
+      const { error: clearErr } = await admin
+        .from("invoices")
+        .update({ roster_id: null })
+        .eq("roster_id", rosterId)
+        .eq("person_id", roster.person_id);
 
-    if (clearErr) {
-      return NextResponse.json({ error: clearErr.message }, { status: 500 });
+      if (clearErr) {
+        return NextResponse.json({ error: clearErr.message }, { status: 500 });
+      }
     }
 
     if (invoice_id) {

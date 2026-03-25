@@ -542,8 +542,9 @@ export function RosterBillingModal({
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      Tie an existing invoice to this roster for status and
-                      resend.
+                      Attach an invoice to this roster (e.g. an existing draft).
+                      Multiple invoices can share this roster for installments;
+                      choosing one here does not remove others.
                     </p>
                   </div>
                 </form>

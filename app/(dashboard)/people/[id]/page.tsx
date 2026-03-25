@@ -25,6 +25,13 @@ import PersonSheet from "@/components/modal/person-sheet";
 import CreateInvoiceModal from "@/components/modal/create-invoice-modal"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatCurrency } from "@/lib/utils"
+import {
+  filterInvoicesAttachedToRoster,
+  filterInvoicesNotAttachedToRoster,
+  sumAllInvoiceAmounts,
+  sumPaidInvoiceAmounts,
+  sumSentInvoiceAmounts,
+} from "@/lib/invoice-aggregates"
 
 interface PersonPageProps {
   params: Promise<{ id: string }>
@@ -74,6 +81,7 @@ interface Invoice {
   created_at: string
   amount: number
   status: string
+  roster_id?: string | null
   due_date: string | null
   invoice_number: string | null
   description: string | null
@@ -489,18 +497,20 @@ export default function PersonPage({ params }: PersonPageProps) {
     return data;
   }
 
-  // Calculate statistics
+  // Calculate statistics (invoice $ via shared aggregates; roster_id split for clarity)
   const stats = {
     totalTeams: roster.length,
     activeTeams: roster.filter(t => t.is_active).length,
     totalInvoices: invoices.length,
-    totalAmount: invoices.reduce((sum, inv) => sum + (inv.amount || 0), 0),
-    paidAmount: invoices
-      .filter(inv => inv.status === 'paid')
-      .reduce((sum, inv) => sum + (inv.amount || 0), 0),
-    pendingAmount: invoices
-      .filter(inv => inv.status === 'sent')
-      .reduce((sum, inv) => sum + (inv.amount || 0), 0),
+    totalAmount: sumAllInvoiceAmounts(invoices),
+    paidAmount: sumPaidInvoiceAmounts(invoices),
+    pendingAmount: sumSentInvoiceAmounts(invoices),
+    paidOnRosterInvoices: sumPaidInvoiceAmounts(
+      filterInvoicesAttachedToRoster(invoices),
+    ),
+    paidOffRosterInvoices: sumPaidInvoiceAmounts(
+      filterInvoicesNotAttachedToRoster(invoices),
+    ),
     relationships: (toRelationships?.length || 0) + (fromRelationships?.length || 0),
   };
 
@@ -685,7 +695,9 @@ export default function PersonPage({ params }: PersonPageProps) {
               {formatCurrency(stats.paidAmount)}
             </div>
             <p className="text-xs text-muted-foreground">
-              Payments received
+              {stats.paidAmount > 0
+                ? `Roster-linked ${formatCurrency(stats.paidOnRosterInvoices)} · Unattached ${formatCurrency(stats.paidOffRosterInvoices)}`
+                : "Payments received"}
             </p>
           </CardContent>
         </Card>

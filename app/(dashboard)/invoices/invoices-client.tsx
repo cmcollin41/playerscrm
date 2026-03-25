@@ -26,6 +26,12 @@ import {
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { getInitials } from "@/lib/utils"
+import {
+  countInvoicesWhere,
+  countInvoicesWithStatus,
+  sumInvoiceAmounts,
+  sumPaidInvoiceAmounts,
+} from "@/lib/invoice-aggregates"
 
 interface Invoice {
   id: string
@@ -65,10 +71,13 @@ interface InvoicesClientProps {
 type SortField = "created_at" | "amount" | "due_date" | "person"
 type SortDirection = "asc" | "desc"
 
-const isOverdue = (invoice: Invoice) =>
-  invoice.status === "sent" &&
-  invoice.due_date &&
-  new Date(invoice.due_date) < new Date()
+function isOverdue(invoice: Invoice): boolean {
+  return (
+    invoice.status === "sent" &&
+    Boolean(invoice.due_date) &&
+    new Date(invoice.due_date as string) < new Date()
+  )
+}
 
 const getStatusBadge = (status: string, overdue: boolean) => {
   if (overdue) {
@@ -109,20 +118,19 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
 
   const stats = useMemo(() => {
     const total = invoices.length
-    const sent = invoices.filter(inv => inv.status === "sent").length
-    const paid = invoices.filter(inv => inv.status === "paid").length
-    const draft = invoices.filter(inv => inv.status === "draft").length
-    const overdue = invoices.filter(inv => isOverdue(inv)).length
+    const sent = countInvoicesWithStatus(invoices, "sent")
+    const paid = countInvoicesWithStatus(invoices, "paid")
+    const draft = countInvoicesWithStatus(invoices, "draft")
+    const overdue = countInvoicesWhere(invoices, (inv) => isOverdue(inv as Invoice))
     const sentOrPaid = sent + paid
-    const totalAmount = invoices
-      .filter(inv => inv.status === "sent" || inv.status === "paid")
-      .reduce((sum, inv) => sum + (inv.amount || 0), 0)
-    const paidAmount = invoices
-      .filter(inv => inv.status === "paid")
-      .reduce((sum, inv) => sum + (inv.amount || 0), 0)
-    const overdueAmount = invoices
-      .filter(inv => isOverdue(inv))
-      .reduce((sum, inv) => sum + (inv.amount || 0), 0)
+    const totalAmount = sumInvoiceAmounts(
+      invoices,
+      (inv) => inv.status === "sent" || inv.status === "paid",
+    )
+    const paidAmount = sumPaidInvoiceAmounts(invoices)
+    const overdueAmount = sumInvoiceAmounts(invoices, (inv) =>
+      isOverdue(inv as Invoice),
+    )
 
     return { total, sent, paid, draft, overdue, sentOrPaid, totalAmount, paidAmount, overdueAmount }
   }, [invoices])
