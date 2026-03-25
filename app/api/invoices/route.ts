@@ -41,9 +41,16 @@ export async function POST(req: Request) {
     }
 
     const applicationFeeAmount = Math.round(amount * 100 * 0.03);
-    const invoiceDescription = isCustomInvoice 
-      ? description
-      : `Team Roster Fee - ${athleteName} - ${teamName}`;
+    const trimmedDesc =
+      typeof description === "string" ? description.trim() : "";
+    let invoiceDescription: string;
+    if (trimmedDesc !== "") {
+      invoiceDescription = trimmedDesc;
+    } else if (isCustomInvoice) {
+      invoiceDescription = "Invoice";
+    } else {
+      invoiceDescription = `Team Roster Fee - ${athleteName} - ${teamName}`;
+    }
 
     const resolvedRosterId = rosterId ?? null;
 

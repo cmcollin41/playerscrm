@@ -9,6 +9,8 @@ export interface PostRosterInvoiceParams {
   guardianEmail: string
   /** Guardian / payer `people.id` — avoids RLS hiding the payer row */
   payerPersonId?: string
+  /** Overrides default "Team Roster Fee - …" line item / memo */
+  description?: string
   accountId: string
   stripeAccountId: string
   person_id: string
@@ -24,6 +26,7 @@ export async function postRosterInvoice(
     amount,
     guardianEmail,
     payerPersonId,
+    description,
     accountId,
     stripeAccountId,
     person_id,
@@ -70,6 +73,7 @@ export async function postRosterInvoice(
       stripeAccountId,
       person_id,
       isCustomInvoice: false,
+      ...(description?.trim() ? { description: description.trim() } : {}),
     }),
   })
 

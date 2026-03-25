@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { getAccount } from "@/lib/fetchers/client";
@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -143,16 +144,41 @@ export function RosterBillingModal({
   const [savedOwedForInvoice, setSavedOwedForInvoice] = useState<number | null>(
     null,
   );
+  const [customInvoiceMemo, setCustomInvoiceMemo] = useState("");
+  const billingOpenSessionRef = useRef(false);
 
   const personName = `${person.first_name} ${person.last_name}`;
+  const defaultRosterInvoiceMemo = `Team Roster Fee - ${personName} - ${teamName}`;
   const guardianEmail = person.primary_contacts?.[0]?.email;
 
   useEffect(() => {
     if (!open) {
       setWizardStep(1);
       setSavedOwedForInvoice(null);
+      setCustomInvoiceMemo("");
+      billingOpenSessionRef.current = false;
+      return;
     }
-  }, [open]);
+
+    const justOpened = !billingOpenSessionRef.current;
+    billingOpenSessionRef.current = true;
+
+    if (justOpened) {
+      const fromSavedCustom =
+        currentCustomAmount != null && Number(currentCustomAmount) > 0;
+      if (fromSavedCustom) {
+        setCustomInvoiceMemo(
+          `Team Roster Fee - ${person.first_name} ${person.last_name} - ${teamName}`,
+        );
+      }
+    }
+  }, [
+    open,
+    currentCustomAmount,
+    person.first_name,
+    person.last_name,
+    teamName,
+  ]);
 
   useEffect(() => {
     if (!open || wizardStep === 2) return;
@@ -224,9 +250,13 @@ export function RosterBillingModal({
     if (useCustom) {
       setPricingMode("custom");
       setSelectedFeeId(undefined);
+      setCustomInvoiceMemo((prev) =>
+        prev.trim() === "" ? defaultRosterInvoiceMemo : prev,
+      );
     } else {
       setPricingMode("preset");
       setCustomAmountInput("");
+      setCustomInvoiceMemo("");
       const back =
         roster?.fee_id ?? roster?.fees?.id ?? currentFeeId ?? null;
       setSelectedFeeId(back ? String(back) : undefined);
@@ -358,6 +388,10 @@ export function RosterBillingModal({
         amount,
         guardianEmail,
         payerPersonId: person.primary_contacts?.[0]?.id,
+        description:
+          pricingMode === "custom" && customInvoiceMemo.trim() !== ""
+            ? customInvoiceMemo.trim()
+            : undefined,
         accountId: team.account_id,
         stripeAccountId: team.accounts.stripe_id,
         person_id: person.id,
@@ -463,6 +497,22 @@ export function RosterBillingModal({
                         Used for invoices, payment links, and reporting for this
                         roster spot.
                       </p>
+                      <div className="space-y-2 pt-1">
+                        <Label htmlFor="bill_custom_memo">
+                          Invoice description / memo
+                        </Label>
+                        <Textarea
+                          id="bill_custom_memo"
+                          className="min-h-[88px] resize-y"
+                          placeholder={defaultRosterInvoiceMemo}
+                          value={customInvoiceMemo}
+                          onChange={(e) => setCustomInvoiceMemo(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Shown on the Stripe invoice line item and in your
+                          records. Leave blank to use the default roster fee text.
+                        </p>
+                      </div>
                     </div>
                   )}
 
