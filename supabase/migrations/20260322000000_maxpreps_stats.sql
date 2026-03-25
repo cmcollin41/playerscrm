@@ -43,6 +43,12 @@ create index if not exists player_season_stats_account_id_idx
 
 alter table public.player_season_stats enable row level security;
 
+drop policy if exists "Allow authenticated select player_season_stats" on public.player_season_stats;
+drop policy if exists "Allow authenticated insert player_season_stats" on public.player_season_stats;
+drop policy if exists "Allow authenticated update player_season_stats" on public.player_season_stats;
+drop policy if exists "Allow authenticated delete player_season_stats" on public.player_season_stats;
+drop policy if exists "Allow anon read player_season_stats for public people" on public.player_season_stats;
+
 -- authenticated: crud scoped to account
 create policy "Allow authenticated select player_season_stats"
   on public.player_season_stats

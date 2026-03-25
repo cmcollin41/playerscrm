@@ -1,18 +1,23 @@
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import type { NextRequest } from 'next/server'
+import { createClient } from "@/lib/supabase/server"
+import { safeAuthNextPath } from "@/lib/auth-site"
+import { redirect } from "next/navigation"
+import type { NextRequest } from "next/server"
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get('code')
+  const code = requestUrl.searchParams.get("code")
+  const nextPath = safeAuthNextPath(requestUrl.searchParams.get("next"))
 
   if (code) {
     const supabase = await createClient()
-    await supabase.auth.exchangeCodeForSession(code)
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (error) {
+      console.error("auth callback exchangeCodeForSession:", error.message)
+      return redirect(new URL("/login?error=auth_callback", requestUrl.origin).toString())
+    }
   }
 
-  // URL to redirect to after sign in process completes
-  return redirect(requestUrl.origin)
+  return redirect(new URL(nextPath, requestUrl.origin).toString())
 }

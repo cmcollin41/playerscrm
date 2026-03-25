@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { fullName } from "@/lib/utils";
 import { toast } from "sonner";
-import { BadgeCheck, Users, Receipt, UserPlus, Globe, BarChart3, RefreshCw } from "lucide-react";
+import { BadgeCheck, User, Users, Receipt, UserPlus, Globe, BarChart3, RefreshCw, Mail, UserCheck } from "lucide-react";
 import LoadingCircle from "@/components/icons/loading-circle";
 import LoadingDots from "@/components/icons/loading-dots";
 import { Badge } from "@/components/ui/badge"
@@ -40,6 +40,8 @@ interface Team {
   jersey_number?: number
   position?: string
   roster_grade?: string
+  /** Roster row id (join person ↔ team) */
+  roster_id?: string
 }
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -97,6 +99,30 @@ function groupBy<T>(array: T[], key: keyof T): Record<string, T[]> {
   }, {} as Record<string, T[]>);
 }
 
+interface InviteEmailResult {
+  email: string
+  isGuardian: boolean
+  contactName?: string
+}
+
+function personInviteEmail(p: any): string | null {
+  const result = personInviteEmailInfo(p)
+  return result?.email ?? null
+}
+
+function personInviteEmailInfo(p: any): InviteEmailResult | null {
+  if (!p) return null
+  const direct = typeof p.email === "string" ? p.email.trim() : ""
+  if (direct) return { email: direct, isGuardian: false }
+  const c = p.primary_contacts?.[0]
+  const cEmail = typeof c?.email === "string" ? c.email.trim() : ""
+  if (cEmail) {
+    const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || undefined
+    return { email: cEmail, isGuardian: true, contactName: name }
+  }
+  return null
+}
+
 export default function PersonPage({ params }: PersonPageProps) {
   // Unwrap the params Promise
   const { id } = use(params);
@@ -117,6 +143,9 @@ export default function PersonPage({ params }: PersonPageProps) {
   const [playerStats, setPlayerStats] = useState<any[]>([])
   const [isSyncing, setIsSyncing] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [invitingAccount, setInvitingAccount] = useState(false)
+  const [grantingAccess, setGrantingAccess] = useState(false)
+  const [isMemberOfCurrentAccount, setIsMemberOfCurrentAccount] = useState(false)
 
   async function fetchRoster() {
     const { data, error } = await supabase
@@ -140,6 +169,7 @@ export default function PersonPage({ params }: PersonPageProps) {
     }
 
     setRoster(data.map((entry) => ({
+      roster_id: entry.id,
       ...entry.teams,
       jersey_number: entry.jersey_number,
       position: entry.position,
@@ -285,7 +315,7 @@ export default function PersonPage({ params }: PersonPageProps) {
     if (id) {
       fetchAllInvoicesAndPayments();
     }
-  }, [id]);
+  }, [id, refreshKey]);
 
   useEffect(() => {
     if (!id) return; // Guard against undefined id
@@ -314,11 +344,24 @@ export default function PersonPage({ params }: PersonPageProps) {
           primary_contacts: primaryPeople,
         })
 
-        setPerson({ ...fetchedPerson, primary_contacts: primaryPeople })
+        const mergedPerson = { ...fetchedPerson, primary_contacts: primaryPeople }
+        setPerson(mergedPerson)
         setToRelationships(fetchedToRelationships || [])
         setFromRelationships(fetchedFromRelationships || [])
         setAccount(fetchedAccount)
         setProfile(p)
+
+        const em = personInviteEmail(mergedPerson)
+        if (em) {
+          fetch("/api/people/check-membership", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: em }),
+          })
+            .then((r) => r.json())
+            .then((data) => setIsMemberOfCurrentAccount(!!data.isMember))
+            .catch(() => {})
+        }
       } catch (error) {
         console.error('Error fetching data:', error)
         toast.error('Failed to load person data')
@@ -329,6 +372,59 @@ export default function PersonPage({ params }: PersonPageProps) {
 
     fetchData()
   }, [id, refreshKey])
+
+  async function handleInviteAccountAccess() {
+    if (!person?.id) return
+    const em = personInviteEmail(person)
+    if (!em) {
+      toast.error("Add an email (or primary contact with email) before inviting")
+      return
+    }
+    setInvitingAccount(true)
+    try {
+      const res = await fetch("/api/people/invite-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ personId: person.id, email: em }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Invite failed")
+      toast.success(`Invitation sent to ${em}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invite failed")
+    } finally {
+      setInvitingAccount(false)
+    }
+  }
+
+  async function handleGrantAccountAccess() {
+    if (!person?.id) return
+    const em = personInviteEmail(person)
+    if (!em) {
+      toast.error("Add an email (or primary contact with email) first")
+      return
+    }
+    setGrantingAccess(true)
+    try {
+      const res = await fetch("/api/people/grant-account-access", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          personId: person.id,
+          email: em,
+          role: "member",
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || "Could not grant access")
+      toast.success("They can open this account from the account switcher after signing in.")
+      setRefreshKey((k) => k + 1)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not grant access")
+    } finally {
+      setGrantingAccess(false)
+    }
+  }
 
   async function hasProfile(person: any) {
     let email = "";
@@ -440,10 +536,93 @@ export default function PersonPage({ params }: PersonPageProps) {
                   </Badge>
                 )}
               </div>
-              <p className="text-muted-foreground">{person?.email || "No email on file"}</p>
+              {person?.email ? (
+                <Badge variant="outline" className="font-mono text-xs font-normal text-muted-foreground">
+                  <User className="h-3 w-3 mr-1" />
+                  {person.email}
+                </Badge>
+              ) : person?.primary_contacts?.[0]?.email ? (
+                <Badge variant="outline" className="font-mono text-xs font-normal text-muted-foreground">
+                  <Users className="h-3 w-3 mr-1" />
+                  {person.primary_contacts[0].email}
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs font-normal text-muted-foreground">
+                  No email on file
+                </Badge>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {(() => {
+              const info = personInviteEmailInfo(person)
+              if (!info) return null
+
+              const guardianLabel = info.contactName
+                ? `${info.contactName} (guardian)`
+                : "Guardian"
+
+              if (!profile) {
+                return (
+                  <Button
+                    onClick={() => void handleInviteAccountAccess()}
+                    variant="outline"
+                    size="sm"
+                    disabled={invitingAccount}
+                    title={info.isGuardian ? `Send invite to ${guardianLabel}` : "Send invite to create account"}
+                  >
+                    {info.isGuardian ? (
+                      <Users className="h-4 w-4 mr-2" />
+                    ) : (
+                      <Mail className="h-4 w-4 mr-2" />
+                    )}
+                    {invitingAccount
+                      ? "Sending…"
+                      : info.isGuardian
+                        ? `Invite ${guardianLabel}`
+                        : "Invite to create account"}
+                  </Button>
+                )
+              }
+
+              if (!isMemberOfCurrentAccount) {
+                return (
+                  <Button
+                    onClick={() => void handleGrantAccountAccess()}
+                    variant="outline"
+                    size="sm"
+                    disabled={grantingAccess}
+                    title={info.isGuardian ? `Grant ${guardianLabel} access to this account` : "Add to this account"}
+                  >
+                    {info.isGuardian ? (
+                      <Users className="h-4 w-4 mr-2" />
+                    ) : (
+                      <UserCheck className="h-4 w-4 mr-2" />
+                    )}
+                    {grantingAccess
+                      ? "Adding…"
+                      : info.isGuardian
+                        ? `Add ${guardianLabel}`
+                        : "Add to this account"}
+                  </Button>
+                )
+              }
+
+              return (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-9 p-0 border-green-200 bg-green-50 text-green-700 hover:bg-green-100 hover:text-green-800"
+                  title={info.isGuardian ? `${guardianLabel} has a login and can access this account` : "This person has a login and can access this account"}
+                >
+                  {info.isGuardian ? (
+                    <Users className="h-4 w-4" />
+                  ) : (
+                    <User className="h-4 w-4" />
+                  )}
+                </Button>
+              )
+            })()}
             <Button
               onClick={() => setInvoiceModalOpen(true)}
               variant="outline"
@@ -474,7 +653,7 @@ export default function PersonPage({ params }: PersonPageProps) {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalTeams}</div>
+            <div className="text-2xl font-bold font-mono">{stats.totalTeams}</div>
             <p className="text-xs text-muted-foreground">
               {stats.activeTeams} active
             </p>
@@ -487,7 +666,7 @@ export default function PersonPage({ params }: PersonPageProps) {
             <Receipt className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold font-mono">
               {formatCurrency(stats.totalAmount)}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -502,7 +681,7 @@ export default function PersonPage({ params }: PersonPageProps) {
             <BadgeCheck className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold font-mono text-green-600">
               {formatCurrency(stats.paidAmount)}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -517,7 +696,7 @@ export default function PersonPage({ params }: PersonPageProps) {
             <UserPlus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.relationships}</div>
+            <div className="text-2xl font-bold font-mono">{stats.relationships}</div>
             <p className="text-xs text-muted-foreground">
               Connected people
             </p>
@@ -553,47 +732,50 @@ export default function PersonPage({ params }: PersonPageProps) {
             <CardContent>
               {roster.length > 0 ? (
                 <div className="space-y-3">
-                  {roster.map((team: Team) => (
-                    <Link
-                      key={team.id}
-                      href={`/teams/${team.id}`}
-                      className={cn(
-                        "flex items-center justify-between p-4 rounded-lg border transition-colors",
-                        "hover:bg-muted/50 hover:border-muted-foreground/25",
-                        "group"
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className={cn(
-                            "h-2.5 w-2.5 rounded-full",
-                            team.is_active ? "bg-green-500" : "bg-gray-300"
-                          )} 
-                        />
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{team.name}</span>
-                            {team.level && (
-                              <Badge variant="outline" className="text-xs capitalize">
-                                {LEVEL_LABELS[team.level] || team.level}
-                              </Badge>
+                  {roster.map((team: Team) => {
+                    const details = [
+                      team.roster_grade && ({ "9": "Freshman", "10": "Sophomore", "11": "Junior", "12": "Senior" }[team.roster_grade] || `Grade ${team.roster_grade}`),
+                      team.jersey_number != null && `#${team.jersey_number}`,
+                      team.position,
+                    ].filter(Boolean)
+
+                    return (
+                      <Link
+                        key={team.id}
+                        href={`/teams/${team.id}`}
+                        className="flex items-center justify-between rounded-lg border p-4 transition-colors hover:bg-muted/50 hover:border-muted-foreground/25 group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              "h-2.5 w-2.5 rounded-full shrink-0",
+                              team.is_active ? "bg-green-500" : "bg-gray-300",
                             )}
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            {team.roster_grade && <span>{{ "9": "Freshman", "10": "Sophomore", "11": "Junior", "12": "Senior" }[team.roster_grade] || `Grade ${team.roster_grade}`}</span>}
-                            {team.jersey_number != null && <span>#{team.jersey_number}</span>}
-                            {team.position && <span>{team.position}</span>}
-                            {!team.roster_grade && !team.jersey_number && !team.position && (
-                              <span>{team.is_active ? "Active" : "Inactive"}</span>
+                          />
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium group-hover:underline">{team.name}</span>
+                              {team.level && (
+                                <Badge variant="outline" className="text-xs capitalize">
+                                  {LEVEL_LABELS[team.level] || team.level}
+                                </Badge>
+                              )}
+                            </div>
+                            {details.length > 0 && (
+                              <div className="flex items-center gap-1.5 text-sm text-muted-foreground mt-0.5">
+                                {details.map((d, i) => (
+                                  <span key={i} className={typeof d === "string" && d.startsWith("#") ? "font-mono" : ""}>
+                                    {i > 0 && <span className="mr-1.5">·</span>}
+                                    {d}
+                                  </span>
+                                ))}
+                              </div>
                             )}
                           </div>
                         </div>
-                      </div>
-                      <Badge variant={team.is_active ? "default" : "secondary"}>
-                        {team.is_active ? "Active" : "Inactive"}
-                      </Badge>
-                    </Link>
-                  ))}
+                      </Link>
+                    )
+                  })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -659,15 +841,15 @@ export default function PersonPage({ params }: PersonPageProps) {
                       <tr className="border-b text-left">
                         <th className="pb-2 pr-4 font-medium">Season</th>
                         <th className="pb-2 pr-4 font-medium">Class</th>
-                        <th className="pb-2 pr-2 font-medium text-right">GP</th>
-                        <th className="pb-2 pr-2 font-medium text-right">PPG</th>
-                        <th className="pb-2 pr-2 font-medium text-right">RPG</th>
-                        <th className="pb-2 pr-2 font-medium text-right">APG</th>
-                        <th className="pb-2 pr-2 font-medium text-right">SPG</th>
-                        <th className="pb-2 pr-2 font-medium text-right">BPG</th>
-                        <th className="pb-2 pr-2 font-medium text-right">FG%</th>
-                        <th className="pb-2 pr-2 font-medium text-right">3PT%</th>
-                        <th className="pb-2 font-medium text-right">FT%</th>
+                        <th className="pb-2 pr-2 font-medium font-mono text-right text-xs uppercase text-muted-foreground">GP</th>
+                        <th className="pb-2 pr-2 font-medium font-mono text-right text-xs uppercase text-muted-foreground">PPG</th>
+                        <th className="pb-2 pr-2 font-medium font-mono text-right text-xs uppercase text-muted-foreground">RPG</th>
+                        <th className="pb-2 pr-2 font-medium font-mono text-right text-xs uppercase text-muted-foreground">APG</th>
+                        <th className="pb-2 pr-2 font-medium font-mono text-right text-xs uppercase text-muted-foreground">SPG</th>
+                        <th className="pb-2 pr-2 font-medium font-mono text-right text-xs uppercase text-muted-foreground">BPG</th>
+                        <th className="pb-2 pr-2 font-medium font-mono text-right text-xs uppercase text-muted-foreground">FG%</th>
+                        <th className="pb-2 pr-2 font-medium font-mono text-right text-xs uppercase text-muted-foreground">3PT%</th>
+                        <th className="pb-2 font-medium font-mono text-right text-xs uppercase text-muted-foreground">FT%</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -675,34 +857,34 @@ export default function PersonPage({ params }: PersonPageProps) {
                         .filter((s) => !s.is_career_total)
                         .map((s) => (
                           <tr key={s.id} className="border-b">
-                            <td className="py-2 pr-4">{s.season_label}</td>
-                            <td className="py-2 pr-4 text-muted-foreground">{s.class_label || "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.gp ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.ppg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.rpg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.apg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.spg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.bpg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.fg_pct != null ? `${s.fg_pct}%` : "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.three_pct != null ? `${s.three_pct}%` : "-"}</td>
-                            <td className="py-2 text-right">{s.ft_pct != null ? `${s.ft_pct}%` : "-"}</td>
+                            <td className="py-2 pr-4 text-sm">{s.season_label}</td>
+                            <td className="py-2 pr-4 text-sm text-muted-foreground">{s.class_label || "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.gp ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.ppg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.rpg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.apg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.spg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.bpg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.fg_pct != null ? `${s.fg_pct}%` : "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.three_pct != null ? `${s.three_pct}%` : "-"}</td>
+                            <td className="py-2 text-right font-mono text-sm">{s.ft_pct != null ? `${s.ft_pct}%` : "-"}</td>
                           </tr>
                         ))}
                       {playerStats
                         .filter((s) => s.is_career_total)
                         .map((s) => (
                           <tr key={s.id} className="border-t-2 font-semibold">
-                            <td className="py-2 pr-4">Career</td>
-                            <td className="py-2 pr-4"></td>
-                            <td className="py-2 pr-2 text-right">{s.gp ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.ppg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.rpg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.apg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.spg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.bpg ?? "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.fg_pct != null ? `${s.fg_pct}%` : "-"}</td>
-                            <td className="py-2 pr-2 text-right">{s.three_pct != null ? `${s.three_pct}%` : "-"}</td>
-                            <td className="py-2 text-right">{s.ft_pct != null ? `${s.ft_pct}%` : "-"}</td>
+                            <td className="py-2 pr-4 text-sm">Career</td>
+                            <td className="py-2 pr-4 text-sm"></td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.gp ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.ppg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.rpg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.apg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.spg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.bpg ?? "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.fg_pct != null ? `${s.fg_pct}%` : "-"}</td>
+                            <td className="py-2 pr-2 text-right font-mono text-sm">{s.three_pct != null ? `${s.three_pct}%` : "-"}</td>
+                            <td className="py-2 text-right font-mono text-sm">{s.ft_pct != null ? `${s.ft_pct}%` : "-"}</td>
                           </tr>
                         ))}
                     </tbody>
@@ -749,8 +931,8 @@ export default function PersonPage({ params }: PersonPageProps) {
                               <Badge variant="outline" className="ml-2">Primary</Badge>
                             )}
                           </h3>
-                          <div className="text-sm font-medium">
-                            Total: {formatCurrency(
+                          <div className="text-sm font-medium font-mono">
+                            {formatCurrency(
                               personInvoices.reduce((sum, inv) => sum + (inv.amount || 0), 0)
                             )}
                           </div>
@@ -762,11 +944,11 @@ export default function PersonPage({ params }: PersonPageProps) {
                             <div className="flex items-start justify-between mb-3">
                               <div className="flex-1">
                                 <div className="font-medium">
-                                  {invoice.description || `Invoice #${invoice.invoice_number}`}
+                                  {invoice.description || <span className="font-mono">Invoice #{invoice.invoice_number}</span>}
                                 </div>
-                                <div className="text-sm text-muted-foreground mt-1">
+                                <div className="text-sm text-muted-foreground mt-1 font-mono">
                                   {new Date(invoice.created_at).toLocaleDateString('en-US', {
-                                    month: 'long',
+                                    month: 'short',
                                     day: 'numeric',
                                     year: 'numeric'
                                   })}
@@ -782,7 +964,7 @@ export default function PersonPage({ params }: PersonPageProps) {
                                 >
                                   {invoice.status}
                                 </Badge>
-                                <span className="font-semibold">
+                                <span className="font-semibold font-mono">
                                   {formatCurrency(invoice.amount)}
                                 </span>
                               </div>
@@ -800,15 +982,19 @@ export default function PersonPage({ params }: PersonPageProps) {
                                     className="flex items-center justify-between text-sm bg-muted/50 rounded-md p-2"
                                   >
                                     <div className="flex items-center gap-2">
-                                      <Badge variant="outline" className="text-xs">
+                                      <Badge variant="outline" className="text-xs font-mono">
                                         {payment.payment_method}
                                       </Badge>
-                                      <span className="text-muted-foreground">
-                                        {new Date(payment.created_at).toLocaleDateString()}
+                                      <span className="text-muted-foreground font-mono text-xs">
+                                        {new Date(payment.created_at).toLocaleDateString('en-US', {
+                                          month: 'short',
+                                          day: 'numeric',
+                                          year: 'numeric'
+                                        })}
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                      <Badge 
+                                      <Badge
                                         className={cn(
                                           payment.status === 'succeeded' && 'bg-green-100 text-green-800 hover:bg-green-100',
                                           payment.status === 'pending' && 'bg-yellow-100 text-yellow-800 hover:bg-yellow-100',
@@ -817,7 +1003,7 @@ export default function PersonPage({ params }: PersonPageProps) {
                                       >
                                         {payment.status}
                                       </Badge>
-                                      <span className="font-medium">
+                                      <span className="font-medium font-mono">
                                         {formatCurrency(payment.amount)}
                                       </span>
                                     </div>
@@ -914,6 +1100,15 @@ export default function PersonPage({ params }: PersonPageProps) {
         account={account}
         open={invoiceModalOpen}
         onOpenChange={setInvoiceModalOpen}
+        rosterOptions={roster
+          .filter((t: Team) => Boolean(t.roster_id))
+          .map((t: Team) => ({
+            rosterId: t.roster_id as string,
+            label: `${t.name}${
+              t.level ? ` (${LEVEL_LABELS[t.level] ?? t.level})` : ""
+            }`,
+          }))}
+        onInvoiceCreated={() => setRefreshKey((k) => k + 1)}
       />
     </div>
   );

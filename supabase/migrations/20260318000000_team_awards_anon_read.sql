@@ -1,4 +1,7 @@
 -- Allow anonymous read of team_awards for public teams (used by public API)
+
+drop policy if exists "Allow anon read team_awards for public teams" on public.team_awards;
+
 create policy "Allow anon read team_awards for public teams"
   on public.team_awards
   for select

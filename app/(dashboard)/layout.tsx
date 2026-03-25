@@ -4,8 +4,9 @@ import { MainNav } from "@/components/navigation/main-nav";
 import { UserNav } from "@/components/navigation/user-nav";
 import { AccountSwitcher } from "@/components/navigation/account-switcher";
 import Link from "next/link";
-import Image from "next/image";
 import type { UserRole } from "@/types/schema.types";
+import { getOrganizationLogoPublicUrl } from "@/lib/storage/organization-logo";
+import { DashboardFooterOrgLogo, DashboardHeaderLogo } from "@/components/navigation/dashboard-org-logo";
 
 
 export default async function DashboardLayout({
@@ -25,6 +26,7 @@ export default async function DashboardLayout({
   let currentAccountId: string | undefined
   let currentAccountName: string | undefined
   let orgName: string | undefined
+  let orgLogoUrl: string | undefined
 
   if (user) {
     const { data: profile } = await supabase
@@ -44,16 +46,27 @@ export default async function DashboardLayout({
 
     userPhoto = (profile?.people as any)?.photo || undefined
 
-    // Fetch org name and account name for the current account
+    // Fetch account then organization explicitly (avoids unreliable embedded selects for logo).
     if (currentAccountId) {
       const { data: account } = await supabase
         .from("accounts")
-        .select("name, organization_id, organizations(name)")
+        .select("name, organization_id")
         .eq("id", currentAccountId)
         .single()
 
       currentAccountName = account?.name || undefined
-      orgName = (account?.organizations as any)?.name || undefined
+
+      if (account?.organization_id) {
+        const { data: org } = await supabase
+          .from("organizations")
+          .select("id, name, logo")
+          .eq("id", account.organization_id)
+          .maybeSingle()
+
+        orgName = org?.name || undefined
+        const orgId = org?.id ?? account.organization_id
+        orgLogoUrl = getOrganizationLogoPublicUrl(supabase, org?.logo ?? undefined, orgId)
+      }
     }
   }
 
@@ -72,8 +85,8 @@ export default async function DashboardLayout({
         <div className="border-b">
           <div className="mx-auto max-w-screen-2xl">
             <div className="flex h-16 items-center px-4">
-              <Link href="/">
-                <Image src="/logo.svg" width={50} height={50} alt="Bulldog Logo" />
+              <Link href="/" className="flex shrink-0 items-center">
+                <DashboardHeaderLogo orgLogoUrl={orgLogoUrl} orgName={orgName} />
               </Link>
               <MainNav className="mx-6" userRole={userRole} />
               <div className="ml-auto flex items-center space-x-3">
@@ -87,8 +100,11 @@ export default async function DashboardLayout({
       <div className="mx-auto my-10 min-h-screen w-full max-w-screen-2xl px-4">
         {children}
       </div>
-      <div className="bg-black text-white flex flex-col space-y-6 py-8">
-        <h1 className="font-cal text-sm text-center font-mono">©  Provo Basketball Club {new Date().getFullYear()}</h1>
+      <div className="flex flex-col items-center space-y-4 bg-black py-8 text-white">
+        <DashboardFooterOrgLogo orgLogoUrl={orgLogoUrl} />
+        <p className="font-cal text-center text-sm font-mono">
+          © {new Date().getFullYear()} Athletes App
+        </p>
       </div>
     </>
   );

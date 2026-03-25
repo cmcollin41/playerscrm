@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label";
 import { DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, Camera, X } from "lucide-react";
+import { Loader2, Camera, X, DollarSign } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { slugify, ensureUniqueSlug } from "@/lib/slug";
 
@@ -32,9 +32,28 @@ export default function CreateTeamModal({ account }: { account: any }) {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [level, setLevel] = useState("bantam");
+  const [isActive, setIsActive] = useState(true);
   const [isPublic, setIsPublic] = useState(false);
+  const [rosterFeeOptions, setRosterFeeOptions] = useState<
+    { id: string; name: string; amount: number }[]
+  >([]);
+  const [defaultRosterFeeId, setDefaultRosterFeeId] = useState("none");
 
   const supabase = createClient();
+
+  useEffect(() => {
+    if (!account?.id) return;
+    void (async () => {
+      const { data } = await supabase
+        .from("fees")
+        .select("id, name, amount")
+        .eq("account_id", account.id)
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+      setRosterFeeOptions(data ?? []);
+    })();
+  }, [account?.id, supabase]);
+
   const {
     register,
     handleSubmit,
@@ -107,8 +126,10 @@ export default function CreateTeamModal({ account }: { account: any }) {
           coach: data.coach,
           level,
           icon: imagePreview,
+          is_active: isActive,
           is_public: isPublic,
           slug,
+          fee_id: defaultRosterFeeId === "none" ? null : defaultRosterFeeId,
         },
       ]);
 
@@ -126,11 +147,12 @@ export default function CreateTeamModal({ account }: { account: any }) {
   };
 
   return (
-    <>
-      <DialogHeader>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col min-h-0 flex-1">
+      <DialogHeader className="shrink-0 border-b px-6 pb-4 pt-6">
         <DialogTitle>New Team</DialogTitle>
       </DialogHeader>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
         {/* Team Image */}
         <div className="flex items-center gap-4">
           <div className="relative group">
@@ -169,6 +191,7 @@ export default function CreateTeamModal({ account }: { account: any }) {
           </div>
         </div>
 
+        {/* Team Name */}
         <div className="space-y-2">
           <Label htmlFor="name">Team Name</Label>
           <Input
@@ -181,6 +204,7 @@ export default function CreateTeamModal({ account }: { account: any }) {
           )}
         </div>
 
+        {/* Level */}
         <div className="space-y-2">
           <Label htmlFor="level">Level</Label>
           <Select value={level} onValueChange={setLevel}>
@@ -197,6 +221,46 @@ export default function CreateTeamModal({ account }: { account: any }) {
           </Select>
         </div>
 
+        {/* Default Roster Fee */}
+        <div className="space-y-2">
+          <Label htmlFor="default_roster_fee" className="flex items-center gap-2">
+            <DollarSign className="h-3.5 w-3.5" />
+            Default roster fee
+          </Label>
+          <Select value={defaultRosterFeeId} onValueChange={setDefaultRosterFeeId}>
+            <SelectTrigger id="default_roster_fee">
+              <SelectValue placeholder="No default" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None — choose per player when adding</SelectItem>
+              {rosterFeeOptions.map((f) => (
+                <SelectItem key={f.id} value={f.id}>
+                  {f.name} — ${f.amount}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Pre-selected when you add players to this roster later.
+          </p>
+        </div>
+
+        {/* Active */}
+        <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+          <div className="space-y-0.5">
+            <Label htmlFor="is_active" className="text-base">Active</Label>
+            <p className="text-sm text-muted-foreground">
+              Active teams appear on the main teams list
+            </p>
+          </div>
+          <Switch
+            id="is_active"
+            checked={isActive}
+            onCheckedChange={setIsActive}
+          />
+        </div>
+
+        {/* Public */}
         <div className="flex flex-row items-center justify-between rounded-lg border p-4">
           <div className="space-y-0.5">
             <Label htmlFor="is_public" className="text-base">Public Team</Label>
@@ -210,22 +274,22 @@ export default function CreateTeamModal({ account }: { account: any }) {
             onCheckedChange={setIsPublic}
           />
         </div>
+      </div>
 
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => modal?.hide()}
-            disabled={isLoading}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Create Team
-          </Button>
-        </DialogFooter>
-      </form>
-    </>
+      <DialogFooter className="shrink-0 border-t bg-zinc-50/90 px-6 py-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => modal?.hide()}
+          disabled={isLoading}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Create Team
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }

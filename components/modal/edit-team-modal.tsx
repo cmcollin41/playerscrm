@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client"
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2, Camera, X, Plus, Trophy, Pencil } from "lucide-react";
+import { Loader2, Camera, X, Plus, Trophy, Pencil, DollarSign } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/utils";
 import { slugify, ensureUniqueSlug } from "@/lib/slug";
@@ -43,7 +43,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
   const [editingAwardId, setEditingAwardId] = useState<string | null>(null);
   const [editingAwardTitle, setEditingAwardTitle] = useState("");
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const {
     register,
     handleSubmit,
@@ -55,7 +55,12 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
   const isActive = watch("is_active");
   const isPublic = watch("is_public");
   const [level, setLevel] = useState(team?.level || "bantam");
+  const [rosterFeeOptions, setRosterFeeOptions] = useState<
+    { id: string; name: string; amount: number }[]
+  >([]);
+  const [defaultRosterFeeId, setDefaultRosterFeeId] = useState<string>("none");
 
+  // Sync all state whenever the team prop changes (including after onRefresh)
   useEffect(() => {
     if (team) {
       setValue("name", team.name);
@@ -71,6 +76,24 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
       setAwards([]);
     }
   }, [team, setValue]);
+
+  // Load fee options and then set the default fee ID (must happen after options load)
+  useEffect(() => {
+    if (!team?.account_id) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("fees")
+        .select("id, name, amount")
+        .eq("account_id", team.account_id)
+        .eq("is_active", true)
+        .order("name", { ascending: true });
+      if (cancelled) return;
+      setRosterFeeOptions(data ?? []);
+      setDefaultRosterFeeId(team.fee_id ? String(team.fee_id) : "none");
+    })();
+    return () => { cancelled = true };
+  }, [team?.account_id, team?.fee_id, team?.id, supabase]);
 
   const addAward = async () => {
     if (!team?.id || !newAwardTitle.trim()) return;
@@ -198,6 +221,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
         level,
         icon: imagePreview,
         slug,
+        fee_id: defaultRosterFeeId === "none" ? null : defaultRosterFeeId,
       };
 
       let error;
@@ -207,7 +231,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
           .update(teamData)
           .eq("id", team.id);
         error = updateError;
-      } 
+      }
 
       if (error) {
         toast.error("Failed to update team");
@@ -224,11 +248,12 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
   };
 
   return (
-    <>
-      <DialogHeader>
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col min-h-0 flex-1">
+      <DialogHeader className="shrink-0 border-b px-6 pb-4 pt-6">
         <DialogTitle>{team ? "Edit Team" : "New Team"}</DialogTitle>
       </DialogHeader>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
         {/* Team Image */}
         <div className="flex items-center gap-4">
           <div className="relative group">
@@ -267,6 +292,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
           </div>
         </div>
 
+        {/* Team Name */}
         <div className="space-y-2">
           <Label htmlFor="name">Team Name</Label>
           <Input
@@ -279,6 +305,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
           )}
         </div>
 
+        {/* Level */}
         <div className="space-y-2">
           <Label htmlFor="level">Level</Label>
           <Select value={level} onValueChange={setLevel}>
@@ -295,15 +322,48 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
           </Select>
         </div>
 
-        <div className="flex items-center space-x-2">
+        {/* Default Roster Fee */}
+        {team?.id ? (
+          <div className="space-y-2">
+            <Label htmlFor="default_roster_fee" className="flex items-center gap-2">
+              <DollarSign className="h-3.5 w-3.5" />
+              Default roster fee
+            </Label>
+            <Select key={`${defaultRosterFeeId}-${rosterFeeOptions.length}`} value={defaultRosterFeeId} onValueChange={setDefaultRosterFeeId}>
+              <SelectTrigger id="default_roster_fee">
+                <SelectValue placeholder="No default" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None — choose per player when adding</SelectItem>
+                {rosterFeeOptions.map((f) => (
+                  <SelectItem key={f.id} value={f.id}>
+                    {f.name} — ${f.amount}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Pre-selected when you add someone to this roster; you can still pick another fee or no fee for each player.
+            </p>
+          </div>
+        ) : null}
+
+        {/* Active */}
+        <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+          <div className="space-y-0.5">
+            <Label htmlFor="is_active" className="text-base">Active</Label>
+            <p className="text-sm text-muted-foreground">
+              Active teams appear on the main teams list
+            </p>
+          </div>
           <Switch
             id="is_active"
             checked={isActive}
             onCheckedChange={(checked) => setValue("is_active", checked)}
           />
-          <Label htmlFor="is_active">Active</Label>
         </div>
 
+        {/* Public */}
         <div className="flex flex-row items-center justify-between rounded-lg border p-4">
           <div className="space-y-0.5">
             <Label htmlFor="is_public" className="text-base">Public Team</Label>
@@ -318,6 +378,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
           />
         </div>
 
+        {/* Awards */}
         {team?.id && (
           <div className="space-y-2">
             <Label className="text-base flex items-center gap-2">
@@ -397,22 +458,22 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
             </div>
           </div>
         )}
+      </div>
 
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => modal?.hide()}
-            disabled={isLoading}
-          >
-            Cancel
-          </Button>
-          <Button type="submit" disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {team ? "Update Team" : "Create Team"}
-          </Button>
-        </DialogFooter>
-      </form>
-    </>
+      <DialogFooter className="shrink-0 border-t bg-zinc-50/90 px-6 py-4">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => modal?.hide()}
+          disabled={isLoading}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isLoading}>
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {team ? "Update Team" : "Create Team"}
+        </Button>
+      </DialogFooter>
+    </form>
   );
 }

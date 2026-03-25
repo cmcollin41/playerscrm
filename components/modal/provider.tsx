@@ -64,7 +64,7 @@ export function ModalProvider({ children }: { children: ReactNode }) {
       {/* Desktop: Use Dialog */}
       {!isMobile && (
         <Dialog open={showModal} onOpenChange={setShowModal}>
-          <DialogContent className="max-h-[90vh] overflow-y-auto">
+          <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0">
             {modalOptions.title && (
               <DialogHeader>
                 {modalOptions.title && <DialogTitle>{modalOptions.title}</DialogTitle>}

@@ -61,6 +61,8 @@ const formSchema = z.object({
     required_error: "Please select a person",
   }),
   fee: z.string().optional(),
+  /** dollars, optional override for this roster row */
+  custom_amount: z.string().optional(),
   jersey_number: z.coerce.number().int().min(0).max(99).optional(),
   position: z.string().optional(),
   grade: z.string().optional(),
@@ -88,7 +90,7 @@ export function AddToRosterModal({
   accountId,
   onSuccess,
 }: {
-  team: { id: string }
+  team: { id: string; fee_id?: string | null }
   accountId: string
   onSuccess?: () => void
 }) {
@@ -108,6 +110,7 @@ export function AddToRosterModal({
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
   })
+  const { setValue } = form
 
   useEffect(() => {
     const fetchData = async () => {
@@ -127,7 +130,14 @@ export function AddToRosterModal({
         .eq("account_id", accountId)
         .eq("is_active", true)
       
-      if (feesData) setFees(feesData)
+      if (feesData) {
+        setFees(feesData)
+        const defaultFeeId =
+          team.fee_id && feesData.some((f) => f.id === team.fee_id)
+            ? team.fee_id
+            : "none"
+        setValue("fee", defaultFeeId)
+      }
       if (feesError) console.error("Error fetching fees:", feesError)
 
       // Fetch award types for this account
@@ -141,9 +151,9 @@ export function AddToRosterModal({
     }
     
     if (dialogOpen && accountId) {
-      fetchData()
+      void fetchData()
     }
-  }, [supabase, accountId, dialogOpen])
+  }, [supabase, accountId, dialogOpen, team?.fee_id, setValue])
 
   const selectedPerson = people.find((p) => p.id === form.watch("person"))
 
@@ -183,6 +193,14 @@ export function AddToRosterModal({
 
       if (photoPreview) {
         rosterData.photo = photoPreview
+      }
+
+      const customRaw = data.custom_amount?.trim()
+      if (customRaw) {
+        const n = Number.parseFloat(customRaw)
+        if (!Number.isNaN(n) && n > 0) {
+          rosterData.custom_amount = n
+        }
       }
 
       const { data: insertedRoster, error } = await supabase
@@ -244,6 +262,9 @@ export function AddToRosterModal({
           <DialogTitle>Add Roster Member</DialogTitle>
           <DialogDescription>
             Search and select a person to add to the team roster, and optionally assign a fee.
+            {team.fee_id
+              ? " The team's default fee is pre-selected when it is still an active catalog fee."
+              : null}
           </DialogDescription>
         </DialogHeader>
 
@@ -528,7 +549,7 @@ export function AddToRosterModal({
                   <FormLabel>Fee (Optional)</FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    value={field.value}
+                    value={field.value ?? "none"}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="No fee" />
@@ -542,6 +563,28 @@ export function AddToRosterModal({
                       ))}
                     </SelectContent>
                   </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="custom_amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Custom amount (optional)</FormLabel>
+                  <Input
+                    {...field}
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="e.g. 125.00"
+                    value={field.value ?? ""}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    When set, this price is used for standard invoices and checkout instead of the catalog fee amount (you can still assign a fee for reporting).
+                  </p>
                   <FormMessage />
                 </FormItem>
               )}

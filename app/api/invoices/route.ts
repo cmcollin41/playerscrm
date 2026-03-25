@@ -23,17 +23,20 @@ export async function POST(req: Request) {
     });
     const supabase = await createClient();
 
-    // First verify that the roster exists if rosterId is provided
+    // Verify roster exists and belongs to this person when rosterId is provided
     if (rosterId) {
       const { data: roster, error: rosterError } = await supabase
         .from('rosters')
-        .select('id')
+        .select('id, person_id')
         .eq('id', rosterId)
         .single();
 
       if (rosterError || !roster) {
         console.error('Roster verification error:', rosterError);
         throw new Error('Invalid roster ID');
+      }
+      if (roster.person_id !== person_id) {
+        throw new Error('Roster does not belong to this person');
       }
     }
 
@@ -42,6 +45,8 @@ export async function POST(req: Request) {
       ? description
       : `Team Roster Fee - ${athleteName} - ${teamName}`;
 
+    const resolvedRosterId = rosterId ?? null;
+
     // Log the data we're trying to insert
     console.log('Attempting to insert invoice with data:', {
       account_id: accountId,
@@ -49,7 +54,7 @@ export async function POST(req: Request) {
       amount,
       status: 'draft',
       description: invoiceDescription,
-      roster_id: isCustomInvoice ? null : rosterId,
+      roster_id: resolvedRosterId,
       due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       metadata: {
         stripe_customer_id: customerId,
@@ -68,7 +73,7 @@ export async function POST(req: Request) {
         amount,
         status: 'draft',
         description: invoiceDescription,
-        roster_id: isCustomInvoice ? null : rosterId,
+        roster_id: resolvedRosterId,
         due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         metadata: {
           stripe_customer_id: customerId,
@@ -95,7 +100,7 @@ export async function POST(req: Request) {
       application_fee_amount: applicationFeeAmount,
       metadata: {
         invoice_id: invoiceRecord.id,
-        roster_id: rosterId || null,
+        roster_id: resolvedRosterId,
         person_id,
         is_custom_invoice: isCustomInvoice
       },

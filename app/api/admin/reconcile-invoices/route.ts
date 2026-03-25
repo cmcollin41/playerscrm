@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server"
+import { requireAccountAdminApi } from "@/lib/auth"
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 
@@ -6,43 +6,24 @@ const PAGE_SIZE = 10
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient()
     const { offset = 0 } = await req.json().catch(() => ({ offset: 0 }))
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const auth = await requireAccountAdminApi()
+    if (!auth.ok) return auth.response
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { data: rawCallerProfile } = await supabase
-      .from("profiles")
-      .select("account_id, current_account_id, role")
-      .eq("id", user.id)
-      .single()
-
-    const callerProfile = rawCallerProfile ? { ...rawCallerProfile, account_id: rawCallerProfile.current_account_id || rawCallerProfile.account_id } : null
-
-    if (!callerProfile?.account_id || callerProfile.role !== "admin") {
-      return NextResponse.json(
-        { error: "Forbidden: admin access required" },
-        { status: 403 }
-      )
-    }
+    const { supabase, activeAccountId } = auth
 
     const { count } = await supabase
       .from("invoices")
       .select("id", { count: "exact", head: true })
-      .eq("account_id", callerProfile.account_id)
+      .eq("account_id", activeAccountId)
       .in("status", ["sent", "draft"])
       .not("metadata->>stripe_invoice_id", "is", null)
 
     const { data: batch, error: fetchError } = await supabase
       .from("invoices")
       .select("id, metadata, amount, person_id, account_id, status")
-      .eq("account_id", callerProfile.account_id)
+      .eq("account_id", activeAccountId)
       .in("status", ["sent", "draft"])
       .not("metadata->>stripe_invoice_id", "is", null)
       .order("created_at", { ascending: true })

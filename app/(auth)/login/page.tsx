@@ -30,6 +30,7 @@ function LoginContent() {
   const from_events = searchParams.get("from_events");
   const account_id = searchParams.get("account_id");
   const people_id = searchParams.get("people_id");
+  const invite_role = searchParams.get("invite_role") || "member";
   const email = from_events === "true"
     ? (searchParams.get("email") as string) || ""
     : decryptId(searchParams.get("email") as string);
@@ -116,6 +117,7 @@ function LoginContent() {
     const formData = new FormData(event.currentTarget);
     formData.append("from_events", from_events || "");
     formData.append("account_id", account_id || "");
+    formData.append("invite_role", invite_role || "member");
 
     try {
       const result = await signup(formData);
@@ -266,6 +268,12 @@ function LoginContent() {
                 name="people_id"
                 defaultValue={people_id || ""}
                 aria-label="People ID"
+              />
+              <input
+                className="mb-6 hidden"
+                name="invite_role"
+                defaultValue={invite_role || "member"}
+                aria-label="Invite role"
               />
               <label className="text-md" htmlFor="email">
                 Email

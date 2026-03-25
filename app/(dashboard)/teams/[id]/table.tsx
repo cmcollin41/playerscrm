@@ -45,44 +45,33 @@ import { Badge } from "@/components/ui/badge";
 import SendEmailModal from "@/components/modal/send-email-sheet";
 import SendButton from "@/components/modal-buttons/send-button";
 import { useRouter } from "next/navigation";
-import { CheckCircle, Mail, FileText, ExternalLink, AlertCircle } from "lucide-react";
+import { CheckCircle, Mail, FileText, ExternalLink, AlertCircle, Receipt } from "lucide-react";
 import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
-import { CreateRosterInvoiceButton } from "@/components/create-roster-invoice-button";
 import SendEmailSheet from "@/components/modal/send-email-sheet";
+import { RosterBillingModal } from "@/components/modal/roster-billing-modal";
+import {
+  amountsDifferCents,
+  effectiveRosterOwedDollars,
+  linkedInvoiceForRoster,
+  rosterPaidViaFeePayment,
+} from "@/lib/roster-pricing";
 
-function paymentStatus(person: Person, fees: any, team: any) {
-  // First check for successful payments
-  if (fees?.payments?.length) {
-    const successfulPayment = fees.payments.find(
-      (payment: { person_id: string; fee_id: string; status: string }) =>
-        payment.person_id === person.id &&
-        payment.fee_id === fees.id &&
-        payment.status === "succeeded"
-    );
-    
-    if (successfulPayment) {
-      return "paid";
-    }
-  }
+function paymentStatus(_person: Person, roster: any) {
+  const invoice = roster ? linkedInvoiceForRoster(roster) : undefined;
 
-  // Then check for existing invoices
-  const rosterId = team.rosters?.find((r: any) => r.person_id === person.id)?.id;
-  const invoice = person.invoices?.find(inv => inv.roster_id === rosterId);
-  
+  const owed = effectiveRosterOwedDollars(roster);
+
+  if (rosterPaidViaFeePayment(roster)) return "paid";
+
   if (invoice) {
-    if (invoice.status === "sent") {
-      return "sent";
-    }
-    if (invoice.status === "draft") {
-      return "draft";
-    }
+    if (invoice.status === "paid") return "paid";
+    if (invoice.status === "sent") return "sent";
+    if (invoice.status === "draft") return "draft";
   }
+
+  if (owed == null || owed <= 0) return "none";
 
   return "unpaid";
-}
-
-function getInvoiceForRoster(person: Person, rosterId: string) {
-  return person.invoices?.find(inv => inv.roster_id === rosterId);
 }
 
 function isInvoiceOverdue(invoice: any) {
@@ -107,11 +96,13 @@ export type Person = {
   invoices?: Array<{
     id: string;
     status: string;
-    roster_id: string;
+    amount?: number | null;
+    roster_id: string | null;
     due_date?: string;
     invoice_number?: string;
     metadata?: any;
   }>;
+  email?: string | null;
   first_name: string;
   last_name: string;
   name: string;
@@ -124,10 +115,23 @@ export type Person = {
 };
 
 const createColumns = (
-  team: any, 
-  onEditRoster: (roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null; bio: string | null; personId: string; height: string | null; photo: string | null }, personName: string) => void,
+  team: any,
+  onEditRoster: (
+    roster: {
+      id: string;
+      jerseyNumber: number | null;
+      position: string | null;
+      grade: string | null;
+      bio: string | null;
+      height: string | null;
+      photo: string | null;
+    },
+    personName: string,
+  ) => void,
   onResendInvoice: (invoiceId: string) => void,
-  resendingInvoiceId: string | null
+  resendingInvoiceId: string | null,
+  emailSendCounts: Record<string, number> | null,
+  onOpenBilling: (person: Person, roster: any) => void,
 ): ColumnDef<Person>[] => [
   {
     id: "select",
@@ -155,15 +159,15 @@ const createColumns = (
       const roster = team.rosters?.find((r: any) => r.person_id === row.original.id)
       const photoUrl = roster?.photo || row.original.photo
       return (
-        <div className="flex items-center gap-3">
+        <Link href={`/people/${row.original.id}`} className="flex items-center gap-3 group">
           <Avatar className="h-8 w-8">
             {photoUrl && <AvatarImage src={photoUrl} alt={row.getValue("name") as string} />}
             <AvatarFallback className="text-xs">
               {getInitials(row.original.first_name, row.original.last_name)}
             </AvatarFallback>
           </Avatar>
-          <div className="font-medium">{row.getValue("name")}</div>
-        </div>
+          <div className="font-medium group-hover:underline">{row.getValue("name")}</div>
+        </Link>
       )
     },
   },
@@ -172,42 +176,56 @@ const createColumns = (
     header: "#",
     cell: ({ row }) => {
       const num = row.getValue("jersey_number") as number | undefined
-      return <div className="font-mono">{num != null ? `#${num}` : "—"}</div>
+      return <div className="font-mono text-sm">{num != null ? `#${num}` : "—"}</div>
     },
-  },
-  {
-    accessorKey: "position",
-    header: "Position",
-    cell: ({ row }) => <div>{row.getValue("position") || "—"}</div>,
-  },
-  {
-    id: "grade",
-    header: "Grade",
-    cell: ({ row }) => {
-      const grade = row.original.roster_grade || (row.original as any).grade || ""
-      const GRADE_LABELS: Record<string, string> = { "9": "Freshman", "10": "Sophomore", "11": "Junior", "12": "Senior" }
-      return <div>{GRADE_LABELS[grade] || grade || "—"}</div>
+    sortingFn: (a, b) => {
+      const aVal = a.getValue("jersey_number") as number | null | undefined
+      const bVal = b.getValue("jersey_number") as number | null | undefined
+      if (aVal == null && bVal == null) return 0
+      if (aVal == null) return 1
+      if (bVal == null) return -1
+      return aVal - bVal
     },
-    accessorFn: (row) => row.roster_grade || (row as any).grade || "",
   },
   {
     accessorKey: "fees",
     header: "Fee Amount",
     cell: ({ row }: { row: any }) => {
-      const fees = row.getValue("fees") as { amount: number; id: string } | undefined;
-      const amount = fees?.amount;
-      
-      if (!amount) {
+      const roster = team.rosters?.find(
+        (r: any) => r.person_id === row.original.id,
+      );
+      const owed = effectiveRosterOwedDollars(roster);
+      const fees = roster?.fees;
+      const isCustom =
+        roster?.custom_amount != null && Number(roster.custom_amount) > 0;
+
+      if (owed == null || owed <= 0) {
         return (
-          <Badge variant="outline" className="bg-gray-50 text-gray-600">
+          <Badge variant="outline" className="bg-gray-50 text-gray-600 whitespace-nowrap">
             No Fee
           </Badge>
         );
       }
-      
+
       return (
-        <span className="font-medium">
-          ${amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+        <span className="font-medium font-mono text-sm inline-flex flex-wrap items-center gap-1.5">
+          $
+          {owed.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          {isCustom ? (
+            <Badge variant="secondary" className="text-[10px] px-1 py-0 font-sans">
+              Custom
+            </Badge>
+          ) : null}
+          {isCustom &&
+          fees?.amount != null &&
+          amountsDifferCents(Number(fees.amount), owed) ? (
+            <span
+              className="text-[10px] text-muted-foreground font-sans font-normal"
+              title={`Catalog fee: $${Number(fees.amount).toFixed(2)}`}
+            >
+              (catalog ${Number(fees.amount).toFixed(0)})
+            </span>
+          ) : null}
         </span>
       );
     },
@@ -218,19 +236,25 @@ const createColumns = (
     cell: ({ row }: { row: any }) => {
       const person = row.original;
       const roster = team.rosters?.find((r: any) => r.person_id === person.id);
-      const invoice = getInvoiceForRoster(person, roster?.id);
-      
-      // If no fee is assigned, show N/A
-      if (!person.fees || !person.fees.amount) {
+      const invoice = roster ? linkedInvoiceForRoster(roster) : undefined;
+      const status = paymentStatus(person, roster);
+      const sendCount = invoice ? (emailSendCounts?.[invoice.id] ?? 0) : 0;
+      const rosterOwed = effectiveRosterOwedDollars(roster);
+      const invoiceAmt =
+        invoice?.amount != null ? Number(invoice.amount) : null;
+      const priceMismatch =
+        invoice &&
+        rosterOwed != null &&
+        invoiceAmt != null &&
+        invoice.status !== "paid" &&
+        amountsDifferCents(invoiceAmt, rosterOwed);
+
+      if (status === "none") {
         return (
-          <Badge variant="outline" className="bg-gray-50 text-gray-600">
-            No Fee
-          </Badge>
+          <span className="text-xs text-gray-400">—</span>
         );
       }
-      
-      const status = paymentStatus(person, person.fees, team);
-      
+
       if (status === "paid") {
         return (
           <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
@@ -239,26 +263,44 @@ const createColumns = (
           </Badge>
         );
       }
-      
+
       if (status === "sent") {
         const overdue = isInvoiceOverdue(invoice);
         return (
           <div className="flex flex-col gap-1">
-            <Badge className={`${
-              overdue 
-                ? "bg-red-100 text-red-800 hover:bg-red-100" 
-                : "bg-blue-100 text-blue-800 hover:bg-blue-100"
-            }`}>
-              <Mail className="mr-1 h-3 w-3" />
-              Sent
-            </Badge>
-            {overdue && (
-              <span className="text-xs text-red-600 font-medium">Overdue</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => invoice && onResendInvoice(invoice.id)}
+              disabled={resendingInvoiceId === invoice?.id}
+              className={`h-auto px-2 py-1 text-xs ${
+                overdue
+                  ? "text-red-600 border-red-200 hover:bg-red-50"
+                  : "text-blue-600 border-blue-200 hover:bg-blue-50"
+              }`}
+              title={overdue ? "Resend overdue invoice" : "Resend invoice"}
+            >
+              <PaperAirplaneIcon className="h-3 w-3 mr-1" />
+              {resendingInvoiceId === invoice?.id ? "Sending..." : "Resend"}
+            </Button>
+            {sendCount > 0 && (
+              <span className="text-xs text-gray-500 pl-2">
+                {sendCount} email{sendCount !== 1 ? "s" : ""} sent
+              </span>
+            )}
+            {priceMismatch && (
+              <span
+                className="text-xs text-amber-700 flex items-center gap-1 pl-2"
+                title={`Roster price $${rosterOwed!.toFixed(2)} vs invoice $${invoiceAmt!.toFixed(2)}`}
+              >
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                Price ≠ roster
+              </span>
             )}
           </div>
         );
       }
-      
+
       if (status === "draft") {
         return (
           <Badge variant="outline" className="bg-purple-50 text-purple-700">
@@ -267,11 +309,10 @@ const createColumns = (
           </Badge>
         );
       }
-      
+
       return (
-        <Badge variant="outline" className="bg-yellow-50 text-yellow-700">
-          <AlertCircle className="mr-1 h-3 w-3" />
-          Unpaid
+        <Badge variant="outline" className="bg-gray-50 text-gray-500 whitespace-nowrap">
+          No Invoice
         </Badge>
       );
     },
@@ -279,106 +320,78 @@ const createColumns = (
   {
     accessorKey: "primary_contacts",
     header: "Email",
-    cell: ({ row }) => (
-      <div className="flex flex-wrap gap-1">
-        {row.original.primary_contacts.map((contact: any, index: any) => (
-          <Link
-            key={index}
-            href={`/people/${contact?.id}`}
-            className="cursor-pointer rounded-full border border-gray-200 bg-gray-100 px-2 py-0.5 text-xs lowercase text-gray-900 hover:bg-gray-200 transition-colors"
-          >
-            {contact?.email}
+    cell: ({ row }) => {
+      const person = row.original;
+      const directEmail = typeof person.email === "string" && person.email.trim() ? person.email.trim() : null;
+      const contact = person.primary_contacts?.[0];
+      const contactEmail = contact?.email?.trim() || null;
+
+      if (directEmail) {
+        return (
+          <Link href={`/people/${person.id}`}>
+            <Badge variant="outline" className="font-mono text-xs font-normal lowercase hover:bg-muted transition-colors">
+              {directEmail}
+            </Badge>
           </Link>
-        ))}
-      </div>
-    ),
+        );
+      }
+
+      if (contactEmail && contact?.id) {
+        return (
+          <Link href={`/people/${contact.id}`}>
+            <Badge variant="outline" className="font-mono text-xs font-normal lowercase hover:bg-muted transition-colors">
+              {contactEmail}
+            </Badge>
+          </Link>
+        );
+      }
+
+      return <span className="text-xs text-muted-foreground">—</span>;
+    },
   },
   {
     id: "actions",
-    header: "Actions",
+    header: "",
     cell: ({ row }) => {
       const person = row.original;
       const roster = team.rosters?.find((r: any) => r.person_id === person.id);
-      const fees = roster?.fees;
-      const invoice = getInvoiceForRoster(person, roster?.id);
-      const status = paymentStatus(person, person.fees, team);
-      const isOverdue = isInvoiceOverdue(invoice);
 
       return (
-        <div className="flex items-center gap-2">
-          {/* Link to Person Page */}
-          <Button
-            variant="ghost"
-            size="sm"
-            asChild
-            className="h-8 px-2"
-            title="View Person"
-          >
-            <Link href={`/people/${person.id}`}>
-              <ExternalLink className="h-4 w-4" />
-            </Link>
-          </Button>
+        <div className="flex items-center justify-end gap-1">
+          {roster?.id ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 w-8 shrink-0 p-0 text-green-700 border-green-200 bg-green-50/50 hover:bg-green-50"
+              title="Fees & invoices"
+              onClick={() => onOpenBilling(person, roster)}
+            >
+              <Receipt className="h-4 w-4" />
+            </Button>
+          ) : null}
 
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onEditRoster({
-              id: roster?.id,
-              feeId: fees?.id || null,
-              jerseyNumber: roster?.jersey_number ?? null,
-              position: roster?.position ?? null,
-              grade: roster?.grade ?? null,
-              bio: roster?.bio ?? null,
-              personId: person.id,
-              height: roster?.height ?? null,
-              photo: roster?.photo ?? null,
-            }, person.name)}
+            onClick={() =>
+              onEditRoster(
+                {
+                  id: roster?.id,
+                  jerseyNumber: roster?.jersey_number ?? null,
+                  position: roster?.position ?? null,
+                  grade: roster?.grade ?? null,
+                  bio: roster?.bio ?? null,
+                  height: roster?.height ?? null,
+                  photo: roster?.photo ?? null,
+                },
+                person.name,
+              )
+            }
             className="h-8 px-3 text-xs"
-            title="Edit Roster Entry"
+            title="Edit roster (jersey, photo, awards…)"
           >
             Edit
           </Button>
-
-          {/* Invoice/Payment Status Actions */}
-          {status === "paid" ? (
-            <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
-              <CheckCircle className="h-3.5 w-3.5 mr-1" />
-              Paid
-            </Badge>
-          ) : status === "sent" ? (
-            <Button 
-              variant="ghost"
-              size="sm"
-              onClick={() => invoice && onResendInvoice(invoice.id)}
-              disabled={resendingInvoiceId === invoice?.id}
-              className={`h-8 px-3 text-xs ${
-                isOverdue 
-                  ? "text-red-600 hover:text-red-700 hover:bg-red-50" 
-                  : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-              }`}
-              title={isOverdue ? "Resend overdue invoice" : "Resend invoice"}
-            >
-              <PaperAirplaneIcon className="h-3.5 w-3.5 mr-1" />
-              {resendingInvoiceId === invoice?.id ? "Sending..." : "Resend"}
-            </Button>
-          ) : status === "draft" ? (
-            <Badge variant="outline" className="bg-gray-100 text-gray-600">
-              <FileText className="h-3.5 w-3.5 mr-1" />
-              Draft
-            </Badge>
-          ) : fees?.amount ? (
-            // Show create invoice button only if fee is assigned
-            <CreateRosterInvoiceButton 
-              rosterId={roster?.id}
-              athleteName={`${person.first_name} ${person.last_name}`}
-              teamName={team?.name}
-              amount={roster?.fees?.amount}
-              guardianEmail={person.primary_contacts?.[0]?.email}
-              accountId={team.account_id}
-              stripeAccountId={team.accounts?.stripe_id}
-              person_id={person.id}
-            />
-          ) : null}
         </div>
       );
     }
@@ -390,6 +403,7 @@ interface TeamTableProps {
   team: any;
   account: any;
   onRefresh?: () => void | Promise<void>;
+  emailSendCounts?: Record<string, number> | null;
 }
 
 export function TeamTable({
@@ -397,6 +411,7 @@ export function TeamTable({
   team,
   account,
   onRefresh,
+  emailSendCounts = null,
 }: TeamTableProps) {
   const router = useRouter();
   const { refresh } = router;
@@ -412,27 +427,40 @@ export function TeamTable({
   
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingRosterId, setEditingRosterId] = useState<string>("");
-  const [editingFeeId, setEditingFeeId] = useState<string | null>(null);
   const [editingJerseyNumber, setEditingJerseyNumber] = useState<number | null>(null);
   const [editingPosition, setEditingPosition] = useState<string | null>(null);
   const [editingGrade, setEditingGrade] = useState<string | null>(null);
   const [editingBio, setEditingBio] = useState<string | null>(null);
-  const [editingPersonId, setEditingPersonId] = useState<string>("");
   const [editingHeight, setEditingHeight] = useState<string | null>(null);
   const [editingPhoto, setEditingPhoto] = useState<string | null>(null);
   const [editingPersonName, setEditingPersonName] = useState<string>("");
+  const [billingOpen, setBillingOpen] = useState(false);
+  const [billingPerson, setBillingPerson] = useState<Person | null>(null);
+  const [billingRoster, setBillingRoster] = useState<any>(null);
+
+  const handleOpenBilling = (person: Person, roster: any) => {
+    setBillingPerson(person);
+    setBillingRoster(roster);
+    setBillingOpen(true);
+  };
 
   const handleEditRoster = (
-    roster: { id: string; feeId: string | null; jerseyNumber: number | null; position: string | null; grade: string | null; bio: string | null; personId: string; height: string | null; photo: string | null },
-    personName: string
+    roster: {
+      id: string;
+      jerseyNumber: number | null;
+      position: string | null;
+      grade: string | null;
+      bio: string | null;
+      height: string | null;
+      photo: string | null;
+    },
+    personName: string,
   ) => {
     setEditingRosterId(roster.id);
-    setEditingFeeId(roster.feeId);
     setEditingJerseyNumber(roster.jerseyNumber);
     setEditingPosition(roster.position);
     setEditingGrade(roster.grade);
     setEditingBio(roster.bio);
-    setEditingPersonId(roster.personId);
     setEditingHeight(roster.height);
     setEditingPhoto(roster.photo);
     setEditingPersonName(personName);
@@ -475,7 +503,14 @@ export function TeamTable({
 
   const table = useReactTable({
     data,
-    columns: createColumns(team, handleEditRoster, handleResendInvoice, resendingInvoiceId),
+    columns: createColumns(
+      team,
+      handleEditRoster,
+      handleResendInvoice,
+      resendingInvoiceId,
+      emailSendCounts,
+      handleOpenBilling,
+    ),
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
@@ -534,18 +569,43 @@ export function TeamTable({
         open={editModalOpen}
         onOpenChange={setEditModalOpen}
         rosterId={editingRosterId}
-        currentFeeId={editingFeeId}
         currentJerseyNumber={editingJerseyNumber}
         currentPosition={editingPosition}
         currentGrade={editingGrade}
         currentBio={editingBio}
-        personId={editingPersonId}
         currentHeight={editingHeight}
         currentPhoto={editingPhoto}
         accountId={account?.id ?? ""}
         personName={editingPersonName}
         onRefresh={onRefresh}
       />
+      {billingPerson && billingRoster ? (
+        <RosterBillingModal
+          open={billingOpen}
+          onOpenChange={(open) => {
+            setBillingOpen(open);
+            if (!open) {
+              setBillingPerson(null);
+              setBillingRoster(null);
+            }
+          }}
+          rosterId={billingRoster.id}
+          teamName={team?.name ?? "Team"}
+          person={billingPerson}
+          roster={billingRoster}
+          team={team}
+          account={account}
+          currentFeeId={billingRoster.fee_id ?? billingRoster.fees?.id ?? null}
+          currentCustomAmount={
+            billingRoster.custom_amount != null &&
+            billingRoster.custom_amount !== ""
+              ? Number(billingRoster.custom_amount)
+              : null
+          }
+          accountId={team.account_id}
+          onRefresh={onRefresh}
+        />
+      ) : null}
       <div className="w-full space-y-4">
         <div className="flex items-center gap-4">
           <Input

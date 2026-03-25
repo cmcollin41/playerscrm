@@ -25,6 +25,12 @@ create index if not exists award_types_account_id_idx
 
 alter table public.award_types enable row level security;
 
+drop policy if exists "Allow authenticated select award_types" on public.award_types;
+drop policy if exists "Allow authenticated insert award_types" on public.award_types;
+drop policy if exists "Allow authenticated update award_types" on public.award_types;
+drop policy if exists "Allow authenticated delete award_types" on public.award_types;
+drop policy if exists "Allow anon read award_types" on public.award_types;
+
 -- authenticated: read global defaults + own account types
 create policy "Allow authenticated select award_types"
   on public.award_types

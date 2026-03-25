@@ -12,8 +12,6 @@ import {
 
 import {
   ArrowLeft,
-  Shield,
-  ShieldOff,
   UserPlus,
   Users as UsersIcon,
 } from "lucide-react"
@@ -74,16 +72,17 @@ import {
 
 import LoadingDots from "@/components/icons/loading-dots"
 import { Skeleton } from "@/components/ui/skeleton"
-import type { UserRole } from "@/types/schema.types"
 import { getInitials } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { ACCOUNT_ROLES, ROLE_CONFIG, type AccountRole } from "@/lib/roles"
 
 interface AccountUser {
   id: string
+  membership_id: string
   email: string | null
   first_name: string | null
   last_name: string | null
-  role: UserRole
+  role: AccountRole
   created_at: string
 }
 
@@ -103,7 +102,7 @@ export default function UsersPage() {
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteFirstName, setInviteFirstName] = useState("")
   const [inviteLastName, setInviteLastName] = useState("")
-  const [inviteRole, setInviteRole] = useState<UserRole>("general")
+  const [inviteRole, setInviteRole] = useState<AccountRole>("member")
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -118,18 +117,54 @@ export default function UsersPage() {
 
       const { data: profile, error } = await supabase
         .from("profiles")
-        .select("role, account_id, accounts(name)")
+        .select("current_account_id, account_id")
         .eq("id", user.id)
         .single()
 
-      if (error || profile?.role !== "admin") {
+      const activeAccountId =
+        profile?.current_account_id ?? profile?.account_id ?? null
+
+      if (error || !activeAccountId) {
         router.replace("/")
         return
       }
 
+      const { data: rpcAccess, error: accessError } = await supabase.rpc(
+        "has_account_role",
+        { p_account_id: activeAccountId, p_min_role: "admin" },
+      )
+
+      let canManage = rpcAccess === true
+      if (!canManage) {
+        const { data: membership } = await supabase
+          .from("account_members")
+          .select("role")
+          .eq("account_id", activeAccountId)
+          .eq("profile_id", user.id)
+          .maybeSingle()
+
+        canManage =
+          membership?.role === "admin" || membership?.role === "owner"
+      }
+
+      if (accessError) {
+        console.warn("has_account_role rpc:", accessError.message)
+      }
+
+      if (!canManage) {
+        router.replace("/")
+        return
+      }
+
+      const { data: accountRow } = await supabase
+        .from("accounts")
+        .select("name")
+        .eq("id", activeAccountId)
+        .single()
+
       setCurrentUserId(user.id)
       setIsAdmin(true)
-      setAccountName((profile.accounts as any)?.name || "")
+      setAccountName(accountRow?.name || "")
     }
 
     checkAuth()
@@ -141,13 +176,24 @@ export default function UsersPage() {
     const fetchUsers = async () => {
       setUsersLoading(true)
       try {
-        const res = await fetch("/api/admin/users")
-        if (!res.ok) throw new Error("Failed to fetch users")
-        const data = await res.json()
+        const res = await fetch("/api/admin/users", {
+          credentials: "include",
+        })
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          const msg =
+            typeof data.error === "string"
+              ? data.error
+              : `Failed to load users (${res.status})`
+          console.error("GET /api/admin/users:", res.status, data)
+          throw new Error(msg)
+        }
         setAccountUsers(data.users || [])
       } catch (error) {
         console.error("Error fetching users:", error)
-        toast.error("Failed to load users")
+        toast.error(
+          error instanceof Error ? error.message : "Failed to load users",
+        )
       } finally {
         setUsersLoading(false)
       }
@@ -156,11 +202,12 @@ export default function UsersPage() {
     fetchUsers()
   }, [isAdmin])
 
-  const handleRoleChange = async (userId: string, newRole: UserRole) => {
+  const handleRoleChange = async (userId: string, newRole: AccountRole) => {
     setUpdatingUserId(userId)
     try {
       const res = await fetch("/api/admin/users", {
         method: "PATCH",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ userId, role: newRole }),
       })
@@ -171,9 +218,9 @@ export default function UsersPage() {
       }
 
       setAccountUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
+        prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
       )
-      toast.success(`User role updated to ${newRole}`)
+      toast.success(`Role updated to ${ROLE_CONFIG[newRole].label}`)
     } catch (error: any) {
       toast.error(error.message)
     } finally {
@@ -185,7 +232,7 @@ export default function UsersPage() {
     setInviteEmail("")
     setInviteFirstName("")
     setInviteLastName("")
-    setInviteRole("general")
+    setInviteRole("member")
   }
 
   const handleInvite = async () => {
@@ -198,6 +245,7 @@ export default function UsersPage() {
     try {
       const res = await fetch("/api/admin/invite", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           email: inviteEmail,
@@ -233,24 +281,29 @@ export default function UsersPage() {
     )
   }
 
-  const adminCount = accountUsers.filter((u) => u.role === "admin").length
-  const generalCount = accountUsers.filter((u) => u.role === "general").length
+  const roleCounts = ACCOUNT_ROLES.reduce(
+    (acc, role) => {
+      acc[role] = accountUsers.filter((u) => u.role === role).length
+      return acc
+    },
+    {} as Record<AccountRole, number>,
+  )
 
   return (
     <div className="flex flex-col gap-6 p-6">
       <div className="flex flex-col gap-2">
         <Link
-          href="/settings"
+          href="/settings/account"
           className="text-muted-foreground inline-flex w-fit items-center gap-1 text-sm hover:text-gray-900"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Settings
+          Workspace settings
         </Link>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Users & Roles</h1>
             <p className="text-muted-foreground">
-              Manage who has access to {accountName || "your organization"} and what they can do
+              Manage who has access to {accountName || "your account"} and what they can do
             </p>
           </div>
           <Button onClick={() => setInviteOpen(true)}>
@@ -260,41 +313,30 @@ export default function UsersPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{accountUsers.length}</div>
-            <p className="text-xs text-muted-foreground">In your organization</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Admins</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{adminCount}</div>
-            <p className="text-xs text-muted-foreground">Can manage settings</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">General</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{generalCount}</div>
-            <p className="text-xs text-muted-foreground">Standard access</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {ACCOUNT_ROLES.map((role) => {
+          const config = ROLE_CONFIG[role]
+          const Icon = config.icon
+          return (
+            <Card key={role}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{config.label}s</CardTitle>
+                <Icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold font-mono">{roleCounts[role]}</div>
+                <p className="text-xs text-muted-foreground">{config.description}</p>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle>All Users ({accountUsers.length})</CardTitle>
           <CardDescription>
-            Complete list of users in your organization
+            Members of this account and their roles
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -326,7 +368,7 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle>Invite User</DialogTitle>
             <DialogDescription>
-              Send an invitation to join {accountName || "your organization"}.
+              Send an invitation to join {accountName || "your account"}.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -365,18 +407,21 @@ export default function UsersPage() {
               <Label htmlFor="invite-role">Role</Label>
               <Select
                 value={inviteRole}
-                onValueChange={(val) => setInviteRole(val as UserRole)}
+                onValueChange={(val) => setInviteRole(val as AccountRole)}
               >
                 <SelectTrigger id="invite-role">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="general">General</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  {ACCOUNT_ROLES.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {ROLE_CONFIG[role].label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500">
-                Admins can manage users, fees, emails, and invoices.
+                {ROLE_CONFIG[inviteRole].description}
               </p>
             </div>
           </div>
@@ -391,7 +436,7 @@ export default function UsersPage() {
               Cancel
             </Button>
             <Button onClick={handleInvite} disabled={inviting || !inviteEmail}>
-              {inviting ? <LoadingDots color="#fff" /> : "Send Invitation"}
+              {inviting ? "Sending..." : "Send Invitation"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -409,7 +454,7 @@ function UsersTable({
   data: AccountUser[]
   currentUserId: string | null
   updatingUserId: string | null
-  onRoleChange: (userId: string, newRole: UserRole) => void
+  onRoleChange: (userId: string, newRole: AccountRole) => void
 }) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -465,23 +510,17 @@ function UsersTable({
     {
       accessorKey: "role",
       header: "Role",
-      cell: ({ row }) => (
-        <Badge
-          variant="secondary"
-          className={
-            row.original.role === "admin"
-              ? "bg-blue-100 text-blue-800 hover:bg-blue-100"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-100"
-          }
-        >
-          {row.original.role === "admin" ? (
-            <Shield className="mr-1 h-3 w-3" />
-          ) : (
-            <ShieldOff className="mr-1 h-3 w-3" />
-          )}
-          {row.original.role}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const role = row.original.role as AccountRole
+        const config = ROLE_CONFIG[role] || ROLE_CONFIG.member
+        const Icon = config.icon
+        return (
+          <Badge variant="secondary" className={config.color}>
+            <Icon className="mr-1 h-3 w-3" />
+            {config.label}
+          </Badge>
+        )
+      },
     },
     {
       accessorKey: "created_at",
@@ -498,32 +537,31 @@ function UsersTable({
     },
     {
       id: "actions",
-      header: () => <div className="text-right">Actions</div>,
+      header: () => <div className="text-right">Role</div>,
       cell: ({ row }) => {
         const isSelf = row.original.id === currentUserId
+        const isUpdating = updatingUserId === row.original.id
+
         if (isSelf) return null
 
         return (
           <div className="text-right">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={updatingUserId === row.original.id}
-              onClick={() =>
-                onRoleChange(
-                  row.original.id,
-                  row.original.role === "admin" ? "general" : "admin"
-                )
-              }
+            <Select
+              value={row.original.role}
+              onValueChange={(val) => onRoleChange(row.original.id, val as AccountRole)}
+              disabled={isUpdating}
             >
-              {updatingUserId === row.original.id ? (
-                <LoadingDots color="#808080" />
-              ) : row.original.role === "admin" ? (
-                "Remove Admin"
-              ) : (
-                "Make Admin"
-              )}
-            </Button>
+              <SelectTrigger className="ml-auto w-[130px] h-8 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACCOUNT_ROLES.map((role) => (
+                  <SelectItem key={role} value={role}>
+                    {ROLE_CONFIG[role].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )
       },
@@ -568,8 +606,11 @@ function UsersTable({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Roles</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="general">General</SelectItem>
+            {ACCOUNT_ROLES.map((role) => (
+              <SelectItem key={role} value={role}>
+                {ROLE_CONFIG[role].label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <DropdownMenu>
@@ -612,7 +653,7 @@ function UsersTable({
                       ? null
                       : flexRender(
                           header.column.columnDef.header,
-                          header.getContext()
+                          header.getContext(),
                         )}
                   </TableHead>
                 ))}
@@ -630,7 +671,7 @@ function UsersTable({
                     <TableCell key={cell.id}>
                       {flexRender(
                         cell.column.columnDef.cell,
-                        cell.getContext()
+                        cell.getContext(),
                       )}
                     </TableCell>
                   ))}

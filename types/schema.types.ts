@@ -97,6 +97,8 @@ export interface Rosters {
   team_id?: string /* foreign key to teams.id */;
   person_id?: string /* foreign key to people.id */;
   fee_id?: string /* foreign key to fees.id */;
+  /** dollars; when set, overrides fees.amount for billing */
+  custom_amount?: number | null;
   jersey_number?: number;
   position?: string;
   grade?: string;
@@ -120,6 +122,8 @@ export interface Teams {
   is_public?: boolean;
   is_active?: boolean;
   slug?: string;
+  /** default catalog fee when adding roster members */
+  fee_id?: string | null;
   accounts?: Accounts;
   team_awards?: TeamAwards[];
 }

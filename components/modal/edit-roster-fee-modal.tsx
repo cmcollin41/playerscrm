@@ -31,22 +31,14 @@ const GRADE_OPTIONS = [
   "Graduated",
 ] as const
 
-interface Fee {
-  id: string;
-  name: string;
-  amount: number;
-}
-
 interface EditRosterFeeModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   rosterId: string;
-  currentFeeId: string | null;
   currentJerseyNumber?: number | null;
   currentPosition?: string | null;
   currentGrade?: string | null;
   currentBio?: string | null;
-  personId: string;
   currentHeight?: string | null;
   currentPhoto?: string | null;
   accountId: string;
@@ -58,12 +50,10 @@ export default function EditRosterFeeModal({
   open,
   onOpenChange,
   rosterId,
-  currentFeeId,
   currentJerseyNumber,
   currentPosition,
   currentGrade,
   currentBio,
-  personId,
   currentHeight,
   currentPhoto,
   accountId,
@@ -72,8 +62,6 @@ export default function EditRosterFeeModal({
 }: EditRosterFeeModalProps) {
   const { refresh } = useRouter();
   const supabase = createClient();
-  const [fees, setFees] = useState<Fee[]>([]);
-  const [selectedFeeId, setSelectedFeeId] = useState<string | undefined>(undefined);
   const [jerseyNumber, setJerseyNumber] = useState<string>("");
   const [position, setPosition] = useState<string>("");
   const [grade, setGrade] = useState<string>("");
@@ -86,25 +74,7 @@ export default function EditRosterFeeModal({
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const fetchFees = async () => {
-      const account = await getAccount();
-      
-      const { data: fees, error } = await supabase
-        .from("fees")
-        .select("*")
-        .eq("is_active", true)
-        .eq("account_id", account?.id);
-
-      if (error) {
-        console.error("Error fetching fees:", error);
-      } else {
-        setFees(fees || []);
-      }
-    };
-
     if (open) {
-      fetchFees();
-      setSelectedFeeId(currentFeeId || undefined);
       setJerseyNumber(currentJerseyNumber != null ? String(currentJerseyNumber) : "");
       setPosition(currentPosition || "");
       setGrade(currentGrade || "");
@@ -120,7 +90,6 @@ export default function EditRosterFeeModal({
           .then(({ data }) => setAwards(data ?? []));
       }
 
-      // Fetch award types
       getAccount().then((account) => {
         if (account?.id) {
           supabase
@@ -132,7 +101,17 @@ export default function EditRosterFeeModal({
         }
       });
     }
-  }, [open, currentFeeId, currentJerseyNumber, currentPosition, currentGrade, currentBio, currentHeight, currentPhoto, rosterId, supabase]);
+  }, [
+    open,
+    currentJerseyNumber,
+    currentPosition,
+    currentGrade,
+    currentBio,
+    currentHeight,
+    currentPhoto,
+    rosterId,
+    supabase,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,13 +119,6 @@ export default function EditRosterFeeModal({
 
     try {
       const updateData: Record<string, unknown> = {};
-      
-      if (!selectedFeeId || selectedFeeId === "none") {
-        updateData.fee_id = null;
-      } else {
-        updateData.fee_id = selectedFeeId;
-      }
-
       updateData.jersey_number = jerseyNumber ? Number(jerseyNumber) : null;
       updateData.position = position && position !== "none_clear" ? position : null;
       updateData.grade = grade && grade !== "none_clear" ? grade : null;
@@ -161,16 +133,16 @@ export default function EditRosterFeeModal({
 
       if (error) throw error;
 
-      toast.success("Roster entry updated");
+      toast.success("Roster updated");
       onOpenChange(false);
       if (onRefresh) {
         onRefresh();
       } else {
         refresh();
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating roster:", error);
-      toast.error(error.message || "Failed to update roster entry");
+      toast.error(error instanceof Error ? error.message : "Failed to update roster");
     } finally {
       setIsLoading(false);
     }
@@ -180,7 +152,7 @@ export default function EditRosterFeeModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Edit Roster — {personName}</DialogTitle>
+          <DialogTitle>Edit roster — {personName}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
@@ -357,26 +329,6 @@ export default function EditRosterFeeModal({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="fee">Fee</Label>
-            <Select
-              value={selectedFeeId || "none"}
-              onValueChange={(value) => setSelectedFeeId(value === "none" ? undefined : value)}
-            >
-              <SelectTrigger id="fee">
-                <SelectValue placeholder="No fee" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No Fee</SelectItem>
-                {fees.map((fee) => (
-                  <SelectItem key={fee.id} value={fee.id}>
-                    {fee.name} - ${fee.amount}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="bio">Season Bio</Label>
             <Textarea
               id="bio"
@@ -387,6 +339,10 @@ export default function EditRosterFeeModal({
               onChange={(e) => setBio(e.target.value)}
             />
           </div>
+
+          <p className="text-xs text-muted-foreground">
+            Fees and invoices are managed from the receipt icon on the team roster row.
+          </p>
 
           <div className="flex justify-end space-x-2">
             <Button

@@ -4,6 +4,15 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 
 import { createClient } from '@/lib/supabase/server'
+import { createClient as createAdminClient } from '@/lib/supabase/admin'
+import { authCallbackRedirectUrl } from '@/lib/auth-site'
+import {
+  ensureAccountMembership,
+  normalizeSignupEmail,
+  parseInviteRole,
+  resolvePeopleIdForAccountSignup,
+  syncProfileAfterSignup,
+} from '@/lib/signup-invite'
 
 export async function login(formData: any): Promise<{ error?: string } | void> {
   const supabase = await createClient()
@@ -28,56 +37,45 @@ export async function login(formData: any): Promise<{ error?: string } | void> {
 
 export async function signup(formData: FormData): Promise<{ error?: string } | void> {
   const supabase = await createClient()
+  const admin = createAdminClient()
 
-  const email = String(formData.get("email"))
+  const emailRaw = String(formData.get("email") || "")
+  const email = normalizeSignupEmail(emailRaw)
   const password = String(formData.get("password"))
-  const account_id = String(formData.get("account_id"))
-  const people_id = String(formData.get("people_id"))
-  const first_name = String(formData.get("first_name"))
-  const last_name = String(formData.get("last_name"))
+  const account_id = String(formData.get("account_id") || "")
+  const people_id_raw = String(formData.get("people_id") || "").trim()
+  const explicitPeopleId = people_id_raw.length > 0 ? people_id_raw : null
+  const first_name = String(formData.get("first_name") || "")
+  const last_name = String(formData.get("last_name") || "")
   const from_events = formData.get("from_events") as string | null
+  const invite_role = parseInviteRole(String(formData.get("invite_role") || ""))
 
-  const domain =
-    process.env.NODE_ENV === "production"
-      ? "https://app.athletes.app"
-      : "http://app.localhost:3000"
+  if (!email || !password || !account_id) {
+    return redirect(`/login?error=${encodeURIComponent("Email, password, and account are required")}`)
+  }
 
-  const payload: any = {
-    first_name: first_name,
-    last_name: last_name,
-    email: email,
-    account_id: account_id,
+  const people_id = await resolvePeopleIdForAccountSignup(
+    admin,
+    account_id,
+    email,
+    explicitPeopleId,
+  )
+
+  const payload: Record<string, unknown> = {
+    first_name,
+    last_name,
+    email,
+    account_id,
     role: "general",
+    invite_role,
   }
+  if (people_id) payload.people_id = people_id
 
-  if (people_id) {
-    payload["people_id"] = people_id
-  } else {
-    const { data, error } = await supabase
-      .from("people")
-      .insert({
-        account_id: account_id,
-        first_name: first_name,
-        last_name: last_name,
-        email: email,
-        name: first_name + " " + last_name,
-        dependent: false,
-      })
-      .select()
-
-    if (error) {
-      console.log("-- Error creating people", email)
-      return redirect(`/login?error=Could not create user profile`)
-    } else {
-      payload["people_id"] = data?.[0].id || null
-    }
-  }
-
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+  const { error: signUpError } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      emailRedirectTo: `${domain}/api/auth/callback`,
+      emailRedirectTo: authCallbackRedirectUrl("/"),
       data: payload,
     },
   })
@@ -87,20 +85,33 @@ export async function signup(formData: FormData): Promise<{ error?: string } | v
     return redirect(`/login?error=Could not create user account`)
   }
 
-  // After successful signup, sign in the user
   const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
     email,
     password,
   })
 
-  if (signInError) {
+  if (signInError || !signInData.user) {
     console.log("SIGN IN ERROR", signInError)
     return redirect(`/login?error=Account created but could not sign in. Please try logging in.`)
   }
 
-  let redirectUrl = from_events === "true"
-    ? `/dashboard?from_events=true&account_id=${account_id}`
-    : `/dashboard`
+  const userId = signInData.user.id
+
+  await ensureAccountMembership(admin, account_id, userId, invite_role)
+  await syncProfileAfterSignup(
+    admin,
+    userId,
+    account_id,
+    people_id,
+    first_name,
+    last_name,
+    email,
+  )
+
+  let redirectUrl =
+    from_events === "true"
+      ? `/dashboard?from_events=true&account_id=${account_id}`
+      : `/dashboard`
 
   revalidatePath('/', 'layout')
   return redirect(redirectUrl)
@@ -126,7 +137,7 @@ export async function resetPassword(email: string) {
   }
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_BASE_URL}/update-password`,
+    redirectTo: authCallbackRedirectUrl("/update-password"),
   })
 
   if (error) {

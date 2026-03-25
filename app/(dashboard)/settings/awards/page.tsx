@@ -202,11 +202,11 @@ export default function AwardTypesPage() {
     <div className="flex flex-col space-y-6 py-8">
       <div>
         <Link
-          href="/settings"
+          href="/settings/account"
           className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          Settings
+          Workspace settings
         </Link>
         <h1 className="font-cal text-3xl font-bold">Award Types</h1>
         <p className="text-muted-foreground mt-1 text-sm">

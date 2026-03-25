@@ -90,11 +90,11 @@ export default function FeesPage() {
     <div className="flex flex-col space-y-6 py-8">
       <div>
         <Link
-          href="/settings"
+          href="/settings/account"
           className="text-muted-foreground mb-2 inline-flex items-center gap-1 text-sm hover:text-gray-900"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          Settings
+          Workspace settings
         </Link>
         <div className="flex items-center justify-between">
           <div>

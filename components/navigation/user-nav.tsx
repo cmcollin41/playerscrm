@@ -36,6 +36,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import {
   DollarSign,
+  KeyRound,
   LogOut,
   Settings,
   Shield,
@@ -61,7 +62,9 @@ export function UserNav({ userRole = "general", userInitials, userPhoto }: UserN
   const [inviteEmail, setInviteEmail] = useState("")
   const [inviteFirstName, setInviteFirstName] = useState("")
   const [inviteLastName, setInviteLastName] = useState("")
-  const [inviteRole, setInviteRole] = useState<UserRole>("general")
+  const [inviteRole, setInviteRole] = useState<
+    "member" | "manager" | "admin"
+  >("member")
   const supabase = createClient()
   const router = useRouter()
 
@@ -94,7 +97,7 @@ export function UserNav({ userRole = "general", userInitials, userPhoto }: UserN
     setInviteEmail("")
     setInviteFirstName("")
     setInviteLastName("")
-    setInviteRole("general")
+    setInviteRole("member")
   }
 
   const handleInvite = async () => {
@@ -173,6 +176,15 @@ export function UserNav({ userRole = "general", userInitials, userPhoto }: UserN
               <Link href="/settings" className="flex w-full cursor-pointer items-center">
                 <Settings className="mr-2 h-3.5 w-3.5" />
                 Settings
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                href="/settings/profile"
+                className="flex w-full cursor-pointer items-center"
+              >
+                <KeyRound className="mr-2 h-3.5 w-3.5" />
+                Your profile
               </Link>
             </DropdownMenuItem>
           </DropdownMenuGroup>
@@ -272,18 +284,22 @@ export function UserNav({ userRole = "general", userInitials, userPhoto }: UserN
               <Label htmlFor="invite-role">Role</Label>
               <Select
                 value={inviteRole}
-                onValueChange={(val) => setInviteRole(val as UserRole)}
+                onValueChange={(val) =>
+                  setInviteRole(val as "member" | "manager" | "admin")
+                }
               >
                 <SelectTrigger id="invite-role">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="general">General</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500">
-                Admins can manage users, fees, emails, and invoices.
+                Role when they accept the invite. Admins can manage users, fees,
+                emails, and invoices.
               </p>
             </div>
           </div>

@@ -11,6 +11,31 @@ export async function POST(req: NextRequest) {
     console.log("PROFILE IN CHECKOUT", profile);
     let customer = null;
 
+    const { data: rosterRow, error: rosterRowError } = await supabase
+      .from("rosters")
+      .select("id, fee_id, custom_amount")
+      .eq("id", roster.id)
+      .single();
+
+    if (rosterRowError || !rosterRow) {
+      return NextResponse.json(
+        { message: "Invalid roster", customMessage: "Error on checkout" },
+        { status: 400 },
+      );
+    }
+
+    if (rosterRow.fee_id !== fee.id) {
+      return NextResponse.json(
+        { message: "Fee does not match roster", customMessage: "Error on checkout" },
+        { status: 400 },
+      );
+    }
+
+    const chargeDollars =
+      rosterRow.custom_amount != null
+        ? Number(rosterRow.custom_amount)
+        : Number(fee.amount);
+
     // search for customer
     const { data: customerData } = await stripe.customers.list(
       {
@@ -67,7 +92,7 @@ export async function POST(req: NextRequest) {
       if (profile.accounts.stripe_id && profile.accounts.application_fee) {
         paymentIntent = await stripe.paymentIntents.create(
           {
-            amount: fee.amount * 100,
+            amount: Math.round(chargeDollars * 100),
             customer: customer.id,
             currency: "usd",
             setup_future_usage: "off_session",
@@ -76,7 +101,7 @@ export async function POST(req: NextRequest) {
               enabled: true,
             },
             application_fee_amount:
-              fee.amount * profile.accounts.application_fee,
+              chargeDollars * profile.accounts.application_fee,
             metadata: {
               fee_id: fee.id,
               roster_id: roster.id,
@@ -90,7 +115,7 @@ export async function POST(req: NextRequest) {
         );
       } else {
         paymentIntent = await stripe.paymentIntents.create({
-          amount: fee.amount * 100,
+          amount: Math.round(chargeDollars * 100),
           customer: customer.id,
           currency: "usd",
           setup_future_usage: "off_session",
@@ -120,7 +145,7 @@ export async function POST(req: NextRequest) {
             payment_intent_id: paymentIntent.id,
             roster_id: roster.id,
             fee_id: fee.id,
-            amount: fee.amount,
+            amount: chargeDollars,
             status: "pending",
           },
         ])

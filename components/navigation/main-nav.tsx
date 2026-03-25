@@ -19,14 +19,8 @@ export function MainNav({ className, userRole = "general", ...props }: MainNavPr
       {...props}
     >
       <Link
-        href="/"
-        className="text-sm font-medium transition-colors hover:text-zinc-900"
-      >
-        Overview
-      </Link>
-      <Link
         href="/people"
-        className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
+        className="text-sm font-medium transition-colors hover:text-zinc-900"
       >
         People
       </Link>
@@ -56,14 +50,6 @@ export function MainNav({ className, userRole = "general", ...props }: MainNavPr
           className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
         >
           Emails
-        </Link>
-      )}
-      {isAdmin && (
-        <Link
-          href="/settings"
-          className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
-        >
-          Settings
         </Link>
       )}
     </nav>

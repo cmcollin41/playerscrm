@@ -1,35 +1,17 @@
-import { createClient } from "@/lib/supabase/server"
+import { createClient as createAdminClient } from "@/lib/supabase/admin"
+import { requireAccountAdminApi } from "@/lib/auth"
 import { NextResponse } from "next/server"
 import { sendTransactionalEmail } from "@/lib/email-service"
+import { encryptId } from "@/app/utils/ecryption"
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient()
+    const auth = await requireAccountAdminApi()
+    if (!auth.ok) return auth.response
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { supabase, user, activeAccountId, profile: callerProfile } = auth
 
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const { data: rawCallerProfile } = await supabase
-      .from("profiles")
-      .select("account_id, current_account_id, role, first_name, last_name")
-      .eq("id", user.id)
-      .single()
-
-    const callerProfile = rawCallerProfile ? { ...rawCallerProfile, account_id: rawCallerProfile.current_account_id || rawCallerProfile.account_id } : null
-
-    if (!callerProfile?.account_id || callerProfile.role !== "admin") {
-      return NextResponse.json(
-        { error: "Forbidden: admin access required" },
-        { status: 403 }
-      )
-    }
-
-    const { email, firstName, lastName, role = "general" } = await req.json()
+    const { email, firstName, lastName, role = "member" } = await req.json()
 
     if (!email) {
       return NextResponse.json(
@@ -38,31 +20,41 @@ export async function POST(req: Request) {
       )
     }
 
-    if (role !== "admin" && role !== "general") {
+    const { isValidAccountRole } = await import("@/lib/roles")
+    if (!isValidAccountRole(role)) {
       return NextResponse.json(
         { error: "Invalid role" },
         { status: 400 }
       )
     }
 
-    const { data: existingProfile } = await supabase
+    const admin = createAdminClient()
+    const { data: existingByEmail } = await admin
       .from("profiles")
       .select("id")
       .eq("email", email)
-      .eq("account_id", callerProfile.account_id)
       .maybeSingle()
 
-    if (existingProfile) {
-      return NextResponse.json(
-        { error: "A user with this email already exists in your account" },
-        { status: 409 }
-      )
+    if (existingByEmail) {
+      const { data: alreadyMember } = await admin
+        .from("account_members")
+        .select("id")
+        .eq("account_id", activeAccountId)
+        .eq("profile_id", existingByEmail.id)
+        .maybeSingle()
+
+      if (alreadyMember) {
+        return NextResponse.json(
+          { error: "This person is already a member of this account" },
+          { status: 409 }
+        )
+      }
     }
 
     const { data: account } = await supabase
       .from("accounts")
       .select("id, name, senders(id, name, email)")
-      .eq("id", callerProfile.account_id)
+      .eq("id", activeAccountId)
       .single()
 
     if (!account) {
@@ -72,15 +64,13 @@ export async function POST(req: Request) {
       )
     }
 
-    const domain =
-      process.env.NODE_ENV === "production"
-        ? "https://app.athletes.app"
-        : "http://app.localhost:3000"
+    const { getAuthSiteUrl } = await import("@/lib/auth-site")
 
-    const signupUrl = new URL("/login", domain)
+    const signupUrl = new URL("/login", getAuthSiteUrl())
     signupUrl.searchParams.set("sign_up", "true")
-    signupUrl.searchParams.set("account_id", callerProfile.account_id)
-    signupUrl.searchParams.set("email", email)
+    signupUrl.searchParams.set("account_id", activeAccountId)
+    signupUrl.searchParams.set("email", encryptId(email))
+    signupUrl.searchParams.set("invite_role", role)
     if (firstName) signupUrl.searchParams.set("first_name", firstName)
     if (lastName) signupUrl.searchParams.set("last_name", lastName)
 
@@ -125,7 +115,7 @@ export async function POST(req: Request) {
         to: email,
         subject: `You're invited to join ${account.name}`,
         html,
-        account_id: callerProfile.account_id,
+        account_id: activeAccountId,
         metadata: { type: "invite", role },
       })
     }

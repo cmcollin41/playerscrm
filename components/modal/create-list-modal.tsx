@@ -47,7 +47,7 @@ export default function CreateListModal({ account }: { account: any }) {
   };
 
   return (
-    <>
+    <div className="p-6">
       <DialogHeader>
         <DialogTitle>New List</DialogTitle>
       </DialogHeader>
@@ -79,6 +79,6 @@ export default function CreateListModal({ account }: { account: any }) {
           </Button>
         </DialogFooter>
       </form>
-    </>
+    </div>
   );
 }

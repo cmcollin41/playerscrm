@@ -19,6 +19,11 @@ import { Users, DollarSign, CheckCircle, AlertCircle, X, Trophy, Pencil } from "
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import {
+  effectiveRosterOwedDollars,
+  rosterCollectedDollars,
+  rosterIsPaid,
+} from "@/lib/roster-pricing";
 
 const LEVEL_LABELS: Record<string, string> = {
   bantam: "Bantam",
@@ -27,6 +32,10 @@ const LEVEL_LABELS: Record<string, string> = {
   sophomore: "Sophomore",
   jv: "JV",
   varsity: "Varsity",
+}
+
+function rosterOwedNumber(roster: any): number {
+  return effectiveRosterOwedDollars(roster) ?? 0;
 }
 
 async function getPrimaryContacts(supabase: any, person: any) {
@@ -86,6 +95,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
   const [team, setTeam] = useState<any>({});
 
   const [peopleWithPrimaryEmail, setPeopleWithPrimaryEmail] = useState<any>([]);
+  const [emailSendCounts, setEmailSendCounts] = useState<Record<string, number> | null>(null);
 
   // Fetch team data function (extracted so we can call it from callbacks)
   const fetchTeam = async () => {
@@ -223,32 +233,73 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
     };
 
     getPrimaryEmail();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [team?.id, team?.rosters?.length]);
+    // Must depend on `team`, not just roster count — invoice links and fees
+    // update nested `people.invoices` without changing the roster length.
+  }, [team]);
 
-  // Calculate team statistics
+  // Fetch email send counts for all invoices in this team's rosters
+  useEffect(() => {
+    if (!team?.rosters?.length) return;
+
+    const invoiceIds: string[] = [];
+    for (const roster of team.rosters) {
+      const invoices = roster.people?.invoices || [];
+      for (const inv of invoices) {
+        if (inv.id && inv.roster_id === roster.id) {
+          invoiceIds.push(inv.id);
+        }
+      }
+    }
+    if (invoiceIds.length === 0) {
+      setEmailSendCounts({});
+      return;
+    }
+
+    const fetchCounts = async () => {
+      // Query emails that have metadata containing each invoice_id
+      // Use containedBy/contains filter per invoice, batched
+      const counts: Record<string, number> = {};
+      const batchSize = 20;
+      for (let i = 0; i < invoiceIds.length; i += batchSize) {
+        const batch = invoiceIds.slice(i, i + batchSize);
+        const results = await Promise.all(
+          batch.map(async (invId) => {
+            const { count } = await supabase
+              .from("emails")
+              .select("id", { count: "exact", head: true })
+              .eq("email_type", "transactional")
+              .contains("metadata", { invoice_id: invId });
+            return { invId, count: count || 0 };
+          }),
+        );
+        for (const { invId, count } of results) {
+          if (count > 0) counts[invId] = count;
+        }
+      }
+      setEmailSendCounts(counts);
+    };
+
+    fetchCounts();
+  }, [team]);
+
+  // Calculate team statistics (aligned with roster table: fee payments + linked invoices)
   const stats = {
     totalPlayers: team?.rosters?.length || 0,
     staffCount: team?.staff?.length || 0,
-    totalFees: team?.rosters?.reduce((sum: number, roster: any) => {
-      return sum + (roster.fees?.amount || 0);
-    }, 0) || 0,
-    paidFees: team?.rosters?.reduce((sum: number, roster: any) => {
-      const hasPaidPayment = roster.fees?.payments?.some(
-        (payment: any) => 
-          payment.person_id === roster.person_id && 
-          payment.status === "succeeded"
-      );
-      return sum + (hasPaidPayment ? (roster.fees?.amount || 0) : 0);
-    }, 0) || 0,
-    playersWithFees: team?.rosters?.filter((r: any) => r.fees?.amount).length || 0,
-    paidPlayers: team?.rosters?.filter((roster: any) => {
-      return roster.fees?.payments?.some(
-        (payment: any) => 
-          payment.person_id === roster.person_id && 
-          payment.status === "succeeded"
-      );
-    }).length || 0,
+    totalFees:
+      team?.rosters?.reduce(
+        (sum: number, roster: any) => sum + rosterOwedNumber(roster),
+        0,
+      ) || 0,
+    paidFees:
+      team?.rosters?.reduce(
+        (sum: number, roster: any) => sum + rosterCollectedDollars(roster),
+        0,
+      ) || 0,
+    playersWithFees:
+      team?.rosters?.filter((r: any) => rosterOwedNumber(r) > 0).length || 0,
+    paidPlayers:
+      team?.rosters?.filter((roster: any) => rosterIsPaid(roster)).length || 0,
   };
 
   const outstandingFees = stats.totalFees - stats.paidFees;
@@ -324,7 +375,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalPlayers}</div>
+            <div className="text-2xl font-bold font-mono">{stats.totalPlayers}</div>
             <p className="text-xs text-muted-foreground">
               {stats.playersWithFees} with fees assigned
             </p>
@@ -337,7 +388,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold font-mono">
               ${stats.totalFees.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -352,7 +403,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-2xl font-bold font-mono text-green-600">
               ${stats.paidFees.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -367,7 +418,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             <AlertCircle className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
+            <div className="text-2xl font-bold font-mono text-yellow-600">
               ${outstandingFees.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground">
@@ -473,6 +524,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             team={team}
             account={account}
             onRefresh={fetchTeam}
+            emailSendCounts={emailSendCounts}
           />
         </CardContent>
       </Card>

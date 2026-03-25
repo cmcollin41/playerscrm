@@ -140,7 +140,7 @@ export default function AddToTeamModal({
   }
 
   return (
-    <>
+    <div className="p-6">
       <DialogHeader>
         <DialogTitle>Add to Team</DialogTitle>
       </DialogHeader>
@@ -208,6 +208,6 @@ export default function AddToTeamModal({
           </Button>
         </DialogFooter>
       </form>
-    </>
+    </div>
   );
 }
