@@ -188,22 +188,29 @@ const createColumns = (
       const roster = team.rosters?.find(
         (r: any) => r.person_id === row.original.id,
       );
-      const totalInvoiced = rosterTotalInvoicedDollars(roster);
       const template = rosterTemplateDollars(roster);
-      const displayAmount = totalInvoiced > 0 ? totalInvoiced : template;
+      const totalInvoiced = rosterTotalInvoicedDollars(roster);
 
-      if (displayAmount == null || displayAmount <= 0) {
+      if (template != null && template > 0) {
         return (
-          <Badge variant="outline" className="bg-gray-50 text-gray-600 whitespace-nowrap">
-            No Fee
-          </Badge>
+          <span className="font-medium font-mono text-sm">
+            ${template.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </span>
+        );
+      }
+
+      if (totalInvoiced > 0) {
+        return (
+          <span className="font-medium font-mono text-sm text-muted-foreground" title="No fee assigned — showing total invoiced">
+            ${totalInvoiced.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </span>
         );
       }
 
       return (
-        <span className="font-medium font-mono text-sm">
-          ${displayAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-        </span>
+        <Badge variant="outline" className="bg-gray-50 text-gray-600 whitespace-nowrap">
+          No Fee
+        </Badge>
       );
     },
   },
@@ -261,24 +268,27 @@ const createColumns = (
     },
   },
   {
-    id: "invoices",
-    header: "",
+    id: "invoiced",
+    header: "Invoiced",
     cell: ({ row }: { row: any }) => {
       const person = row.original;
       const roster = team.rosters?.find((r: any) => r.person_id === person.id);
       const rosterInvs = roster ? invoicesForRoster(roster) : [];
+      const totalInvoiced = rosterTotalInvoicedDollars(roster);
 
-      if (rosterInvs.length === 0) return null;
+      if (rosterInvs.length === 0) return <span className="text-xs text-gray-400">—</span>;
 
       return (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-auto px-2 py-1 text-xs"
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 font-mono text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
           onClick={() => onViewInvoices(person, roster)}
         >
-          Invoices ({rosterInvs.length})
-        </Button>
+          ${totalInvoiced.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          <span className="font-sans text-[10px] font-normal text-muted-foreground">
+            ({rosterInvs.length})
+          </span>
+        </button>
       );
     },
   },
