@@ -7,8 +7,9 @@ interface RouteParams {
 }
 
 /**
- * PATCH body: { fee_id, custom_amount }
- * Updates the roster's billing template (what to charge next).
+ * PATCH body: { fee_id, custom_amount, payment_status, payment_status_note }
+ * Updates the roster's billing template (what to charge next) and optional
+ * manual payment status override.
  * Does NOT touch invoice links — invoices are linked at creation time
  * via POST /api/invoices and stay linked permanently.
  */
@@ -38,6 +39,16 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       }
       custom_amount = n
     }
+
+    const VALID_PAYMENT_STATUSES = ["paid", "waived"]
+    const rawPaymentStatus = body.payment_status
+    const payment_status =
+      rawPaymentStatus && VALID_PAYMENT_STATUSES.includes(rawPaymentStatus)
+        ? rawPaymentStatus
+        : null
+    const payment_status_note = payment_status
+      ? (body.payment_status_note ?? null)
+      : null
 
     const userSb = await createClient()
     const {
@@ -95,9 +106,16 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       }
     }
 
+    const rosterUpdate: Record<string, unknown> = {
+      payment_status,
+      payment_status_note,
+    }
+    if ("fee_id" in body) rosterUpdate.fee_id = fee_id
+    if ("custom_amount" in body) rosterUpdate.custom_amount = custom_amount
+
     const { error: rosterErr } = await admin
       .from("rosters")
-      .update({ fee_id, custom_amount })
+      .update(rosterUpdate)
       .eq("id", rosterId)
 
     if (rosterErr) {

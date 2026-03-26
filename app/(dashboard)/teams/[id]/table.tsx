@@ -43,7 +43,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 
 import { useRouter } from "next/navigation";
-import { CheckCircle, FileText, AlertCircle, Receipt } from "lucide-react";
+import { CheckCircle, FileText, AlertCircle, Receipt, ShieldCheck, Banknote, DollarSign } from "lucide-react";
+import Image from "next/image";
 import SendEmailSheet from "@/components/modal/send-email-sheet";
 import { RosterBillingModal } from "@/components/modal/roster-billing-modal";
 import { RosterInvoicesDialog } from "@/components/modal/roster-invoices-dialog";
@@ -59,20 +60,26 @@ import {
 function paymentStatus(
   _person: Person,
   roster: any,
-): "paid" | "partial" | "sent" | "draft" | "unpaid" | "none" {
-  const invs = roster ? invoicesForRoster(roster) : [];
-  if (invs.length === 0) return "none";
+): "paid" | "waived" | "partial" | "sent" | "draft" | "unpaid" | "none" {
+  if (roster?.payment_status === "paid") return "paid"
+  if (roster?.payment_status === "waived") return "waived"
 
-  if (rosterIsPaid(roster)) return "paid";
-  if (rosterPartiallyPaidViaInvoices(roster)) return "partial";
+  const fee = rosterTemplateDollars(roster)
+  if (fee == null || fee <= 0) return "none"
 
-  const unpaidSent = unpaidSentInvoicesForRoster(roster);
-  if (unpaidSent.length > 0) return "sent";
+  if (rosterIsPaid(roster)) return "paid"
+  if (rosterPartiallyPaidViaInvoices(roster)) return "partial"
 
-  const draftInv = invs.find((i: { status?: string }) => i.status === "draft");
-  if (draftInv) return "draft";
+  const invs = roster ? invoicesForRoster(roster) : []
+  const unpaidSent = unpaidSentInvoicesForRoster(roster)
+  if (unpaidSent.length > 0) return "sent"
 
-  return "unpaid";
+  const draftInv = invs.find((i: { status?: string }) => i.status === "draft")
+  if (draftInv) return "draft"
+
+  if (invs.length > 0) return "unpaid"
+
+  return "none"
 }
 
 export type Person = {
@@ -233,7 +240,14 @@ const createColumns = (
           <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
             <CheckCircle className="mr-1 h-3 w-3" /> Paid
           </Badge>
-        );
+        )
+
+      if (status === "waived")
+        return (
+          <Badge className="bg-violet-100 text-violet-800 hover:bg-violet-100">
+            <ShieldCheck className="mr-1 h-3 w-3" /> Waived
+          </Badge>
+        )
 
       if (status === "partial")
         return (
@@ -275,19 +289,46 @@ const createColumns = (
       const roster = team.rosters?.find((r: any) => r.person_id === person.id);
       const rosterInvs = roster ? invoicesForRoster(roster) : [];
 
-      if (rosterInvs.length === 0) return <span className="text-xs text-gray-400">—</span>;
+      if (rosterInvs.length > 0)
+        return (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => onViewInvoices(person, roster)}
+          >
+            <FileText className="mr-1 h-3 w-3" />
+            Invoices ({rosterInvs.length})
+          </Button>
+        )
 
-      return (
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 text-xs"
-          onClick={() => onViewInvoices(person, roster)}
-        >
-          <FileText className="mr-1 h-3 w-3" />
-          Invoices ({rosterInvs.length})
-        </Button>
-      );
+      const method = roster?.payment_status === "paid" ? roster.payment_status_note : null
+      if (method === "venmo")
+        return (
+          <Badge className="bg-[#e8f0fe] hover:bg-[#e8f0fe] px-2 py-1">
+            <Image src="/venmo-logo.svg" alt="Venmo" width={48} height={10} className="h-2.5 w-auto" />
+          </Badge>
+        )
+      if (method === "cashapp")
+        return (
+          <Badge className="bg-[#00D54B]/10 hover:bg-[#00D54B]/10 px-2 py-1">
+            <Image src="/cashapp-logo.svg" alt="Cash App" width={60} height={12} className="h-3 w-auto" />
+          </Badge>
+        )
+      if (method === "cash")
+        return (
+          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+            <Banknote className="mr-1 h-3 w-3" /> Cash
+          </Badge>
+        )
+      if (method === "other")
+        return (
+          <Badge variant="outline" className="text-muted-foreground">
+            <DollarSign className="mr-1 h-3 w-3" /> Other
+          </Badge>
+        )
+
+      return <span className="text-xs text-gray-400">—</span>
     },
   },
   {

@@ -8,9 +8,9 @@ import {
 } from "./invoice-aggregates"
 
 /**
- * The roster's billing template: fee catalog amount or custom override.
- * Use this when previewing what the *next* invoice will charge, NOT for
- * how much is actually owed (which comes from issued invoices).
+ * The roster's fee: custom override or catalog amount.
+ * This is what the player owes for the roster spot — the source of truth
+ * for paid/partial/unpaid status. Invoices are payments against this fee.
  */
 export function rosterTemplateDollars(roster: any): number | null {
   if (!roster) return null
@@ -66,20 +66,15 @@ export function rosterPaidInvoiceTotalDollars(roster: any): number {
 }
 
 /**
- * What this roster actually owes: sum of unpaid (non-void, non-paid) invoice
- * amounts. Returns null when no invoices exist.
+ * What this roster still owes: fee amount minus total collected.
+ * Returns null when no fee is set.
  */
 export function effectiveRosterOwedDollars(roster: any): number | null {
-  const invs = invoicesForRoster(roster)
-  if (invs.length === 0) return null
-  const unpaid = invs
-    .filter((inv: any) => inv.status !== "paid")
-    .reduce(
-      (sum: number, inv: any) =>
-        sum + (inv.amount != null ? Number(inv.amount) : 0),
-      0,
-    )
-  return unpaid > 0 ? unpaid : 0
+  const fee = rosterTemplateDollars(roster)
+  if (fee == null || fee <= 0) return null
+  const collected = rosterTotalPaidCollectedDollars(roster)
+  const remaining = fee - collected
+  return remaining > 0 ? remaining : 0
 }
 
 /**
@@ -122,35 +117,37 @@ export function rosterPaidViaFeePayment(roster: any): boolean {
 }
 
 /**
- * Roster fully paid: total collected (fee payments + paid invoices) covers
- * total invoiced amount.
+ * Roster fully paid: manual override takes precedence, otherwise
+ * total collected (fee payments + paid invoices) covers the fee amount.
  */
 export function rosterIsPaid(roster: any): boolean {
-  const totalInvoiced = rosterTotalInvoicedDollars(roster)
-  if (totalInvoiced <= 0) return false
+  if (roster?.payment_status === "paid" || roster?.payment_status === "waived")
+    return true
+  const fee = rosterTemplateDollars(roster)
+  if (fee == null || fee <= 0) return false
   return (
     dollarsToCents(rosterTotalPaidCollectedDollars(roster)) >=
-    dollarsToCents(totalInvoiced)
+    dollarsToCents(fee)
   )
 }
 
 export function rosterPaidViaInvoices(roster: any): boolean {
-  const totalInvoiced = rosterTotalInvoicedDollars(roster)
-  if (totalInvoiced <= 0) return false
+  const fee = rosterTemplateDollars(roster)
+  if (fee == null || fee <= 0) return false
   const paidSum = rosterPaidInvoiceTotalDollars(roster)
-  return dollarsToCents(paidSum) >= dollarsToCents(totalInvoiced)
+  return dollarsToCents(paidSum) >= dollarsToCents(fee)
 }
 
 /**
- * Some payment captured but not fully covering total invoiced.
+ * Some payment captured but not fully covering the fee amount.
  */
 export function rosterPartiallyPaidViaInvoices(roster: any): boolean {
-  const totalInvoiced = rosterTotalInvoicedDollars(roster)
-  if (totalInvoiced <= 0) return false
+  const fee = rosterTemplateDollars(roster)
+  if (fee == null || fee <= 0) return false
   const total = rosterTotalPaidCollectedDollars(roster)
   const tc = dollarsToCents(total)
-  const oc = dollarsToCents(totalInvoiced)
-  return tc > 0 && tc < oc
+  const fc = dollarsToCents(fee)
+  return tc > 0 && tc < fc
 }
 
 export function rosterPaidViaLinkedInvoice(roster: any): boolean {
@@ -181,12 +178,14 @@ export function amountsDifferCents(a: number, b: number) {
 }
 
 /**
- * Person's roster spot: no invoices, or all invoices paid.
+ * Person's roster spot: manual override, no fee assigned, or collected >= fee.
  */
 export function hasPaidFee(person: any, roster: any): boolean {
   if (!person?.id || !roster) return false
   if (roster.person_id !== person.id) return false
-  const invs = invoicesForRoster(roster)
-  if (invs.length === 0) return true
+  if (roster.payment_status === "paid" || roster.payment_status === "waived")
+    return true
+  const fee = rosterTemplateDollars(roster)
+  if (fee == null || fee <= 0) return true
   return rosterIsPaid(roster)
 }

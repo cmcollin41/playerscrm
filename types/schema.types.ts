@@ -99,6 +99,10 @@ export interface Rosters {
   fee_id?: string /* foreign key to fees.id */;
   /** dollars; when set, overrides fees.amount for billing */
   custom_amount?: number | null;
+  /** manual payment status: 'paid', 'waived', or null (derive from invoices) */
+  payment_status?: string | null;
+  /** admin note explaining the manual payment status */
+  payment_status_note?: string | null;
   jersey_number?: number;
   position?: string;
   grade?: string;
