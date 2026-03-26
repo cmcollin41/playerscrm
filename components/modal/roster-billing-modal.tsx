@@ -33,7 +33,7 @@ import {
 import { DocumentIcon, ChevronDownIcon } from "@heroicons/react/24/outline"
 import { cn } from "@/lib/utils"
 import { postRosterInvoice } from "@/lib/post-roster-invoice"
-import { effectiveRosterOwedDollars } from "@/lib/roster-pricing"
+import { rosterTemplateDollars } from "@/lib/roster-pricing"
 
 type PricingMode = "preset" | "custom"
 
@@ -225,7 +225,7 @@ export function RosterBillingModal({
     fees,
     customAmountInput,
   )
-  const rosterOwed = effectiveRosterOwedDollars(draftRoster)
+  const rosterOwed = rosterTemplateDollars(draftRoster)
 
   async function handleSaveBilling(e: React.FormEvent) {
     e.preventDefault()
@@ -268,7 +268,7 @@ export function RosterBillingModal({
       toast.success("Billing saved")
       if (onRefresh) await onRefresh()
       else refresh()
-      const owedAfter = effectiveRosterOwedDollars(
+      const owedAfter = rosterTemplateDollars(
         draftRosterForPreview(roster, pricingMode, selectedFeeId, fees, customAmountInput),
       )
       setSavedOwedForInvoice(

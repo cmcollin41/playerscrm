@@ -20,10 +20,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
-  effectiveRosterOwedDollars,
   invoicesForRoster,
-  rosterCollectedDollars,
   rosterIsPaid,
+  rosterPaidInvoiceTotalDollars,
+  rosterTotalInvoicedDollars,
 } from "@/lib/roster-pricing";
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -35,25 +35,6 @@ const LEVEL_LABELS: Record<string, string> = {
   varsity: "Varsity",
 }
 
-function rosterOwedNumber(roster: any): number {
-  return effectiveRosterOwedDollars(roster) ?? 0;
-}
-
-function rosterTotalInvoiced(roster: any): number {
-  return invoicesForRoster(roster).reduce(
-    (sum: number, inv: any) => sum + (inv.amount != null ? Number(inv.amount) : 0),
-    0,
-  );
-}
-
-function rosterTotalCollectedFromInvoices(roster: any): number {
-  return invoicesForRoster(roster)
-    .filter((inv: any) => inv.status === "paid")
-    .reduce(
-      (sum: number, inv: any) => sum + (inv.amount != null ? Number(inv.amount) : 0),
-      0,
-    );
-}
 
 async function getPrimaryContacts(supabase: any, person: any) {
   if (person?.dependent) {
@@ -260,12 +241,12 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
     staffCount: team?.staff?.length || 0,
     totalInvoiced:
       team?.rosters?.reduce(
-        (sum: number, roster: any) => sum + rosterTotalInvoiced(roster),
+        (sum: number, roster: any) => sum + rosterTotalInvoicedDollars(roster),
         0,
       ) || 0,
     paidFees:
       team?.rosters?.reduce(
-        (sum: number, roster: any) => sum + rosterTotalCollectedFromInvoices(roster),
+        (sum: number, roster: any) => sum + rosterPaidInvoiceTotalDollars(roster),
         0,
       ) || 0,
     playersWithInvoices:

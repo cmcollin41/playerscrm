@@ -49,11 +49,10 @@ import { RosterBillingModal } from "@/components/modal/roster-billing-modal";
 import { RosterInvoicesDialog } from "@/components/modal/roster-invoices-dialog";
 import {
   amountsDifferCents,
-  effectiveRosterOwedDollars,
   invoicesForRoster,
   rosterIsPaid,
   rosterPartiallyPaidViaInvoices,
-  rosterTotalPaidCollectedDollars,
+  rosterTemplateDollars,
   unpaidSentInvoicesForRoster,
 } from "@/lib/roster-pricing";
 
@@ -61,20 +60,17 @@ function paymentStatus(
   _person: Person,
   roster: any,
 ): "paid" | "partial" | "sent" | "draft" | "unpaid" | "none" {
-  const owed = effectiveRosterOwedDollars(roster);
+  const invs = roster ? invoicesForRoster(roster) : [];
+  if (invs.length === 0) return "none";
 
   if (rosterIsPaid(roster)) return "paid";
-
-  const invs = roster ? invoicesForRoster(roster) : [];
   if (rosterPartiallyPaidViaInvoices(roster)) return "partial";
 
-  const unpaidSent = roster ? unpaidSentInvoicesForRoster(roster) : [];
+  const unpaidSent = unpaidSentInvoicesForRoster(roster);
   if (unpaidSent.length > 0) return "sent";
 
   const draftInv = invs.find((i: { status?: string }) => i.status === "draft");
   if (draftInv) return "draft";
-
-  if (owed == null || owed <= 0) return "none";
 
   return "unpaid";
 }
@@ -187,17 +183,17 @@ const createColumns = (
   },
   {
     accessorKey: "fees",
-    header: "Fee Amount",
+    header: "Fee",
     cell: ({ row }: { row: any }) => {
       const roster = team.rosters?.find(
         (r: any) => r.person_id === row.original.id,
       );
-      const owed = effectiveRosterOwedDollars(roster);
+      const template = rosterTemplateDollars(roster);
       const fees = roster?.fees;
       const isCustom =
         roster?.custom_amount != null && Number(roster.custom_amount) > 0;
 
-      if (owed == null || owed <= 0) {
+      if (template == null || template <= 0) {
         return (
           <Badge variant="outline" className="bg-gray-50 text-gray-600 whitespace-nowrap">
             No Fee
@@ -208,7 +204,7 @@ const createColumns = (
       return (
         <span className="font-medium font-mono text-sm inline-flex flex-wrap items-center gap-1.5">
           $
-          {owed.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          {template.toLocaleString("en-US", { minimumFractionDigits: 2 })}
           {isCustom ? (
             <Badge variant="secondary" className="text-[10px] px-1 py-0 font-sans">
               Custom
@@ -216,7 +212,7 @@ const createColumns = (
           ) : null}
           {isCustom &&
           fees?.amount != null &&
-          amountsDifferCents(Number(fees.amount), owed) ? (
+          amountsDifferCents(Number(fees.amount), template) ? (
             <span
               className="text-[10px] text-muted-foreground font-sans font-normal"
               title={`Catalog fee: $${Number(fees.amount).toFixed(2)}`}
