@@ -106,12 +106,11 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       }
     }
 
-    const rosterUpdate: Record<string, unknown> = {
-      payment_status,
-      payment_status_note,
-    }
+    const rosterUpdate: Record<string, unknown> = {}
     if ("fee_id" in body) rosterUpdate.fee_id = fee_id
     if ("custom_amount" in body) rosterUpdate.custom_amount = custom_amount
+    if ("payment_status" in body) rosterUpdate.payment_status = payment_status
+    if ("payment_status_note" in body) rosterUpdate.payment_status_note = payment_status_note
 
     const { error: rosterErr } = await admin
       .from("rosters")

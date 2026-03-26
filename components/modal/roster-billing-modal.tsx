@@ -226,6 +226,12 @@ export function RosterBillingModal({
       toast.success("Fee saved")
       if (onRefresh) await onRefresh()
       else refresh()
+
+      const newFee = useCustomFee
+        ? customAmount
+        : fees.find((f) => f.id === feeId)?.amount ?? null
+      if (newFee != null && newFee > 0)
+        setInvoiceAmountInput(newFee.toFixed(2))
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Save failed")
     } finally {
