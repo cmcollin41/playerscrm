@@ -548,8 +548,6 @@ export function TeamTable({
           personName={`${invoicesDialogPerson.first_name} ${invoicesDialogPerson.last_name}`}
           teamName={team?.name ?? "Team"}
           invoices={invoicesForRoster(invoicesDialogRoster)}
-          owedAmount={effectiveRosterOwedDollars(invoicesDialogRoster)}
-          paidTotal={rosterTotalPaidCollectedDollars(invoicesDialogRoster)}
           onRefresh={onRefresh}
         />
       ) : null}

@@ -29,8 +29,6 @@ export interface RosterInvoicesDialogProps {
   personName: string
   teamName: string
   invoices: RosterInvoice[]
-  owedAmount: number | null
-  paidTotal: number
   onRefresh?: () => void | Promise<void>
 }
 
@@ -90,11 +88,17 @@ export function RosterInvoicesDialog({
   personName,
   teamName,
   invoices,
-  owedAmount,
-  paidTotal,
   onRefresh,
 }: RosterInvoicesDialogProps) {
   const [resendingId, setResendingId] = useState<string | null>(null)
+
+  const totalInvoiced = invoices.reduce(
+    (sum, inv) => sum + (inv.amount != null ? Number(inv.amount) : 0),
+    0,
+  )
+  const totalCollected = invoices
+    .filter((inv) => inv.status === "paid")
+    .reduce((sum, inv) => sum + (inv.amount != null ? Number(inv.amount) : 0), 0)
 
   async function handleResend(invoiceId: string) {
     setResendingId(invoiceId)
@@ -132,14 +136,14 @@ export function RosterInvoicesDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {owedAmount != null && owedAmount > 0 ? (
+        {invoices.length > 0 ? (
           <div className="flex items-baseline justify-between rounded-lg border px-4 py-3">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Roster owed
+                Total invoiced
               </p>
               <p className="font-mono text-lg font-semibold tabular-nums">
-                ${owedAmount.toFixed(2)}
+                ${totalInvoiced.toFixed(2)}
               </p>
             </div>
             <div className="text-right">
@@ -147,7 +151,7 @@ export function RosterInvoicesDialog({
                 Collected
               </p>
               <p className="font-mono text-lg font-semibold tabular-nums">
-                ${paidTotal.toFixed(2)}
+                ${totalCollected.toFixed(2)}
               </p>
             </div>
           </div>
