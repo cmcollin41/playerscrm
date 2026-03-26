@@ -113,11 +113,13 @@ export function RosterBillingModal({
   const personName = `${person.first_name} ${person.last_name}`
   const defaultInvoiceMemo = `Team Roster Fee - ${personName} - ${teamName}`
   const guardianEmail = person.primary_contacts?.[0]?.email
-  const currentFeeAmount = rosterTemplateDollars(roster)
+  const [savedFeeAmount, setSavedFeeAmount] = useState<number | null>(null)
+  const currentFeeAmount = savedFeeAmount ?? rosterTemplateDollars(roster)
 
   useEffect(() => {
     if (!open) {
       openSessionRef.current = false
+      setSavedFeeAmount(null)
       return
     }
 
@@ -230,6 +232,7 @@ export function RosterBillingModal({
       const newFee = useCustomFee
         ? customAmount
         : fees.find((f) => f.id === feeId)?.amount ?? null
+      setSavedFeeAmount(newFee)
       if (newFee != null && newFee > 0)
         setInvoiceAmountInput(newFee.toFixed(2))
     } catch (err: unknown) {
