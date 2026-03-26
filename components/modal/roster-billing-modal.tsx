@@ -434,9 +434,7 @@ export function RosterBillingModal({
                       onChange={(e) => setCustomAmountInput(e.target.value)}
                     />
                     <div className="space-y-2 pt-1">
-                      <Label htmlFor="bill_custom_memo">
-                        Invoice description / memo
-                      </Label>
+                      <Label htmlFor="bill_custom_memo">Description</Label>
                       <Textarea
                         id="bill_custom_memo"
                         className="min-h-[88px] resize-y"
@@ -445,8 +443,8 @@ export function RosterBillingModal({
                         onChange={(e) => setCustomInvoiceMemo(e.target.value)}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Shown on the Stripe invoice line item. Leave blank to use
-                        the default roster fee text.
+                        Shown as the line item on the Stripe invoice. Leave blank
+                        to use the default roster fee text.
                       </p>
                     </div>
                   </div>

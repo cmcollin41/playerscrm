@@ -182,9 +182,7 @@ export default function CreateInvoiceModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Line item description
-            </label>
+            <label className="block text-sm font-medium mb-1">Description</label>
             <Input
               required
               value={description}
@@ -192,7 +190,7 @@ export default function CreateInvoiceModal({
               placeholder="e.g., Team Jersey"
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Appears as the line item on the Stripe invoice.
+              Shown as the line item on the Stripe invoice.
             </p>
           </div>
 

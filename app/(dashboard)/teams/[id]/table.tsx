@@ -48,11 +48,11 @@ import SendEmailSheet from "@/components/modal/send-email-sheet";
 import { RosterBillingModal } from "@/components/modal/roster-billing-modal";
 import { RosterInvoicesDialog } from "@/components/modal/roster-invoices-dialog";
 import {
-  amountsDifferCents,
   invoicesForRoster,
   rosterIsPaid,
   rosterPartiallyPaidViaInvoices,
   rosterTemplateDollars,
+  rosterTotalInvoicedDollars,
   unpaidSentInvoicesForRoster,
 } from "@/lib/roster-pricing";
 
@@ -188,12 +188,11 @@ const createColumns = (
       const roster = team.rosters?.find(
         (r: any) => r.person_id === row.original.id,
       );
+      const totalInvoiced = rosterTotalInvoicedDollars(roster);
       const template = rosterTemplateDollars(roster);
-      const fees = roster?.fees;
-      const isCustom =
-        roster?.custom_amount != null && Number(roster.custom_amount) > 0;
+      const displayAmount = totalInvoiced > 0 ? totalInvoiced : template;
 
-      if (template == null || template <= 0) {
+      if (displayAmount == null || displayAmount <= 0) {
         return (
           <Badge variant="outline" className="bg-gray-50 text-gray-600 whitespace-nowrap">
             No Fee
@@ -202,24 +201,8 @@ const createColumns = (
       }
 
       return (
-        <span className="font-medium font-mono text-sm inline-flex flex-wrap items-center gap-1.5">
-          $
-          {template.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          {isCustom ? (
-            <Badge variant="secondary" className="text-[10px] px-1 py-0 font-sans">
-              Custom
-            </Badge>
-          ) : null}
-          {isCustom &&
-          fees?.amount != null &&
-          amountsDifferCents(Number(fees.amount), template) ? (
-            <span
-              className="text-[10px] text-muted-foreground font-sans font-normal"
-              title={`Catalog fee: $${Number(fees.amount).toFixed(2)}`}
-            >
-              (catalog ${Number(fees.amount).toFixed(0)})
-            </span>
-          ) : null}
+        <span className="font-medium font-mono text-sm">
+          ${displayAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
         </span>
       );
     },
