@@ -7,36 +7,18 @@ interface RouteParams {
 }
 
 /**
- * PATCH body: { fee_id, custom_amount }
- * Updates the roster's billing template (what to charge next).
- * Does NOT touch invoice links — invoices are linked at creation time
- * via POST /api/invoices and stay linked permanently.
+ * POST body: { invoice_id }
+ * One-time link: sets invoice.roster_id so an existing (orphan) invoice
+ * is associated with this roster spot. Does not unlink other invoices.
  */
-export async function PATCH(req: Request, { params }: RouteParams) {
+export async function POST(req: Request, { params }: RouteParams) {
   try {
     const { rosterId } = await params
     const body = await req.json().catch(() => ({}))
+    const invoiceId = body.invoice_id
 
-    const fee_id =
-      body.fee_id === null ||
-      body.fee_id === undefined ||
-      body.fee_id === "" ||
-      body.fee_id === "none"
-        ? null
-        : String(body.fee_id)
-
-    let custom_amount: number | null = null
-    const rawCustom = body.custom_amount
-    if (rawCustom !== null && rawCustom !== undefined && rawCustom !== "") {
-      const n =
-        typeof rawCustom === "number" ? rawCustom : Number.parseFloat(String(rawCustom))
-      if (Number.isNaN(n) || n <= 0) {
-        return NextResponse.json(
-          { error: "Custom amount must be a positive number" },
-          { status: 400 },
-        )
-      }
-      custom_amount = n
+    if (!invoiceId || typeof invoiceId !== "string") {
+      return NextResponse.json({ error: "invoice_id is required" }, { status: 400 })
     }
 
     const userSb = await createClient()
@@ -78,30 +60,44 @@ export async function PATCH(req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    if (fee_id) {
-      const { data: feeRow } = await admin
-        .from("fees")
-        .select("id")
-        .eq("id", fee_id)
-        .eq("account_id", team.account_id)
-        .eq("is_active", true)
-        .maybeSingle()
+    const { data: invoice, error: iErr } = await admin
+      .from("invoices")
+      .select("id, person_id, account_id, roster_id")
+      .eq("id", invoiceId)
+      .single()
 
-      if (!feeRow) {
-        return NextResponse.json(
-          { error: "Invalid or inactive fee for this account" },
-          { status: 400 },
-        )
-      }
+    if (iErr || !invoice) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 })
     }
 
-    const { error: rosterErr } = await admin
-      .from("rosters")
-      .update({ fee_id, custom_amount })
-      .eq("id", rosterId)
+    if (invoice.person_id !== roster.person_id) {
+      return NextResponse.json(
+        { error: "Invoice belongs to a different person" },
+        { status: 400 },
+      )
+    }
 
-    if (rosterErr) {
-      return NextResponse.json({ error: rosterErr.message }, { status: 500 })
+    if (invoice.account_id !== team.account_id) {
+      return NextResponse.json(
+        { error: "Invoice is not on this account" },
+        { status: 400 },
+      )
+    }
+
+    if (invoice.roster_id && invoice.roster_id !== rosterId) {
+      return NextResponse.json(
+        { error: "Invoice is already linked to another roster" },
+        { status: 409 },
+      )
+    }
+
+    const { error: linkErr } = await admin
+      .from("invoices")
+      .update({ roster_id: rosterId })
+      .eq("id", invoiceId)
+
+    if (linkErr) {
+      return NextResponse.json({ error: linkErr.message }, { status: 500 })
     }
 
     return NextResponse.json({ ok: true })

@@ -678,12 +678,6 @@ export function TeamTable({
           team={team}
           account={account}
           currentFeeId={billingRoster.fee_id ?? billingRoster.fees?.id ?? null}
-          currentCustomAmount={
-            billingRoster.custom_amount != null &&
-            billingRoster.custom_amount !== ""
-              ? Number(billingRoster.custom_amount)
-              : null
-          }
           accountId={team.account_id}
           onRefresh={onRefresh}
         />
