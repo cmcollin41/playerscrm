@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   effectiveRosterOwedDollars,
+  invoicesForRoster,
   rosterCollectedDollars,
   rosterIsPaid,
 } from "@/lib/roster-pricing";
@@ -36,6 +37,22 @@ const LEVEL_LABELS: Record<string, string> = {
 
 function rosterOwedNumber(roster: any): number {
   return effectiveRosterOwedDollars(roster) ?? 0;
+}
+
+function rosterTotalInvoiced(roster: any): number {
+  return invoicesForRoster(roster).reduce(
+    (sum: number, inv: any) => sum + (inv.amount != null ? Number(inv.amount) : 0),
+    0,
+  );
+}
+
+function rosterTotalCollectedFromInvoices(roster: any): number {
+  return invoicesForRoster(roster)
+    .filter((inv: any) => inv.status === "paid")
+    .reduce(
+      (sum: number, inv: any) => sum + (inv.amount != null ? Number(inv.amount) : 0),
+      0,
+    );
 }
 
 async function getPrimaryContacts(supabase: any, person: any) {
@@ -241,23 +258,23 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
   const stats = {
     totalPlayers: team?.rosters?.length || 0,
     staffCount: team?.staff?.length || 0,
-    totalFees:
+    totalInvoiced:
       team?.rosters?.reduce(
-        (sum: number, roster: any) => sum + rosterOwedNumber(roster),
+        (sum: number, roster: any) => sum + rosterTotalInvoiced(roster),
         0,
       ) || 0,
     paidFees:
       team?.rosters?.reduce(
-        (sum: number, roster: any) => sum + rosterCollectedDollars(roster),
+        (sum: number, roster: any) => sum + rosterTotalCollectedFromInvoices(roster),
         0,
       ) || 0,
-    playersWithFees:
-      team?.rosters?.filter((r: any) => rosterOwedNumber(r) > 0).length || 0,
+    playersWithInvoices:
+      team?.rosters?.filter((r: any) => invoicesForRoster(r).length > 0).length || 0,
     paidPlayers:
       team?.rosters?.filter((roster: any) => rosterIsPaid(roster)).length || 0,
   };
 
-  const outstandingFees = stats.totalFees - stats.paidFees;
+  const outstandingFees = stats.totalInvoiced - stats.paidFees;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -332,29 +349,29 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
           <CardContent>
             <div className="text-2xl font-bold font-mono">{stats.totalPlayers}</div>
             <p className="text-xs text-muted-foreground">
-              {stats.playersWithFees} with fees assigned
+              {stats.playersWithInvoices} with invoices
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Fees</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Invoiced</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              ${stats.totalFees.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              ${stats.totalInvoiced.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground">
-              Across all roster members
+              Across all roster invoices
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Fees Collected</CardTitle>
+            <CardTitle className="text-sm font-medium">Collected</CardTitle>
             <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
@@ -362,7 +379,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
               ${stats.paidFees.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground">
-              {stats.paidPlayers} of {stats.playersWithFees} players paid
+              {stats.paidPlayers} of {stats.playersWithInvoices} players paid
             </p>
           </CardContent>
         </Card>
@@ -377,7 +394,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
               ${outstandingFees.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </div>
             <p className="text-xs text-muted-foreground">
-              {stats.playersWithFees - stats.paidPlayers} players pending
+              {stats.playersWithInvoices - stats.paidPlayers} players pending
             </p>
           </CardContent>
         </Card>
