@@ -6,13 +6,13 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { PaperAirplaneIcon } from "@heroicons/react/24/outline"
-import { CheckCircle, AlertCircle, FileText, Clock } from "lucide-react"
+import { CheckCircle, AlertCircle, FileText, Clock, Ban, AlertTriangle } from "lucide-react"
 
 interface RosterInvoice {
   id: string
@@ -35,7 +35,7 @@ export interface RosterInvoicesDialogProps {
 function formatDate(dateStr: string | null | undefined): string {
   if (!dateStr) return "—"
   const d = new Date(dateStr)
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
 function isOverdue(inv: RosterInvoice): boolean {
@@ -43,43 +43,20 @@ function isOverdue(inv: RosterInvoice): boolean {
   return new Date(inv.due_date) < new Date()
 }
 
-function statusBadge(inv: RosterInvoice) {
+function StatusIcon({ inv }: { inv: RosterInvoice }) {
   const overdue = isOverdue(inv)
 
-  switch (inv.status) {
-    case "paid":
-      return (
-        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-          <CheckCircle className="mr-1 h-3 w-3" />
-          Paid
-        </Badge>
-      )
-    case "sent":
-      return overdue ? (
-        <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
-          <AlertCircle className="mr-1 h-3 w-3" />
-          Overdue
-        </Badge>
-      ) : (
-        <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
-          <Clock className="mr-1 h-3 w-3" />
-          Sent
-        </Badge>
-      )
-    case "draft":
-      return (
-        <Badge variant="outline" className="bg-purple-50 text-purple-700">
-          <FileText className="mr-1 h-3 w-3" />
-          Draft
-        </Badge>
-      )
-    default:
-      return (
-        <Badge variant="outline" className="bg-gray-50 text-gray-600">
-          {inv.status}
-        </Badge>
-      )
-  }
+  if (inv.status === "paid")
+    return <CheckCircle className="h-4 w-4 text-green-500" />
+  if (inv.status === "sent" && overdue)
+    return <AlertCircle className="h-4 w-4 text-red-500" />
+  if (inv.status === "sent")
+    return <Clock className="h-4 w-4 text-blue-500" />
+  if (inv.status === "draft")
+    return <FileText className="h-4 w-4 text-purple-500" />
+  if (inv.status === "void")
+    return <Ban className="h-4 w-4 text-slate-400" />
+  return <FileText className="h-4 w-4 text-gray-400" />
 }
 
 export function RosterInvoicesDialog({
@@ -91,11 +68,15 @@ export function RosterInvoicesDialog({
   onRefresh,
 }: RosterInvoicesDialogProps) {
   const [resendingId, setResendingId] = useState<string | null>(null)
+  const [voidingId, setVoidingId] = useState<string | null>(null)
+  const [confirmVoidInvoice, setConfirmVoidInvoice] = useState<RosterInvoice | null>(null)
 
-  const totalInvoiced = invoices.reduce(
-    (sum, inv) => sum + (inv.amount != null ? Number(inv.amount) : 0),
-    0,
-  )
+  const totalInvoiced = invoices
+    .filter((inv) => inv.status !== "void")
+    .reduce(
+      (sum, inv) => sum + (inv.amount != null ? Number(inv.amount) : 0),
+      0,
+    )
   const totalCollected = invoices
     .filter((inv) => inv.status === "paid")
     .reduce((sum, inv) => sum + (inv.amount != null ? Number(inv.amount) : 0), 0)
@@ -120,93 +101,172 @@ export function RosterInvoicesDialog({
     }
   }
 
+  async function handleVoid(invoiceId: string) {
+    setVoidingId(invoiceId)
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/void`, {
+        method: "POST",
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok)
+        throw new Error((data as { error?: string }).error || "Failed to void invoice")
+      toast.success("Invoice voided")
+      if (onRefresh) await onRefresh()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Void failed")
+    } finally {
+      setVoidingId(null)
+      setConfirmVoidInvoice(null)
+    }
+  }
+
   const sorted = [...invoices].sort((a, b) => {
     const ta = a.created_at ? Date.parse(a.created_at) : 0
     const tb = b.created_at ? Date.parse(b.created_at) : 0
     return tb - ta
   })
 
+  const confirmVoidAmount = confirmVoidInvoice?.amount != null
+    ? `$${Number(confirmVoidInvoice.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+    : ""
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        if (!o) setConfirmVoidInvoice(null)
+        onOpenChange(o)
+      }}
+    >
       <DialogContent className="max-w-md sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Invoices</DialogTitle>
-          <DialogDescription>
-            {personName} · {teamName}
-          </DialogDescription>
-        </DialogHeader>
-
-        {invoices.length > 0 ? (
-          <div className="flex items-baseline justify-between rounded-lg border px-4 py-3">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Total invoiced
-              </p>
-              <p className="font-mono text-lg font-semibold tabular-nums">
-                ${totalInvoiced.toFixed(2)}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                Collected
-              </p>
-              <p className="font-mono text-lg font-semibold tabular-nums">
-                ${totalCollected.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        ) : null}
-
-        {sorted.length === 0 ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
-            No invoices linked to this roster yet.
-          </p>
+        {confirmVoidInvoice ? (
+          <>
+            <DialogHeader>
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <DialogTitle className="text-center">Void this invoice?</DialogTitle>
+              <DialogDescription className="text-center">
+                This will void{" "}
+                {confirmVoidInvoice.invoice_number
+                  ? `invoice #${confirmVoidInvoice.invoice_number}`
+                  : "this invoice"}
+                {confirmVoidAmount ? ` (${confirmVoidAmount})` : ""} for {personName}.
+                The invoice will be canceled in Stripe and can no longer be paid. This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setConfirmVoidInvoice(null)}
+                disabled={voidingId !== null}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => handleVoid(confirmVoidInvoice.id)}
+                disabled={voidingId !== null}
+              >
+                {voidingId ? "Voiding…" : "Void Invoice"}
+              </Button>
+            </DialogFooter>
+          </>
         ) : (
-          <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
-            {sorted.map((inv) => {
-              const canResend = inv.status === "sent"
-              return (
-                <li
-                  key={inv.id}
-                  className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
-                >
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      {statusBadge(inv)}
-                      <span className="truncate text-sm font-medium">
-                        {inv.invoice_number || inv.id.slice(0, 8)}
-                      </span>
-                    </div>
-                    <div className="flex gap-3 text-xs text-muted-foreground">
-                      {inv.amount != null ? (
-                        <span className="font-mono tabular-nums">
-                          ${Number(inv.amount).toFixed(2)}
-                        </span>
-                      ) : null}
-                      {inv.due_date ? (
-                        <span>Due {formatDate(inv.due_date)}</span>
-                      ) : null}
-                      {inv.created_at ? (
-                        <span>Created {formatDate(inv.created_at)}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                  {canResend ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={resendingId != null}
-                      onClick={() => void handleResend(inv.id)}
-                      className="shrink-0 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+          <>
+            <DialogHeader>
+              <DialogTitle>Invoices</DialogTitle>
+              <DialogDescription>
+                {personName} · {teamName}
+              </DialogDescription>
+            </DialogHeader>
+
+            {invoices.length > 0 ? (
+              <div className="flex items-baseline justify-between rounded-lg border px-4 py-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Total invoiced
+                  </p>
+                  <p className="font-mono text-lg font-semibold tabular-nums">
+                    ${totalInvoiced.toFixed(2)}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Collected
+                  </p>
+                  <p className="font-mono text-lg font-semibold tabular-nums">
+                    ${totalCollected.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            ) : null}
+
+            {sorted.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No invoices linked to this roster yet.
+              </p>
+            ) : (
+              <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
+                {sorted.map((inv) => {
+                  const canResend = inv.status === "sent"
+                  const canVoid = inv.status === "sent" || inv.status === "draft" || inv.status === "overdue"
+                  const amount = inv.amount != null
+                    ? `$${Number(inv.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+                    : "—"
+
+                  return (
+                    <li
+                      key={inv.id}
+                      className={`rounded-lg border px-3 py-2.5 ${inv.status === "void" ? "opacity-50" : ""}`}
                     >
-                      <PaperAirplaneIcon className="mr-1 h-3 w-3" />
-                      {resendingId === inv.id ? "Sending…" : "Resend"}
-                    </Button>
-                  ) : null}
-                </li>
-              )
-            })}
-          </ul>
+                      <div className="flex items-center gap-3">
+                        <StatusIcon inv={inv} />
+
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium leading-tight">
+                            {inv.invoice_number ? `#${inv.invoice_number}` : inv.id.slice(0, 8)}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground leading-tight mt-0.5">
+                            {amount}
+                            {inv.created_at ? ` · ${formatDate(inv.created_at)}` : ""}
+                          </p>
+                        </div>
+
+                        {(canResend || canVoid) ? (
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            {canVoid && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                disabled={voidingId != null || resendingId != null}
+                                onClick={() => setConfirmVoidInvoice(inv)}
+                                title="Void invoice"
+                                className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                              >
+                                <Ban className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {canResend && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={resendingId != null || voidingId != null}
+                                onClick={() => void handleResend(inv.id)}
+                                className="h-7 px-2.5 text-[11px] text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                              >
+                                {resendingId === inv.id ? "Sending…" : "Resend"}
+                              </Button>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </>
         )}
       </DialogContent>
     </Dialog>

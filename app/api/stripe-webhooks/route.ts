@@ -49,6 +49,7 @@ export async function POST(req: Request) {
       case "invoice.paid":
       case "invoice.payment_failed":
       case "invoice.payment_succeeded":
+      case "invoice.voided":
         await updateSupabase(event, supabase);
         break;
       default:
@@ -226,16 +227,18 @@ const updateSupabase = async (event: any, supabase: any) => {
 function getStatusFromInvoiceEvent(eventType: string): string {
   switch (eventType) {
     case 'invoice.created':
-      return 'draft';
+      return 'draft'
     case 'invoice.finalized':
-      return 'sent';
+      return 'sent'
     case 'invoice.paid':
     case 'invoice.payment_succeeded':
-      return 'succeeded';
+      return 'succeeded'
     case 'invoice.payment_failed':
-      return 'overdue';
+      return 'overdue'
+    case 'invoice.voided':
+      return 'void'
     default:
-      return 'sent';
+      return 'sent'
   }
 }
 

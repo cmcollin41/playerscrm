@@ -16,13 +16,23 @@ import { formatDistanceToNow } from "date-fns"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
   DollarSign,
   FileText,
   CheckCircle2,
   Clock,
   AlertTriangle,
-  Send,
   RotateCw,
+  Ban,
 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { getInitials } from "@/lib/utils"
@@ -93,6 +103,7 @@ const getStatusBadge = (status: string, overdue: boolean) => {
     draft: { className: "bg-gray-100 text-gray-800 hover:bg-gray-100", icon: FileText },
     sent: { className: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100", icon: Clock },
     paid: { className: "bg-green-100 text-green-800 hover:bg-green-100", icon: CheckCircle2 },
+    void: { className: "bg-slate-100 text-slate-500 hover:bg-slate-100", icon: Ban },
   }
 
   const statusConfig = config[status] || config.sent
@@ -113,6 +124,8 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
   const [sortField, setSortField] = useState<SortField>("created_at")
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [resendingInvoiceId, setResendingInvoiceId] = useState<string | null>(null)
+  const [voidingInvoiceId, setVoidingInvoiceId] = useState<string | null>(null)
+  const [confirmVoidInvoice, setConfirmVoidInvoice] = useState<Invoice | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 25
 
@@ -240,8 +253,63 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
     }
   }
 
+  const handleVoidInvoice = async (invoiceId: string) => {
+    setVoidingInvoiceId(invoiceId)
+
+    try {
+      const response = await fetch(`/api/invoices/${invoiceId}/void`, {
+        method: "POST",
+      })
+
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Failed to void invoice")
+
+      toast.success("Invoice voided successfully")
+      router.refresh()
+    } catch (error: any) {
+      console.error("Error voiding invoice:", error)
+      toast.error(error.message || "Failed to void invoice")
+    } finally {
+      setVoidingInvoiceId(null)
+      setConfirmVoidInvoice(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
+      {/* Void Confirmation Dialog */}
+      <AlertDialog
+        open={confirmVoidInvoice !== null}
+        onOpenChange={(open) => { if (!open) setConfirmVoidInvoice(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void this invoice?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will void{" "}
+              {confirmVoidInvoice?.invoice_number
+                ? `invoice #${confirmVoidInvoice.invoice_number}`
+                : "this invoice"}
+              {confirmVoidInvoice?.person
+                ? ` for ${confirmVoidInvoice.person.first_name} ${confirmVoidInvoice.person.last_name}`
+                : ""}
+              {" "}(${confirmVoidInvoice?.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}).
+              The invoice will be canceled in Stripe and can no longer be paid. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={voidingInvoiceId !== null}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmVoidInvoice && handleVoidInvoice(confirmVoidInvoice.id)}
+              disabled={voidingInvoiceId !== null}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {voidingInvoiceId ? "Voiding…" : "Void Invoice"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -334,6 +402,7 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
                   <SelectItem value="sent">Sent (Awaiting Payment)</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
                   <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="void">Void</SelectItem>
                   <SelectItem value="unpaid">All Unpaid</SelectItem>
                 </SelectContent>
               </Select>
@@ -447,31 +516,33 @@ export default function InvoicesClient({ invoices, accountId }: InvoicesClientPr
                               {formatDistanceToNow(new Date(invoice.created_at), { addSuffix: true })}
                             </span>
                           </div>
-                          {invoice.status === "sent" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleResendInvoice(invoice.id)}
-                              disabled={resendingInvoiceId === invoice.id}
-                              className={`h-7 text-xs ${
-                                overdue
-                                  ? "text-red-600 hover:text-red-700 hover:bg-red-50"
-                                  : "text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                              }`}
-                            >
-                              {resendingInvoiceId === invoice.id ? (
-                                <>
-                                  <RotateCw className="h-3 w-3 mr-1 animate-spin" />
-                                  Sending...
-                                </>
-                              ) : (
-                                <>
-                                  <Send className="h-3 w-3 mr-1" />
-                                  Resend
-                                </>
-                              )}
-                            </Button>
-                          )}
+                          <div className="flex items-center gap-0.5">
+                            {(invoice.status === "sent" || invoice.status === "draft" || invoice.status === "overdue") && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setConfirmVoidInvoice(invoice)}
+                                disabled={voidingInvoiceId === invoice.id || resendingInvoiceId === invoice.id}
+                                title="Void invoice"
+                                className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-50"
+                              >
+                                {voidingInvoiceId === invoice.id
+                                  ? <RotateCw className="h-3.5 w-3.5 animate-spin" />
+                                  : <Ban className="h-3.5 w-3.5" />}
+                              </Button>
+                            )}
+                            {invoice.status === "sent" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleResendInvoice(invoice.id)}
+                                disabled={resendingInvoiceId === invoice.id || voidingInvoiceId === invoice.id}
+                                className="h-7 px-2.5 text-[11px] text-blue-600 border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                              >
+                                {resendingInvoiceId === invoice.id ? "Sending…" : "Resend"}
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

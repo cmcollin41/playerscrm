@@ -269,26 +269,24 @@ const createColumns = (
   },
   {
     id: "invoiced",
-    header: "Invoiced",
+    header: "Invoices",
     cell: ({ row }: { row: any }) => {
       const person = row.original;
       const roster = team.rosters?.find((r: any) => r.person_id === person.id);
       const rosterInvs = roster ? invoicesForRoster(roster) : [];
-      const totalInvoiced = rosterTotalInvoicedDollars(roster);
 
       if (rosterInvs.length === 0) return <span className="text-xs text-gray-400">—</span>;
 
       return (
-        <button
-          type="button"
-          className="inline-flex items-center gap-1.5 font-mono text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
           onClick={() => onViewInvoices(person, roster)}
         >
-          ${totalInvoiced.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-          <span className="font-sans text-[10px] font-normal text-muted-foreground">
-            ({rosterInvs.length})
-          </span>
-        </button>
+          <FileText className="mr-1 h-3 w-3" />
+          Invoices ({rosterInvs.length})
+        </Button>
       );
     },
   },
