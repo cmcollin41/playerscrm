@@ -169,6 +169,33 @@ export default function CreateInvoiceModal({
           )}
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Amount ($)</label>
+            <Input
+              required
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Line item description
+            </label>
+            <Input
+              required
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g., Team Jersey"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Appears as the line item on the Stripe invoice.
+            </p>
+          </div>
+
           {showRosterPicker ? (
             <div>
               <label className="block text-sm font-medium mb-1">
@@ -197,28 +224,6 @@ export default function CreateInvoiceModal({
               </p>
             </div>
           ) : null}
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
-            <Input
-              required
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g., Team Jersey"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Amount ($)</label>
-            <Input
-              required
-              type="number"
-              min="0.01"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder="0.00"
-            />
-          </div>
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
