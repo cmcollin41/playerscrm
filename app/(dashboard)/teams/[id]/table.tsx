@@ -44,7 +44,6 @@ import { Badge } from "@/components/ui/badge";
 
 import { useRouter } from "next/navigation";
 import { CheckCircle, FileText, AlertCircle, Receipt } from "lucide-react";
-import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
 import SendEmailSheet from "@/components/modal/send-email-sheet";
 import { RosterBillingModal } from "@/components/modal/roster-billing-modal";
 import { RosterInvoicesDialog } from "@/components/modal/roster-invoices-dialog";
@@ -231,116 +230,76 @@ const createColumns = (
   },
   {
     id: "invoice_status",
-    header: "Invoice Status",
+    header: "Status",
     cell: ({ row }: { row: any }) => {
       const person = row.original;
       const roster = team.rosters?.find((r: any) => r.person_id === person.id);
-      const rosterInvs = roster ? invoicesForRoster(roster) : [];
-      const unpaidSent = roster ? unpaidSentInvoicesForRoster(roster) : [];
       const status = paymentStatus(person, roster);
-      const rosterOwed = effectiveRosterOwedDollars(roster);
-      const paidSum = roster ? rosterTotalPaidCollectedDollars(roster) : 0;
+      const unpaidSent = roster ? unpaidSentInvoicesForRoster(roster) : [];
       const hasOverdue = unpaidSent.some(
         (inv: any) => inv.due_date && new Date(inv.due_date) < new Date(),
       );
 
-      if (status === "none") {
-        return <span className="text-xs text-gray-400">—</span>;
-      }
+      if (status === "none") return <span className="text-xs text-gray-400">—</span>;
 
-      if (status === "paid") {
+      if (status === "paid")
         return (
-          <button
-            type="button"
-            className="cursor-pointer"
-            onClick={() => onViewInvoices(person, roster)}
-          >
-            <Badge className="bg-green-100 text-green-800 hover:bg-green-200 transition-colors">
-              <CheckCircle className="mr-1 h-3 w-3" />
-              Paid
-              {rosterInvs.length > 1 ? ` (${rosterInvs.length})` : ""}
-            </Badge>
-          </button>
+          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+            <CheckCircle className="mr-1 h-3 w-3" /> Paid
+          </Badge>
         );
-      }
 
-      if (status === "partial") {
+      if (status === "partial")
         return (
-          <button
-            type="button"
-            className="flex flex-col items-start gap-1 cursor-pointer"
-            onClick={() => onViewInvoices(person, roster)}
-          >
-            <Badge
-              variant="outline"
-              className="bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100 transition-colors whitespace-normal text-left"
-            >
-              Partial
-              {rosterOwed != null ? (
-                <span className="ml-1 font-mono tabular-nums">
-                  ${paidSum.toFixed(2)} / ${rosterOwed.toFixed(2)}
-                </span>
-              ) : null}
-            </Badge>
-            <span className="text-xs text-blue-600 hover:underline">
-              {rosterInvs.length} invoice{rosterInvs.length !== 1 ? "s" : ""} — view
-            </span>
-          </button>
+          <Badge variant="outline" className="bg-amber-50 text-amber-900 border-amber-200">
+            Partial
+          </Badge>
         );
-      }
 
-      if (status === "sent") {
-        return (
-          <button
-            type="button"
-            className="flex flex-col items-start gap-1 cursor-pointer"
-            onClick={() => onViewInvoices(person, roster)}
-          >
-            <Badge
-              variant="outline"
-              className={`transition-colors ${
-                hasOverdue
-                  ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                  : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-              }`}
-            >
-              {hasOverdue ? (
-                <AlertCircle className="mr-1 h-3 w-3" />
-              ) : (
-                <PaperAirplaneIcon className="mr-1 h-3 w-3" />
-              )}
-              {hasOverdue ? "Overdue" : "Sent"}
-              {rosterInvs.length > 1 ? ` (${rosterInvs.length})` : ""}
-            </Badge>
-            <span className="text-xs text-blue-600 hover:underline">
-              View & resend
-            </span>
-          </button>
+      if (status === "sent")
+        return hasOverdue ? (
+          <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+            <AlertCircle className="mr-1 h-3 w-3" /> Overdue
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
+            Sent
+          </Badge>
         );
-      }
 
-      if (status === "draft") {
-        const draftCount = rosterInvs.filter(
-          (i: { status?: string }) => i.status === "draft",
-        ).length;
+      if (status === "draft")
         return (
-          <button
-            type="button"
-            className="cursor-pointer"
-            onClick={() => onViewInvoices(person, roster)}
-          >
-            <Badge variant="outline" className="bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors">
-              <FileText className="mr-1 h-3 w-3" />
-              Draft{draftCount > 1 ? ` (${draftCount})` : ""}
-            </Badge>
-          </button>
+          <Badge variant="outline" className="bg-purple-50 text-purple-700">
+            <FileText className="mr-1 h-3 w-3" /> Draft
+          </Badge>
         );
-      }
 
       return (
         <Badge variant="outline" className="bg-gray-50 text-gray-500 whitespace-nowrap">
           No Invoice
         </Badge>
+      );
+    },
+  },
+  {
+    id: "invoices",
+    header: "",
+    cell: ({ row }: { row: any }) => {
+      const person = row.original;
+      const roster = team.rosters?.find((r: any) => r.person_id === person.id);
+      const rosterInvs = roster ? invoicesForRoster(roster) : [];
+
+      if (rosterInvs.length === 0) return null;
+
+      return (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-auto px-2 py-1 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+          onClick={() => onViewInvoices(person, roster)}
+        >
+          Invoices ({rosterInvs.length})
+        </Button>
       );
     },
   },
