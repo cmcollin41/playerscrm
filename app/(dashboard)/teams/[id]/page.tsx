@@ -95,7 +95,6 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
   const [team, setTeam] = useState<any>({});
 
   const [peopleWithPrimaryEmail, setPeopleWithPrimaryEmail] = useState<any>([]);
-  const [emailSendCounts, setEmailSendCounts] = useState<Record<string, number> | null>(null);
 
   // Fetch team data function (extracted so we can call it from callbacks)
   const fetchTeam = async () => {
@@ -237,50 +236,6 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
     // update nested `people.invoices` without changing the roster length.
   }, [team]);
 
-  // Fetch email send counts for all invoices in this team's rosters
-  useEffect(() => {
-    if (!team?.rosters?.length) return;
-
-    const invoiceIds: string[] = [];
-    for (const roster of team.rosters) {
-      const invoices = roster.people?.invoices || [];
-      for (const inv of invoices) {
-        if (inv.id && inv.roster_id === roster.id) {
-          invoiceIds.push(inv.id);
-        }
-      }
-    }
-    if (invoiceIds.length === 0) {
-      setEmailSendCounts({});
-      return;
-    }
-
-    const fetchCounts = async () => {
-      // Query emails that have metadata containing each invoice_id
-      // Use containedBy/contains filter per invoice, batched
-      const counts: Record<string, number> = {};
-      const batchSize = 20;
-      for (let i = 0; i < invoiceIds.length; i += batchSize) {
-        const batch = invoiceIds.slice(i, i + batchSize);
-        const results = await Promise.all(
-          batch.map(async (invId) => {
-            const { count } = await supabase
-              .from("emails")
-              .select("id", { count: "exact", head: true })
-              .eq("email_type", "transactional")
-              .contains("metadata", { invoice_id: invId });
-            return { invId, count: count || 0 };
-          }),
-        );
-        for (const { invId, count } of results) {
-          if (count > 0) counts[invId] = count;
-        }
-      }
-      setEmailSendCounts(counts);
-    };
-
-    fetchCounts();
-  }, [team]);
 
   // Calculate team statistics (aligned with roster table: fee payments + linked invoices)
   const stats = {
@@ -524,7 +479,6 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             team={team}
             account={account}
             onRefresh={fetchTeam}
-            emailSendCounts={emailSendCounts}
           />
         </CardContent>
       </Card>

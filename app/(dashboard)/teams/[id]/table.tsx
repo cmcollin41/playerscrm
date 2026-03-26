@@ -42,18 +42,16 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
-import SendEmailModal from "@/components/modal/send-email-sheet";
-import SendButton from "@/components/modal-buttons/send-button";
 import { useRouter } from "next/navigation";
-import { CheckCircle, Mail, FileText, ExternalLink, AlertCircle, Receipt } from "lucide-react";
+import { CheckCircle, FileText, AlertCircle, Receipt } from "lucide-react";
 import { PaperAirplaneIcon } from "@heroicons/react/24/outline";
 import SendEmailSheet from "@/components/modal/send-email-sheet";
 import { RosterBillingModal } from "@/components/modal/roster-billing-modal";
+import { RosterInvoicesDialog } from "@/components/modal/roster-invoices-dialog";
 import {
   amountsDifferCents,
   effectiveRosterOwedDollars,
   invoicesForRoster,
-  linkedInvoiceForRoster,
   rosterIsPaid,
   rosterPartiallyPaidViaInvoices,
   rosterTotalPaidCollectedDollars,
@@ -80,11 +78,6 @@ function paymentStatus(
   if (owed == null || owed <= 0) return "none";
 
   return "unpaid";
-}
-
-function isInvoiceOverdue(invoice: any) {
-  if (!invoice?.due_date || invoice.status !== "sent") return false;
-  return new Date(invoice.due_date) < new Date();
 }
 
 export type Person = {
@@ -136,9 +129,7 @@ const createColumns = (
     },
     personName: string,
   ) => void,
-  onResendInvoice: (invoiceId: string) => void,
-  resendingInvoiceId: string | null,
-  emailSendCounts: Record<string, number> | null,
+  onViewInvoices: (person: Person, roster: any) => void,
   onOpenBilling: (person: Person, roster: any) => void,
 ): ColumnDef<Person>[] => [
   {
@@ -245,49 +236,44 @@ const createColumns = (
       const person = row.original;
       const roster = team.rosters?.find((r: any) => r.person_id === person.id);
       const rosterInvs = roster ? invoicesForRoster(roster) : [];
-      const invoice =
-        rosterInvs.length === 1 ? rosterInvs[0] : linkedInvoiceForRoster(roster);
       const unpaidSent = roster ? unpaidSentInvoicesForRoster(roster) : [];
-      const resendTarget = unpaidSent[0];
-      const sendCount = resendTarget
-        ? (emailSendCounts?.[resendTarget.id] ?? 0)
-        : invoice
-          ? (emailSendCounts?.[invoice.id] ?? 0)
-          : 0;
       const status = paymentStatus(person, roster);
       const rosterOwed = effectiveRosterOwedDollars(roster);
-      const invoiceAmt =
-        invoice?.amount != null ? Number(invoice.amount) : null;
       const paidSum = roster ? rosterTotalPaidCollectedDollars(roster) : 0;
-      const priceMismatch =
-        rosterInvs.length === 1 &&
-        invoice &&
-        rosterOwed != null &&
-        invoiceAmt != null &&
-        invoice.status !== "paid" &&
-        amountsDifferCents(invoiceAmt, rosterOwed);
+      const hasOverdue = unpaidSent.some(
+        (inv: any) => inv.due_date && new Date(inv.due_date) < new Date(),
+      );
 
       if (status === "none") {
-        return (
-          <span className="text-xs text-gray-400">—</span>
-        );
+        return <span className="text-xs text-gray-400">—</span>;
       }
 
       if (status === "paid") {
         return (
-          <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-            <CheckCircle className="mr-1 h-3 w-3" />
-            Paid
-          </Badge>
+          <button
+            type="button"
+            className="cursor-pointer"
+            onClick={() => onViewInvoices(person, roster)}
+          >
+            <Badge className="bg-green-100 text-green-800 hover:bg-green-200 transition-colors">
+              <CheckCircle className="mr-1 h-3 w-3" />
+              Paid
+              {rosterInvs.length > 1 ? ` (${rosterInvs.length})` : ""}
+            </Badge>
+          </button>
         );
       }
 
       if (status === "partial") {
         return (
-          <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            className="flex flex-col items-start gap-1 cursor-pointer"
+            onClick={() => onViewInvoices(person, roster)}
+          >
             <Badge
               variant="outline"
-              className="bg-amber-50 text-amber-900 border-amber-200 whitespace-normal text-left"
+              className="bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100 transition-colors whitespace-normal text-left"
             >
               Partial
               {rosterOwed != null ? (
@@ -296,87 +282,40 @@ const createColumns = (
                 </span>
               ) : null}
             </Badge>
-            {unpaidSent.length > 0 ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => resendTarget && onResendInvoice(resendTarget.id)}
-                disabled={resendingInvoiceId === resendTarget?.id}
-                className="h-auto px-2 py-1 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
-                title={
-                  unpaidSent.length > 1
-                    ? `Resend one of ${unpaidSent.length} open invoices (oldest in queue first)`
-                    : "Resend invoice"
-                }
-              >
-                <PaperAirplaneIcon className="h-3 w-3 mr-1" />
-                {resendingInvoiceId === resendTarget?.id
-                  ? "Sending..."
-                  : unpaidSent.length > 1
-                    ? `Resend (${unpaidSent.length} open)`
-                    : "Resend"}
-              </Button>
-            ) : null}
-          </div>
+            <span className="text-xs text-blue-600 hover:underline">
+              {rosterInvs.length} invoice{rosterInvs.length !== 1 ? "s" : ""} — view
+            </span>
+          </button>
         );
       }
 
       if (status === "sent") {
-        const overdue = resendTarget
-          ? isInvoiceOverdue(resendTarget)
-          : invoice
-            ? isInvoiceOverdue(invoice)
-            : false;
         return (
-          <div className="flex flex-col gap-1">
-            <Button
+          <button
+            type="button"
+            className="flex flex-col items-start gap-1 cursor-pointer"
+            onClick={() => onViewInvoices(person, roster)}
+          >
+            <Badge
               variant="outline"
-              size="sm"
-              onClick={() =>
-                resendTarget
-                  ? onResendInvoice(resendTarget.id)
-                  : invoice && onResendInvoice(invoice.id)
-              }
-              disabled={
-                resendingInvoiceId === (resendTarget?.id ?? invoice?.id)
-              }
-              className={`h-auto px-2 py-1 text-xs ${
-                overdue
-                  ? "text-red-600 border-red-200 hover:bg-red-50"
-                  : "text-blue-600 border-blue-200 hover:bg-blue-50"
+              className={`transition-colors ${
+                hasOverdue
+                  ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                  : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
               }`}
-              title={
-                unpaidSent.length > 1
-                  ? overdue
-                    ? "Resend oldest overdue open invoice"
-                    : `Resend one of ${unpaidSent.length} open invoices`
-                  : overdue
-                    ? "Resend overdue invoice"
-                    : "Resend invoice"
-              }
             >
-              <PaperAirplaneIcon className="h-3 w-3 mr-1" />
-              {resendingInvoiceId === (resendTarget?.id ?? invoice?.id)
-                ? "Sending..."
-                : unpaidSent.length > 1
-                  ? `Resend (${unpaidSent.length})`
-                  : "Resend"}
-            </Button>
-            {sendCount > 0 && (
-              <span className="text-xs text-gray-500 pl-2">
-                {sendCount} email{sendCount !== 1 ? "s" : ""} sent
-              </span>
-            )}
-            {priceMismatch && (
-              <span
-                className="text-xs text-amber-700 flex items-center gap-1 pl-2"
-                title={`Roster price $${rosterOwed!.toFixed(2)} vs invoice $${invoiceAmt!.toFixed(2)}`}
-              >
-                <AlertCircle className="h-3 w-3 shrink-0" />
-                Price ≠ roster
-              </span>
-            )}
-          </div>
+              {hasOverdue ? (
+                <AlertCircle className="mr-1 h-3 w-3" />
+              ) : (
+                <PaperAirplaneIcon className="mr-1 h-3 w-3" />
+              )}
+              {hasOverdue ? "Overdue" : "Sent"}
+              {rosterInvs.length > 1 ? ` (${rosterInvs.length})` : ""}
+            </Badge>
+            <span className="text-xs text-blue-600 hover:underline">
+              View & resend
+            </span>
+          </button>
         );
       }
 
@@ -385,10 +324,16 @@ const createColumns = (
           (i: { status?: string }) => i.status === "draft",
         ).length;
         return (
-          <Badge variant="outline" className="bg-purple-50 text-purple-700">
-            <FileText className="mr-1 h-3 w-3" />
-            Draft{draftCount > 1 ? ` (${draftCount})` : ""}
-          </Badge>
+          <button
+            type="button"
+            className="cursor-pointer"
+            onClick={() => onViewInvoices(person, roster)}
+          >
+            <Badge variant="outline" className="bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors">
+              <FileText className="mr-1 h-3 w-3" />
+              Draft{draftCount > 1 ? ` (${draftCount})` : ""}
+            </Badge>
+          </button>
         );
       }
 
@@ -485,7 +430,6 @@ interface TeamTableProps {
   team: any;
   account: any;
   onRefresh?: () => void | Promise<void>;
-  emailSendCounts?: Record<string, number> | null;
 }
 
 export function TeamTable({
@@ -493,7 +437,6 @@ export function TeamTable({
   team,
   account,
   onRefresh,
-  emailSendCounts = null,
 }: TeamTableProps) {
   const router = useRouter();
   const { refresh } = router;
@@ -505,8 +448,6 @@ export function TeamTable({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
-  const [resendingInvoiceId, setResendingInvoiceId] = useState<string | null>(null);
-  
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingRosterId, setEditingRosterId] = useState<string>("");
   const [editingJerseyNumber, setEditingJerseyNumber] = useState<number | null>(null);
@@ -520,10 +461,20 @@ export function TeamTable({
   const [billingPerson, setBillingPerson] = useState<Person | null>(null);
   const [billingRoster, setBillingRoster] = useState<any>(null);
 
+  const [invoicesDialogOpen, setInvoicesDialogOpen] = useState(false);
+  const [invoicesDialogPerson, setInvoicesDialogPerson] = useState<Person | null>(null);
+  const [invoicesDialogRoster, setInvoicesDialogRoster] = useState<any>(null);
+
   const handleOpenBilling = (person: Person, roster: any) => {
     setBillingPerson(person);
     setBillingRoster(roster);
     setBillingOpen(true);
+  };
+
+  const handleViewInvoices = (person: Person, roster: any) => {
+    setInvoicesDialogPerson(person);
+    setInvoicesDialogRoster(roster);
+    setInvoicesDialogOpen(true);
   };
 
   const handleEditRoster = (
@@ -549,48 +500,12 @@ export function TeamTable({
     setEditModalOpen(true);
   };
 
-  const handleResendInvoice = async (invoiceId: string) => {
-    setResendingInvoiceId(invoiceId);
-    
-    try {
-      const response = await fetch("/api/invoices/resend", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ invoiceId }),
-      });
-
-      const responseData = await response.json();
-
-      if (!response.ok) {
-        throw new Error(responseData.error || "Failed to resend invoice");
-      }
-
-      toast.success("Invoice email resent successfully!");
-      
-      // Refresh the team data to update UI
-      if (onRefresh) {
-        onRefresh();
-      } else {
-        refresh();
-      }
-    } catch (error: any) {
-      console.error("Error resending invoice:", error);
-      toast.error(error.message || "Failed to resend invoice");
-    } finally {
-      setResendingInvoiceId(null);
-    }
-  };
-
   const table = useReactTable({
     data,
     columns: createColumns(
       team,
       handleEditRoster,
-      handleResendInvoice,
-      resendingInvoiceId,
-      emailSendCounts,
+      handleViewInvoices,
       handleOpenBilling,
     ),
     onSortingChange: setSorting,
@@ -661,6 +576,24 @@ export function TeamTable({
         personName={editingPersonName}
         onRefresh={onRefresh}
       />
+      {invoicesDialogPerson && invoicesDialogRoster ? (
+        <RosterInvoicesDialog
+          open={invoicesDialogOpen}
+          onOpenChange={(open) => {
+            setInvoicesDialogOpen(open);
+            if (!open) {
+              setInvoicesDialogPerson(null);
+              setInvoicesDialogRoster(null);
+            }
+          }}
+          personName={`${invoicesDialogPerson.first_name} ${invoicesDialogPerson.last_name}`}
+          teamName={team?.name ?? "Team"}
+          invoices={invoicesForRoster(invoicesDialogRoster)}
+          owedAmount={effectiveRosterOwedDollars(invoicesDialogRoster)}
+          paidTotal={rosterTotalPaidCollectedDollars(invoicesDialogRoster)}
+          onRefresh={onRefresh}
+        />
+      ) : null}
       {billingPerson && billingRoster ? (
         <RosterBillingModal
           open={billingOpen}
