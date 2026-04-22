@@ -1,5 +1,6 @@
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
+import { sendEventConfirmations } from "@/lib/events/event-confirmation";
 import { NextResponse } from "next/server";
 
 
@@ -162,7 +163,58 @@ const updateSupabase = async (event: any, supabase: any) => {
   // Handle payment intent events (for non-invoice payments)
   if (event.type.startsWith('payment_intent.')) {
     const paymentIntent = event.data.object;
-    
+    const piMetadata = paymentIntent.metadata || {};
+
+    // Event registration flow — identified by registration_ids + event_id in metadata
+    if (piMetadata.registration_ids && piMetadata.event_id) {
+      const registrationIds = String(piMetadata.registration_ids)
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+
+      // Update payments row status (matched by payment_intent_id)
+      await supabase
+        .from("payments")
+        .update({ status: paymentIntent.status })
+        .eq("payment_intent_id", paymentIntent.id);
+
+      if (event.type === "payment_intent.succeeded" && registrationIds.length > 0) {
+        // Idempotency guard: only flip + email if at least one reg is still pending
+        const { data: existingRegs } = await supabase
+          .from("event_registrations")
+          .select("id, status")
+          .in("id", registrationIds);
+
+        const needsConfirm = (existingRegs || []).some(
+          (r: any) => r.status !== "confirmed"
+        );
+
+        if (needsConfirm) {
+          await supabase
+            .from("event_registrations")
+            .update({ status: "confirmed" })
+            .in("id", registrationIds);
+
+          try {
+            await sendEventConfirmations({
+              eventId: piMetadata.event_id,
+              registrationIds,
+              supabase,
+            });
+          } catch (emailErr) {
+            console.error("Event confirmation email failed:", emailErr);
+          }
+        }
+      } else if (event.type === "payment_intent.canceled" && registrationIds.length > 0) {
+        await supabase
+          .from("event_registrations")
+          .update({ status: "cancelled" })
+          .in("id", registrationIds);
+      }
+
+      return;
+    }
+
     // Only create/update payment record if we have an invoice_id in metadata
     if (paymentIntent.metadata.invoice_id) {
       const { error: paymentError } = await supabase
