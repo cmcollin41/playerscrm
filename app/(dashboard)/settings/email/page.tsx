@@ -428,15 +428,13 @@ export default function EmailSettingsPage() {
       <div>
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">Sender addresses</h2>
-          {verifiedDomains.length > 0 && (
-            <button
-              onClick={() => setShowSenderForm(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-gray-800"
-            >
-              <Plus className="h-3 w-3" />
-              Add sender
-            </button>
-          )}
+          <button
+            onClick={() => setShowSenderForm(true)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-gray-800"
+          >
+            <Plus className="h-3 w-3" />
+            Add sender
+          </button>
         </div>
 
         {showSenderForm && (
@@ -485,10 +483,17 @@ export default function EmailSettingsPage() {
                 </button>
               </div>
             </div>
-            <p className="text-muted-foreground mt-2 text-xs">
-              The email must use a verified domain (
-              {verifiedDomains.map((d) => d.domain).join(", ")}).
-            </p>
+            {verifiedDomains.length > 0 && (
+              <p className="text-muted-foreground mt-2 text-xs">
+                The email must use a verified domain (
+                {verifiedDomains.map((d) => d.domain).join(", ")}).
+              </p>
+            )}
+            {verifiedDomains.length === 0 && (
+              <p className="mt-2 text-xs text-amber-600">
+                Note: verify a sending domain first for new senders to work.
+              </p>
+            )}
           </div>
         )}
 
