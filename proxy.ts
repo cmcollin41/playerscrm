@@ -1,15 +1,13 @@
-import { NextResponse, type NextRequest } from 'next/server'
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from "next/server"
+import { createServerClient } from "@supabase/ssr"
 
 export const config = {
   matcher: ["/((?!api/|_next/|_static/|_vercel|[\\w-]+\\.\\w+).*)"],
-};
+}
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
+    request: { headers: request.headers },
   })
 
   const supabase = createServerClient(
@@ -21,44 +19,132 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
+          cookiesToSet.forEach(({ name, value }) =>
+            request.cookies.set(name, value),
+          )
+          response = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options)
+            response.cookies.set(name, value, options),
           )
         },
       },
-    }
+    },
   )
 
   const url = request.nextUrl
+  const hostname = request.headers.get("host") || ""
   const path = url.pathname
 
-  // Handle www redirect
-  if (url.hostname.startsWith('www.')) {
-    const newUrl = new URL(`https://${process.env.NEXT_PUBLIC_ROOT_DOMAIN}${path}`, request.url)
-    return NextResponse.redirect(newUrl, { status: 301 })
+  // Determine root domain (e.g. "athletes.app" or "localhost:3000")
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000"
+
+  // Extract subdomain
+  // hostname: "provobasketball.athletes.app" → subdomain: "provobasketball"
+  // hostname: "athletes.app" → subdomain: null
+  // hostname: "provobasketball.localhost:3000" → subdomain: "provobasketball"
+  let subdomain: string | null = null
+  if (hostname !== rootDomain && hostname !== `www.${rootDomain}`) {
+    const sub = hostname.replace(`.${rootDomain}`, "")
+    if (sub !== hostname) {
+      subdomain = sub
+    }
   }
 
-  // Check authentication
-  const { data: { session } } = await supabase.auth.getSession()
+  // Handle www redirect
+  if (hostname === `www.${rootDomain}`) {
+    return NextResponse.redirect(
+      new URL(`https://${rootDomain}${path}`, request.url),
+      { status: 301 },
+    )
+  }
 
-  // Define public paths that don't require authentication
-  const publicPaths = ["/login", "/forgot-password", "/update-password", "/public"]
-  const isPublicPath = publicPaths.some(publicPath => path.startsWith(publicPath))
+  // --- Root domain: serve marketing/home pages ---
+  if (!subdomain) {
+    if (
+      path === "/" ||
+      path === "/demo" ||
+      path === "/portal" ||
+      path.startsWith("/home")
+    ) {
+      const rewritePath =
+        path === "/"
+          ? "/home"
+          : path.startsWith("/home")
+            ? path
+            : `/home${path}`
+      const rewritten = NextResponse.rewrite(
+        new URL(rewritePath, request.url),
+      )
+      response.cookies.getAll().forEach(({ name, value }) => {
+        rewritten.cookies.set(name, value)
+      })
+      return rewritten
+    }
 
-  // Redirect logic
-  if (!session && !isPublicPath && !path.includes("/public/")) {
-    // Redirect to login if not authenticated and trying to access protected route
+    // Login, dashboard, etc. still accessible from root domain
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    const publicPaths = ["/login", "/forgot-password", "/update-password"]
+    const isPublicPath = publicPaths.some((p) => path.startsWith(p))
+
+    if (!session && !isPublicPath) {
+      return NextResponse.redirect(new URL("/login", request.url))
+    } else if (session && path === "/login") {
+      return NextResponse.redirect(new URL("/", request.url))
+    }
+
+    return response
+  }
+
+  // --- Subdomain: tenant routes ---
+  // Pass the subdomain to downstream pages via header
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set("x-subdomain", subdomain)
+
+  // Public tenant paths that don't require auth
+  const tenantPublicPaths = [
+    "/register",
+    "/login",
+    "/forgot-password",
+    "/update-password",
+  ]
+  const isPublicTenantPath = tenantPublicPaths.some((p) => path.startsWith(p))
+
+  // Check auth for protected tenant routes
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session && !isPublicTenantPath && path !== "/") {
     return NextResponse.redirect(new URL("/login", request.url))
   } else if (session && path === "/login") {
-    // Redirect to home if authenticated and trying to access login page
     return NextResponse.redirect(new URL("/", request.url))
   }
+
+  response = NextResponse.next({
+    request: { headers: requestHeaders },
+  })
+
+  // Re-apply cookie changes from supabase auth refresh
+  const supabaseRefresh = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options),
+          )
+        },
+      },
+    },
+  )
+  await supabaseRefresh.auth.getSession()
 
   return response
 }

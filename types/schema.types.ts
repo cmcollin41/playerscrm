@@ -8,6 +8,7 @@ export interface Accounts {
   stripe_id?: string;
   application_fee?: number;
   sport?: string;
+  subdomain?: string;
 }
 
 export interface People {

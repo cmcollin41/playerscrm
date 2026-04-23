@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { getSubdomainFromHeaders } from "@/lib/tenant"
 import { notFound } from "next/navigation"
 import { RegisterClient } from "./register-client"
 
@@ -9,14 +10,21 @@ export default async function RegisterPage({
 }) {
   const { slug } = await params
   const supabase = await createClient()
+  const subdomain = await getSubdomainFromHeaders()
 
-  // Fetch published event by slug (uses anon policy)
-  const { data: event, error } = await supabase
+  // Build query for published event by slug
+  let query = supabase
     .from("events")
-    .select("*, accounts(id, name, stripe_id, application_fee)")
+    .select("*, accounts!inner(id, name, stripe_id, application_fee, subdomain)")
     .eq("slug", slug)
     .eq("is_published", true)
-    .single()
+
+  // Scope to the account matching the subdomain
+  if (subdomain) {
+    query = query.eq("accounts.subdomain", subdomain)
+  }
+
+  const { data: event, error } = await query.single()
 
   if (error || !event) notFound()
 
