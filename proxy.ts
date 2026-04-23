@@ -38,15 +38,23 @@ export async function proxy(request: NextRequest) {
   // Determine root domain (e.g. "athletes.app" or "localhost:3000")
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000"
 
-  // Extract subdomain
+  // Extract subdomain or detect custom domain
   // hostname: "provobasketball.athletes.app" → subdomain: "provobasketball"
   // hostname: "athletes.app" → subdomain: null
-  // hostname: "provobasketball.localhost:3000" → subdomain: "provobasketball"
+  // hostname: "app.provobasketball.com" → customDomain: "app.provobasketball.com"
   let subdomain: string | null = null
-  if (hostname !== rootDomain && hostname !== `www.${rootDomain}`) {
+  let customDomain: string | null = null
+
+  if (hostname === rootDomain || hostname === `www.${rootDomain}`) {
+    // Root domain or www — no tenant
+  } else {
     const sub = hostname.replace(`.${rootDomain}`, "")
     if (sub !== hostname) {
+      // It's a subdomain of our root domain
       subdomain = sub
+    } else {
+      // Not our root domain at all — treat as custom domain
+      customDomain = hostname
     }
   }
 
@@ -56,6 +64,25 @@ export async function proxy(request: NextRequest) {
       new URL(`https://${rootDomain}${path}`, request.url),
       { status: 301 },
     )
+  }
+
+  // --- Custom domain: look up account and treat like a subdomain ---
+  if (customDomain) {
+    const { data: account } = await supabase
+      .from("accounts")
+      .select("subdomain")
+      .eq("custom_domain", customDomain)
+      .single()
+
+    if (account?.subdomain) {
+      subdomain = account.subdomain
+    } else {
+      // Unknown custom domain — redirect to root
+      return NextResponse.redirect(
+        new URL(`https://${rootDomain}`, request.url),
+        { status: 302 },
+      )
+    }
   }
 
   // --- Root domain: serve marketing/home pages ---

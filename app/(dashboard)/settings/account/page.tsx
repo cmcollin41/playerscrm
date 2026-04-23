@@ -10,6 +10,7 @@ import {
   Building2,
   ChevronRight,
   DollarSign,
+  Globe,
   RefreshCw,
   Trophy,
   Users,
@@ -232,6 +233,12 @@ export default function AccountSettingsPage() {
       icon: Trophy,
       title: "Award types",
       description: "Standard awards for player recognition",
+    },
+    {
+      href: "/settings/domain",
+      icon: Globe,
+      title: "Custom domain",
+      description: "Use your own domain for public-facing pages",
     },
   ]
 

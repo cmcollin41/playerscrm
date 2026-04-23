@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 
 /**
  * Get the current tenant account from the subdomain header (set by proxy.ts).
+ * Works for both *.athletes.app subdomains and custom CNAME domains.
  * Returns null when on the root domain (no subdomain).
  */
 export async function getTenantAccount() {
@@ -14,7 +15,7 @@ export async function getTenantAccount() {
   const supabase = await createClient()
   const { data: account } = await supabase
     .from("accounts")
-    .select("id, name, subdomain, stripe_id, application_fee, organization_id, logo, sport")
+    .select("id, name, subdomain, custom_domain, stripe_id, application_fee, organization_id, logo, sport")
     .eq("subdomain", subdomain)
     .single()
 

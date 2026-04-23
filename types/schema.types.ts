@@ -9,6 +9,7 @@ export interface Accounts {
   application_fee?: number;
   sport?: string;
   subdomain?: string;
+  custom_domain?: string;
 }
 
 export interface People {
