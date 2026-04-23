@@ -56,13 +56,16 @@ export async function GET() {
     getConfigResponse(account.custom_domain),
   ])
 
+  const attached = domainData?.error?.code !== "not_found"
+
   return NextResponse.json({
     domain: account.custom_domain,
     subdomain: account.subdomain,
-    verified: domainData.verified,
+    attached,
+    verified: attached ? domainData.verified : false,
     configured: !configData.misconfigured,
     configuredBy: configData.configuredBy,
-    verification: domainData.verification,
+    verification: attached ? domainData.verification : undefined,
   })
 }
 
@@ -182,6 +185,23 @@ export async function PATCH() {
 
   if (!account?.custom_domain) {
     return NextResponse.json({ error: "No domain configured" }, { status: 400 })
+  }
+
+  // Self-heal: if the domain was dropped from the Vercel project out-of-band,
+  // re-attach it before verifying so the user doesn't get stuck on Pending.
+  const existing = await getDomainResponse(account.custom_domain)
+  if (existing?.error?.code === "not_found") {
+    const reattached = await addDomainToVercel(account.custom_domain)
+    if (reattached?.error) {
+      return NextResponse.json(
+        {
+          error:
+            reattached.error.message ||
+            "Domain is not attached to this project and could not be re-attached.",
+        },
+        { status: 400 },
+      )
+    }
   }
 
   const result = await verifyDomain(account.custom_domain)

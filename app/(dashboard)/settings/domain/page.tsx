@@ -11,6 +11,7 @@ import { AlertCircle, CheckCircle2, ExternalLink, Globe, RefreshCw, Trash2 } fro
 interface DomainStatus {
   domain: string | null
   subdomain: string | null
+  attached?: boolean
   verified?: boolean
   configured?: boolean
   configuredBy?: string | null
@@ -224,6 +225,10 @@ export default function DomainSettingsPage() {
                   <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700">
                     <CheckCircle2 className="h-3 w-3" /> Active
                   </span>
+                ) : status.attached === false ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs text-red-700">
+                    <AlertCircle className="h-3 w-3" /> Not attached
+                  </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs text-amber-700">
                     <AlertCircle className="h-3 w-3" /> Pending
@@ -250,8 +255,22 @@ export default function DomainSettingsPage() {
               </div>
             </div>
 
+            {/* Not attached — Vercel dropped the domain from the project */}
+            {status.attached === false && (
+              <div className="rounded-md border border-red-100 bg-red-50 p-4">
+                <h3 className="mb-1 text-sm font-medium text-red-900">
+                  Not attached to Vercel
+                </h3>
+                <p className="text-xs text-red-800">
+                  This domain is saved to your workspace but isn&apos;t currently linked to
+                  the Vercel project. Click <span className="font-medium">Verify</span> to
+                  re-attach it automatically.
+                </p>
+              </div>
+            )}
+
             {/* DNS instructions */}
-            {(!status.verified || !status.configured) && (
+            {status.attached !== false && (!status.verified || !status.configured) && (
               <div className="rounded-md border border-amber-100 bg-amber-50 p-4">
                 <h3 className="mb-2 text-sm font-medium text-amber-900">
                   Configure your DNS

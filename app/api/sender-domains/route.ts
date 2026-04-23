@@ -221,25 +221,43 @@ export async function PATCH(req: Request) {
   }
 
   try {
-    const result = await resend.domains.verify(domain.resend_domain_id)
+    await resend.domains.verify(domain.resend_domain_id)
 
-    // Fetch updated domain status from Resend
     const domainInfo = await resend.domains.get(domain.resend_domain_id)
-    const status = domainInfo.data?.status === "verified" ? "verified" : "pending"
+
+    if (domainInfo.error || !domainInfo.data) {
+      console.error("Resend domain.get failed:", domainInfo.error)
+      return NextResponse.json(
+        {
+          error:
+            domainInfo.error?.message ||
+            "Resend could not return this domain — the API key may not have access to it.",
+        },
+        { status: 502 },
+      )
+    }
+
+    const resendStatus = domainInfo.data.status
+    const status =
+      resendStatus === "verified"
+        ? "verified"
+        : resendStatus === "failed" || resendStatus === "temporary_failure"
+          ? "failed"
+          : "pending"
 
     await supabase
       .from("sender_domains")
       .update({
         verification_status: status,
         verified_at: status === "verified" ? new Date().toISOString() : null,
-        dns_records: domainInfo.data?.records || domain.dns_records,
+        dns_records: domainInfo.data.records || domain.dns_records,
         updated_at: new Date().toISOString(),
       })
       .eq("id", domain_id)
 
     return NextResponse.json({
       status,
-      dns_records: domainInfo.data?.records || domain.dns_records,
+      dns_records: domainInfo.data.records || domain.dns_records,
     })
   } catch (err: any) {
     console.error("Error verifying domain:", err)
