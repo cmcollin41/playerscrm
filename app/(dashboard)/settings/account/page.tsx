@@ -11,6 +11,7 @@ import {
   ChevronRight,
   DollarSign,
   Globe,
+  Mail,
   RefreshCw,
   Trophy,
   Users,
@@ -233,6 +234,12 @@ export default function AccountSettingsPage() {
       icon: Trophy,
       title: "Award types",
       description: "Standard awards for player recognition",
+    },
+    {
+      href: "/settings/email",
+      icon: Mail,
+      title: "Email sending",
+      description: "Verify sending domains and manage sender addresses",
     },
     {
       href: "/settings/domain",

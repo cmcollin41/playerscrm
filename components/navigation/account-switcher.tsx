@@ -15,6 +15,7 @@ interface Account {
   id: string
   name: string
   sport?: string
+  subdomain?: string
 }
 
 interface AccountSwitcherProps {
@@ -50,7 +51,7 @@ export function AccountSwitcher({ currentAccountId, currentAccountName }: Accoun
     const fetchAccounts = async () => {
       const { data: members } = await supabase
         .from("account_members")
-        .select("account_id, accounts(id, name, sport)")
+        .select("account_id, accounts(id, name, sport, subdomain)")
 
       if (members && members.length > 0) {
         const accs = members
@@ -84,7 +85,16 @@ export function AccountSwitcher({ currentAccountId, currentAccountName }: Accoun
       return
     }
 
-    window.location.href = "/"
+    // Redirect to the new account's subdomain
+    const targetAccount = accounts.find((a) => a.id === accountId)
+    const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000"
+    const protocol = rootDomain.includes("localhost") ? "http" : "https"
+
+    if (targetAccount?.subdomain) {
+      window.location.href = `${protocol}://${targetAccount.subdomain}.${rootDomain}/`
+    } else {
+      window.location.href = "/"
+    }
   }
 
   const activeAccount = accounts.find((a) => a.id === activeId)
