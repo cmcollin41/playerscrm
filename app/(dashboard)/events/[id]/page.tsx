@@ -1,9 +1,17 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
+import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, MapPin, Users, DollarSign } from "lucide-react"
-import { EventDetailClient } from "./event-detail-client"
+import { Button } from "@/components/ui/button"
+import { Calendar, MapPin, Users, DollarSign, Pencil } from "lucide-react"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
+import { EventDetailClient, DeleteEventButton } from "./event-detail-client"
 
 export default async function EventDetailPage({
   params,
@@ -38,7 +46,7 @@ export default async function EventDetailPage({
 
   return (
     <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold tracking-tight">{event.name}</h1>
@@ -49,6 +57,15 @@ export default async function EventDetailPage({
           {event.description && (
             <p className="text-muted-foreground mt-1">{event.description}</p>
           )}
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link href={`/events/${event.id}/edit`}>
+            <Button variant="outline" size="sm">
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit
+            </Button>
+          </Link>
+          <DeleteEventButton eventId={event.id} />
         </div>
       </div>
 
@@ -82,10 +99,25 @@ export default async function EventDetailPage({
             <Users className="h-5 w-5 text-gray-400" />
             <div>
               <p className="text-xs text-gray-500">Registered</p>
-              <p className="text-sm font-medium">
+              <div className="text-sm font-medium">
                 {confirmed}{event.capacity ? ` / ${event.capacity}` : ""}
-                {pending > 0 && <span className="text-gray-400 ml-1">({pending} pending)</span>}
-              </p>
+                {pending > 0 && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="ml-1 cursor-help text-gray-400 underline decoration-dotted">
+                          ({pending} pending)
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-xs">
+                        Pending = registration started but payment not confirmed yet.
+                        The Stripe webhook flips these to Confirmed once payment succeeds.
+                        You can also mark them Confirmed manually from the attendees table.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
