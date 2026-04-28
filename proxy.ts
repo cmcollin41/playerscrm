@@ -91,6 +91,8 @@ export async function proxy(request: NextRequest) {
       path === "/" ||
       path === "/demo" ||
       path === "/portal" ||
+      path === "/docs" ||
+      path.startsWith("/docs/") ||
       path.startsWith("/home")
     ) {
       const rewritePath =

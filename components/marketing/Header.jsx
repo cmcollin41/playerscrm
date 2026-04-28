@@ -100,8 +100,8 @@ export function Header() {
                             <MobileNavLink href="/#features">
                               Features
                             </MobileNavLink>
-                            <MobileNavLink href="/#reviews">
-                              Reviews
+                            <MobileNavLink href="/docs">
+                              Docs
                             </MobileNavLink>
                             <MobileNavLink href="/#pricing">
                               Pricing
