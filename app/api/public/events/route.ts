@@ -14,6 +14,7 @@ interface PublicEvent {
   capacity: number | null
   fee_amount: number
   fee_description: string | null
+  image_url: string | null
   registration_open: boolean
   register_url: string
 }
@@ -74,7 +75,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("events")
       .select(
-        "id, slug, name, description, location, starts_at, ends_at, registration_opens_at, registration_closes_at, capacity, fee_amount, fee_description",
+        "id, slug, name, description, location, starts_at, ends_at, registration_opens_at, registration_closes_at, capacity, fee_amount, fee_description, image_url",
       )
       .eq("account_id", accountId)
       .eq("is_published", true)
@@ -118,6 +119,7 @@ export async function GET(request: NextRequest) {
         capacity: e.capacity,
         fee_amount: e.fee_amount,
         fee_description: e.fee_description,
+        image_url: e.image_url,
         registration_open: registrationOpen,
         register_url: buildRegisterUrl(account, e.slug),
       }

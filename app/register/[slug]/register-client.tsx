@@ -317,7 +317,16 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   return (
     <>
       {/* Event header - always visible */}
-      <Card className="mb-6">
+      <Card className="mb-6 overflow-hidden">
+        {event.image_url && (
+          <div className="aspect-[16/9] w-full overflow-hidden bg-gray-100">
+            <img
+              src={event.image_url}
+              alt={event.name}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        )}
         <CardHeader className="text-center">
           <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">
             {account?.name}

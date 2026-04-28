@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { ImageDropzone } from "@/components/ui/image-dropzone"
 import { toast } from "sonner"
 import { slugify } from "@/lib/slug"
 import LoadingDots from "@/components/icons/loading-dots"
@@ -30,6 +31,7 @@ export default function NewEventPage() {
   const [feeAmount, setFeeAmount] = useState("")
   const [feeDescription, setFeeDescription] = useState("")
   const [isPublished, setIsPublished] = useState(false)
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -60,6 +62,7 @@ export default function NewEventPage() {
         fee_amount: feeInCents,
         fee_description: feeDescription.trim() || null,
         is_published: isPublished,
+        image_url: imageUrl,
       })
 
       if (error) throw error
@@ -109,6 +112,31 @@ export default function NewEventPage() {
                 placeholder="Provo High School Gym"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Cover Image</Label>
+              <ImageDropzone
+                value={imageUrl}
+                onChange={setImageUrl}
+                onFileSelect={async (file) => {
+                  const account = await getAccount()
+                  if (!account?.id) throw new Error("No account found")
+                  const ext = file.name.split(".").pop()
+                  const fileName = `${account.id}/${crypto.randomUUID()}.${ext}`
+                  const { data, error } = await supabase.storage
+                    .from("event-images")
+                    .upload(fileName, file, { upsert: false })
+                  if (error) throw error
+                  const { data: urlData } = supabase.storage
+                    .from("event-images")
+                    .getPublicUrl(data.path)
+                  toast.success("Image uploaded")
+                  return urlData.publicUrl
+                }}
+                onError={(msg) => toast.error(msg)}
+                placeholder="Drop a cover image (JPG, PNG, WebP — max 5MB)"
+                className="min-h-32"
               />
             </div>
           </CardContent>

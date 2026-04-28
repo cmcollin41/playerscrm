@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ImageDropzone } from "@/components/ui/image-dropzone"
 import { toast } from "sonner"
 import LoadingDots from "@/components/icons/loading-dots"
 
@@ -42,6 +43,7 @@ export function EventEditClient({ event }: { event: any }) {
   )
   const [feeDescription, setFeeDescription] = useState(event.fee_description || "")
   const [isPublished, setIsPublished] = useState(!!event.is_published)
+  const [imageUrl, setImageUrl] = useState<string | null>(event.image_url || null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -68,6 +70,7 @@ export function EventEditClient({ event }: { event: any }) {
           fee_amount: feeInCents,
           fee_description: feeDescription.trim() || null,
           is_published: isPublished,
+          image_url: imageUrl,
         })
         .eq("id", event.id)
 
@@ -116,6 +119,29 @@ export function EventEditClient({ event }: { event: any }) {
                 id="location"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Cover Image</Label>
+              <ImageDropzone
+                value={imageUrl}
+                onChange={setImageUrl}
+                onFileSelect={async (file) => {
+                  const ext = file.name.split(".").pop()
+                  const fileName = `${event.account_id}/${crypto.randomUUID()}.${ext}`
+                  const { data, error } = await supabase.storage
+                    .from("event-images")
+                    .upload(fileName, file, { upsert: false })
+                  if (error) throw error
+                  const { data: urlData } = supabase.storage
+                    .from("event-images")
+                    .getPublicUrl(data.path)
+                  toast.success("Image uploaded")
+                  return urlData.publicUrl
+                }}
+                onError={(msg) => toast.error(msg)}
+                placeholder="Drop a cover image (JPG, PNG, WebP — max 5MB)"
+                className="min-h-32"
               />
             </div>
           </CardContent>

@@ -260,6 +260,7 @@ export default function DocsPage() {
       "capacity": 50,
       "fee_amount": 15000,
       "fee_description": "Per camper",
+      "image_url": "https://…/event-images/{account_id}/{uuid}.jpg",
       "registration_open": true,
       "register_url": "https://yourname.athletes.app/register/summer-camp-2026"
     }
