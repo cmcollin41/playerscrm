@@ -285,6 +285,13 @@ export default function DocsPage() {
               as-is — don&apos;t reconstruct the URL yourself.
             </li>
             <li>
+              <Code>image_url</Code> is the event&apos;s cover image — a
+              public URL hosted on Supabase Storage. <Code>null</Code> if the
+              event has no cover. Safe to use directly in <Code>&lt;img&gt;</Code>{" "}
+              tags or CSS <Code>background-image</Code>. Recommended display
+              ratio is 16:9.
+            </li>
+            <li>
               When <Code>slug</Code> is provided the response key is{" "}
               <Code>event</Code> (singular) instead of <Code>events</Code>.
             </li>
