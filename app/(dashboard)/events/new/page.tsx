@@ -135,8 +135,9 @@ export default function NewEventPage() {
                   return urlData.publicUrl
                 }}
                 onError={(msg) => toast.error(msg)}
-                placeholder="Drop a cover image (JPG, PNG, WebP — max 5MB)"
+                placeholder="Drop a cover image (JPG, PNG, WebP — max 50MB)"
                 className="min-h-32"
+                maxSize={50 * 1024 * 1024}
               />
             </div>
           </CardContent>

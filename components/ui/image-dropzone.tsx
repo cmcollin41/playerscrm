@@ -6,7 +6,7 @@ import { ImageIcon, X } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 const ACCEPT = "image/jpeg,image/png,image/webp"
-const MAX_SIZE = 5 * 1024 * 1024 // 5MB
+const DEFAULT_MAX_SIZE = 5 * 1024 * 1024 // 5MB
 
 interface ImageDropzoneProps {
   value: string | null
@@ -16,6 +16,7 @@ interface ImageDropzoneProps {
   placeholder?: string
   disabled?: boolean
   className?: string
+  maxSize?: number
 }
 
 export function ImageDropzone({
@@ -26,6 +27,7 @@ export function ImageDropzone({
   placeholder = "Drop image here or click to upload",
   disabled = false,
   className,
+  maxSize = DEFAULT_MAX_SIZE,
 }: ImageDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
@@ -33,8 +35,9 @@ export function ImageDropzone({
   const handleFile = useCallback(
     async (file: File | null) => {
       if (!file) return
-      if (file.size > MAX_SIZE) {
-        onError?.("Image must be under 5MB")
+      if (file.size > maxSize) {
+        const mb = Math.round(maxSize / (1024 * 1024))
+        onError?.(`Image must be under ${mb}MB`)
         return
       }
       const ext = file.name.split(".").pop()?.toLowerCase()
@@ -53,7 +56,7 @@ export function ImageDropzone({
         setIsUploading(false)
       }
     },
-    [onFileSelect, onChange, onError]
+    [onFileSelect, onChange, onError, maxSize]
   )
 
   const handleDrop = useCallback(
