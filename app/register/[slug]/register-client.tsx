@@ -14,6 +14,53 @@ import { toast } from "sonner"
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
+function formatEventDateRange(starts: string | null, ends: string | null) {
+  if (!starts) return null
+  const start = new Date(starts)
+
+  if (!ends) {
+    return start.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })
+  }
+
+  const end = new Date(ends)
+  const sameDay =
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate()
+
+  if (sameDay) {
+    return start.toLocaleDateString(undefined, {
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    })
+  }
+
+  const sameYear = start.getFullYear() === end.getFullYear()
+  const sameMonth = sameYear && start.getMonth() === end.getMonth()
+
+  if (sameMonth) {
+    const month = start.toLocaleDateString(undefined, { month: "long" })
+    return `${month} ${start.getDate()}–${end.getDate()}, ${start.getFullYear()}`
+  }
+
+  if (sameYear) {
+    const startStr = start.toLocaleDateString(undefined, { month: "long", day: "numeric" })
+    const endStr = end.toLocaleDateString(undefined, { month: "long", day: "numeric" })
+    return `${startStr} – ${endStr}, ${start.getFullYear()}`
+  }
+
+  const startStr = start.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+  const endStr = end.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+  return `${startStr} – ${endStr}`
+}
+
 interface RegisterClientProps {
   event: any
   account: any
@@ -285,12 +332,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
             {event.starts_at && (
               <span className="flex items-center gap-1.5">
                 <Calendar className="h-4 w-4" />
-                {new Date(event.starts_at).toLocaleDateString(undefined, {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                {formatEventDateRange(event.starts_at, event.ends_at)}
               </span>
             )}
             {event.location && (
