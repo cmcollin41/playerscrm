@@ -144,7 +144,7 @@ function LoginContent() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
       <div className="flex items-center justify-center">
-        <Image src="/logo.svg" width={75} height={75} alt="Bulldog Logo" />
+        <Image src="/athletes-logo.png" width={75} height={75} alt="Athletes App" />
       </div>
 
       <div className="mt-5 w-[300px] rounded border border-gray-100 bg-gray-50 p-3 shadow md:w-[400px]">

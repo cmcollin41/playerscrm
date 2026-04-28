@@ -16,7 +16,7 @@ const image = "/og-image.png";
 export const metadata: Metadata = {
   title,
   description,
-  icons: ["/logo.svg"],
+  icons: ["/athletes-logo.png"],
   openGraph: {
     title,
     description,

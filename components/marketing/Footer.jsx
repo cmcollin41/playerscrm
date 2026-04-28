@@ -28,7 +28,7 @@ export function Footer() {
           <div>
             <div className="flex items-center text-gray-900">
               <div className="ml-0">
-                <img src="/athletes-logo.svg" className="w-16" />
+                <img src="/athletes-logo.png" className="w-16" />
               </div>
             </div>
             <nav className="mt-11 flex gap-8">
@@ -40,7 +40,7 @@ export function Footer() {
               href="/portal"
               className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-6 py-3 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              <img src="/athletes-logo.svg" className="w-6 mr-2" />
+              <img src="/athletes-logo.png" className="w-6 mr-2" />
               Billing Portal
             </Link>
           </div>

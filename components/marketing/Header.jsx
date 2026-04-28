@@ -51,7 +51,7 @@ export function Header() {
         <Container className="relative z-50 flex justify-between py-4">
           <div className="relative z-10 flex items-center gap-16">
             <Link href="/" aria-label="Home">
-              <img src="/athletes-logo.svg" className="w-12" />
+              <img src="/athletes-logo.png" className="w-12" />
             </Link>
             <div className="hidden lg:flex lg:gap-10">
               <NavLinks />
