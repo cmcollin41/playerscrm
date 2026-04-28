@@ -36,8 +36,9 @@ export function ImageDropzone({
     async (file: File | null) => {
       if (!file) return
       if (file.size > maxSize) {
-        const mb = Math.round(maxSize / (1024 * 1024))
-        onError?.(`Image must be under ${mb}MB`)
+        const gb = maxSize / (1024 * 1024 * 1024)
+        const label = gb >= 1 ? `${gb}GB` : `${Math.round(maxSize / (1024 * 1024))}MB`
+        onError?.(`Image must be under ${label}`)
         return
       }
       const ext = file.name.split(".").pop()?.toLowerCase()

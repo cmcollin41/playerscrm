@@ -140,9 +140,9 @@ export function EventEditClient({ event }: { event: any }) {
                   return urlData.publicUrl
                 }}
                 onError={(msg) => toast.error(msg)}
-                placeholder="Drop a cover image (JPG, PNG, WebP — max 50MB)"
+                placeholder="Drop a cover image (JPG, PNG, WebP — max 1GB)"
                 className="min-h-32"
-                maxSize={50 * 1024 * 1024}
+                maxSize={1024 * 1024 * 1024}
               />
             </div>
           </CardContent>
