@@ -67,7 +67,8 @@ interface RegisterClientProps {
   registrationOpen: boolean
 }
 
-type Step = "info" | "email" | "magic-link-sent" | "select-kids" | "payment" | "success"
+type Step = "info" | "email" | "magic-link-sent" | "registrant-kind" | "select-kids" | "payment" | "success"
+type RegistrantKind = "self" | "dependent" | "both"
 
 export function RegisterClient({ event, account, registrationOpen }: RegisterClientProps) {
   const supabase = createClient()
@@ -81,7 +82,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [registering, setRegistering] = useState(false)
   const [showAddChild, setShowAddChild] = useState(false)
-  const [newChild, setNewChild] = useState({ first_name: "", last_name: "", grade: "" })
+  const [newChild, setNewChild] = useState({ first_name: "", last_name: "", grade: "", relationship: "Parent" })
   const [addingChild, setAddingChild] = useState(false)
   const [registerSelf, setRegisterSelf] = useState(false)
   const [selfName, setSelfName] = useState({ first_name: "", last_name: "", grade: "" })
@@ -89,6 +90,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [stripeAccount, setStripeAccount] = useState<string | null>(null)
   const [hasSelfInList, setHasSelfInList] = useState(false)
+  const [registrantKind, setRegistrantKind] = useState<RegistrantKind | null>(null)
 
   // Load family via server API (avoids RLS timing issues with browser client)
   const loadFamily = async () => {
@@ -102,22 +104,49 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   useEffect(() => {
     let loaded = false
 
+    const handleSignedIn = async (sessionUser: any) => {
+      if (loaded) return
+      loaded = true
+      setUser(sessionUser)
+      setFamilyLoading(true)
+      try {
+        const res = await fetch(`/api/register/family?event_id=${event.id}`)
+        const data = await res.json()
+        const familyList = data.family || []
+        setFamily(familyList)
+        setHasSelfInList(data.hasSelf)
+        // Skip the "who are you registering" step if the user already has
+        // family on file — they've answered this question implicitly.
+        if (familyList.length > 0) {
+          setStep("select-kids")
+        } else {
+          setStep("registrant-kind")
+        }
+      } catch (err) {
+        console.error("loadFamily error:", err)
+        setStep("registrant-kind")
+      } finally {
+        setFamilyLoading(false)
+        setAuthLoading(false)
+      }
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
-        if (loaded) return
         if (session?.user) {
-          loaded = true
-          setUser(session.user)
-          setStep("select-kids")
-          setFamilyLoading(true)
-          try {
-            await loadFamily()
-          } catch (err) {
-            console.error("loadFamily error:", err)
-          } finally {
-            setFamilyLoading(false)
-          }
+          await handleSignedIn(session.user)
+        } else {
+          setAuthLoading(false)
         }
+      }
+    })
+
+    // Fallback: if no auth state event fires (e.g. magic-link redirect race),
+    // resolve the session directly so we don't hang on the loading spinner.
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        handleSignedIn(session.user)
+      } else {
         setAuthLoading(false)
       }
     })
@@ -163,64 +192,30 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
 
     setAddingChild(true)
     try {
-      // Create the person
-      const { data: person, error: personError } = await supabase
-        .from("people")
-        .insert({
-          account_id: account.id,
+      const res = await fetch("/api/register/people", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: event.id,
+          kind: "dependent",
           first_name: newChild.first_name,
           last_name: newChild.last_name,
-          name: `${newChild.first_name} ${newChild.last_name}`,
           grade: newChild.grade || null,
-          dependent: true,
-        })
-        .select("id, first_name, last_name, grade, email")
-        .single()
+          relationship: newChild.relationship || "Parent",
+        }),
+      })
 
-      if (personError) throw personError
-
-      // Create account_people link
-      await supabase.from("account_people").upsert(
-        { account_id: account.id, person_id: person.id },
-        { onConflict: "account_id,person_id" }
-      )
-
-      // Create relationship (parent → child)
-      // Link child to parent via relationship
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("people_id")
-        .eq("id", user.id)
-        .single()
-
-      let parentPersonId = profile?.people_id
-      // If no people_id on profile, find parent by email
-      if (!parentPersonId && user?.email) {
-        const { data: parentPerson } = await supabase
-          .from("people")
-          .select("id")
-          .eq("email", user.email)
-          .limit(1)
-          .maybeSingle()
-        parentPersonId = parentPerson?.id
-      }
-
-      if (parentPersonId) {
-        await supabase.from("relationships").insert({
-          person_id: parentPersonId,
-          relation_id: person.id,
-          name: "Parent",
-          primary: true,
-        })
-      }
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to add")
+      const person = data.person
 
       setFamily(prev => [...prev, person])
       setSelected(prev => new Set(prev).add(person.id))
-      setNewChild({ first_name: "", last_name: "", grade: "" })
+      setNewChild({ first_name: "", last_name: "", grade: "", relationship: "Parent" })
       setShowAddChild(false)
-      toast.success("Child added")
+      toast.success("Added")
     } catch (err: any) {
-      toast.error(err.message || "Failed to add child")
+      toast.error(err.message || "Failed to add")
     } finally {
       setAddingChild(false)
     }
@@ -234,33 +229,21 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
 
     setAddingSelf(true)
     try {
-      const { data: person, error: personError } = await supabase
-        .from("people")
-        .insert({
-          account_id: account.id,
+      const res = await fetch("/api/register/people", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: event.id,
+          kind: "self",
           first_name: selfName.first_name,
           last_name: selfName.last_name,
-          name: `${selfName.first_name} ${selfName.last_name}`,
-          email: user?.email || null,
           grade: selfName.grade || null,
-          dependent: false,
-        })
-        .select("id, first_name, last_name, grade, email")
-        .single()
+        }),
+      })
 
-      if (personError) throw personError
-
-      // Link to account
-      await supabase.from("account_people").upsert(
-        { account_id: account.id, person_id: person.id },
-        { onConflict: "account_id,person_id" }
-      )
-
-      // Link person to profile
-      await supabase
-        .from("profiles")
-        .update({ people_id: person.id })
-        .eq("id", user.id)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to add")
+      const person = data.person
 
       setFamily(prev => [...prev, person])
       setSelected(prev => new Set(prev).add(person.id))
@@ -436,6 +419,62 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
         </Card>
       )}
 
+      {/* Step: Who are you registering? */}
+      {step === "registrant-kind" && (
+        <Card>
+          <CardHeader className="text-center">
+            <CardTitle className="text-lg">Who are you registering?</CardTitle>
+            <CardDescription>
+              We&apos;ll tailor the next step to your situation
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <button
+              onClick={() => {
+                setRegistrantKind("self")
+                setRegisterSelf(true)
+                setShowAddChild(false)
+                setStep("select-kids")
+              }}
+              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left hover:border-gray-400 transition-colors"
+            >
+              <div className="flex-1">
+                <p className="text-sm font-medium">Just myself</p>
+                <p className="text-xs text-gray-500">I&apos;m the athlete signing up</p>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setRegistrantKind("dependent")
+                setRegisterSelf(false)
+                setShowAddChild(true)
+                setStep("select-kids")
+              }}
+              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left hover:border-gray-400 transition-colors"
+            >
+              <div className="flex-1">
+                <p className="text-sm font-medium">My child or dependent</p>
+                <p className="text-xs text-gray-500">I&apos;m a parent or guardian signing up someone else</p>
+              </div>
+            </button>
+            <button
+              onClick={() => {
+                setRegistrantKind("both")
+                setRegisterSelf(true)
+                setShowAddChild(false)
+                setStep("select-kids")
+              }}
+              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left hover:border-gray-400 transition-colors"
+            >
+              <div className="flex-1">
+                <p className="text-sm font-medium">Myself and my child(ren)</p>
+                <p className="text-xs text-gray-500">Register everyone in one go</p>
+              </div>
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Step: Select kids */}
       {step === "select-kids" && (
         <>
@@ -591,18 +630,32 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
                         />
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Grade</Label>
-                      <select
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                        value={newChild.grade}
-                        onChange={(e) => setNewChild(p => ({ ...p, grade: e.target.value }))}
-                      >
-                        <option value="">Select grade</option>
-                        {[...Array(12)].map((_, i) => (
-                          <option key={i} value={String(i + 1)}>{i + 1}</option>
-                        ))}
-                      </select>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs">Grade</Label>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                          value={newChild.grade}
+                          onChange={(e) => setNewChild(p => ({ ...p, grade: e.target.value }))}
+                        >
+                          <option value="">Select grade</option>
+                          {[...Array(12)].map((_, i) => (
+                            <option key={i} value={String(i + 1)}>{i + 1}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">Your relationship</Label>
+                        <select
+                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                          value={newChild.relationship}
+                          onChange={(e) => setNewChild(p => ({ ...p, relationship: e.target.value }))}
+                        >
+                          <option value="Parent">Parent</option>
+                          <option value="Guardian">Guardian</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
                     </div>
                     <div className="flex gap-2">
                       <Button size="sm" onClick={handleAddChild} disabled={addingChild}>
