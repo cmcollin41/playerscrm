@@ -212,7 +212,7 @@ export default function DocsPage() {
           id="endpoint-events"
           method="GET"
           path="/api/public/events"
-          description="Returns published events for an account — camps with hosted registration plus team-level practices and games. Use event_type and team filters to scope to a specific schedule."
+          description="Returns published events for an account — registerable events (camps and other) with hosted registration plus team-level practices and games. Use event_type and team filters to scope to a specific schedule."
         >
           <h3 className="text-lg font-semibold text-gray-900">
             Query parameters
@@ -362,8 +362,10 @@ export default function DocsPage() {
             <li>
               <Code>event_type</Code> is one of <Code>camp</Code>,{" "}
               <Code>practice</Code>, <Code>game</Code>, or <Code>other</Code>.
-              Camps are account-level events with paid registration; practices
-              and games belong to a team.
+              Camps and <Code>other</Code> events take registrations (free or
+              paid) and can be account-level or attached to a team. Practices
+              and games are calendar items that always belong to a team and
+              don&apos;t take registrations.
             </li>
             <li>
               <Code>team</Code> is <Code>null</Code> for account-level events.
@@ -383,8 +385,11 @@ export default function DocsPage() {
             <li>
               Registration fields (<Code>fee_amount</Code>,{" "}
               <Code>capacity</Code>, <Code>registration_open</Code>,{" "}
-              <Code>register_url</Code>, etc.) are only populated for camps.
-              They are <Code>null</Code> for practices and games.
+              <Code>register_url</Code>, etc.) are populated for{" "}
+              <Code>camp</Code> and <Code>other</Code> events. They are{" "}
+              <Code>null</Code> for practices and games. A{" "}
+              <Code>fee_amount</Code> of <Code>0</Code> means a free
+              registration.
             </li>
             <li>
               <Code>fee_amount</Code> is in the smallest currency unit (cents
@@ -706,6 +711,14 @@ const { players } = await res.json()`}</CodeBlock>
 
         <Section id="changelog" title="Changelog">
           <ul className="space-y-3">
+            <ChangelogEntry date="2026-05-01">
+              <Code>GET /api/public/events</Code>: registration fields (
+              <Code>fee_amount</Code>, <Code>capacity</Code>,{" "}
+              <Code>register_url</Code>, etc.) are now populated for both{" "}
+              <Code>camp</Code> and <Code>other</Code> events, not just camps.
+              An <Code>other</Code> event with a fee or registration window is
+              now exposed as registerable.
+            </ChangelogEntry>
             <ChangelogEntry date="2026-05-01">
               Extended <Code>GET /api/public/events</Code> to cover team-level
               practices and games. New filters:{" "}

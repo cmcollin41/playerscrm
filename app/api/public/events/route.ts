@@ -186,7 +186,9 @@ export async function GET(request: NextRequest) {
       })
       .map((e: any) => {
         const eventType = (e.event_type as EventType) ?? "camp"
-        const isCamp = eventType === "camp"
+        // Games and practices are calendar items; camps and "other" can take
+        // registrations (free or paid).
+        const isRegisterable = eventType === "camp" || eventType === "other"
 
         const opensAt = e.registration_opens_at
           ? new Date(e.registration_opens_at)
@@ -194,7 +196,7 @@ export async function GET(request: NextRequest) {
         const closesAt = e.registration_closes_at
           ? new Date(e.registration_closes_at)
           : null
-        const registrationOpen = isCamp
+        const registrationOpen = isRegisterable
           ? (!opensAt || opensAt <= now) && (!closesAt || closesAt > now)
           : null
 
@@ -216,13 +218,13 @@ export async function GET(request: NextRequest) {
           team,
           opponent_name: eventType === "game" ? e.opponent_name : null,
           is_home: eventType === "game" ? e.is_home : null,
-          registration_opens_at: isCamp ? e.registration_opens_at : null,
-          registration_closes_at: isCamp ? e.registration_closes_at : null,
-          capacity: isCamp ? e.capacity : null,
-          fee_amount: isCamp ? e.fee_amount : null,
-          fee_description: isCamp ? e.fee_description : null,
+          registration_opens_at: isRegisterable ? e.registration_opens_at : null,
+          registration_closes_at: isRegisterable ? e.registration_closes_at : null,
+          capacity: isRegisterable ? e.capacity : null,
+          fee_amount: isRegisterable ? e.fee_amount : null,
+          fee_description: isRegisterable ? e.fee_description : null,
           registration_open: registrationOpen,
-          register_url: isCamp ? buildRegisterUrl(account, e.slug) : null,
+          register_url: isRegisterable ? buildRegisterUrl(account, e.slug) : null,
         }
       })
 
