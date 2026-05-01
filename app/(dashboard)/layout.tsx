@@ -1,4 +1,5 @@
 import { ReactNode } from "react";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { MainNav } from "@/components/navigation/main-nav";
 import { UserNav } from "@/components/navigation/user-nav";
@@ -7,6 +8,7 @@ import Link from "next/link";
 import type { UserRole } from "@/types/schema.types";
 import { getOrganizationLogoPublicUrl } from "@/lib/storage/organization-logo";
 import { DashboardFooterOrgLogo, DashboardHeaderLogo } from "@/components/navigation/dashboard-org-logo";
+import { DashboardAccessDenied } from "./access-denied";
 
 
 export default async function DashboardLayout({
@@ -19,6 +21,27 @@ export default async function DashboardLayout({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login")
+
+  // Gate the dashboard to staff only. Registrants who signed up via magic
+  // link have a session but no membership; render an explicit no-access
+  // screen instead of the dashboard chrome.
+  const [{ count: accountMemberCount }, { count: orgMemberCount }] = await Promise.all([
+    supabase
+      .from("account_members")
+      .select("account_id", { count: "exact", head: true })
+      .eq("profile_id", user.id),
+    supabase
+      .from("organization_members")
+      .select("organization_id", { count: "exact", head: true })
+      .eq("profile_id", user.id),
+  ])
+
+  const hasStaffAccess = (accountMemberCount ?? 0) > 0 || (orgMemberCount ?? 0) > 0
+  if (!hasStaffAccess) {
+    return <DashboardAccessDenied email={user.email ?? null} />
+  }
 
   let userRole: UserRole = "general"
   let userInitials = ""
