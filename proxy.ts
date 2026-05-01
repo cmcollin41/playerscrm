@@ -68,11 +68,28 @@ export async function proxy(request: NextRequest) {
 
   // --- Custom domain: look up account and treat like a subdomain ---
   if (customDomain) {
-    const { data: account } = await supabase
+    // Tenant resolution must always run as anon — using the cookie-bound
+    // client filters accounts via RLS (authenticated users only see
+    // accounts they're members of), which would 404 a custom domain for
+    // anyone signed in to a different tenant.
+    const tenantLookup = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return []
+          },
+          setAll() {},
+        },
+      },
+    )
+
+    const { data: account } = await tenantLookup
       .from("accounts")
       .select("subdomain")
       .eq("custom_domain", customDomain)
-      .single()
+      .maybeSingle()
 
     if (account?.subdomain) {
       subdomain = account.subdomain
