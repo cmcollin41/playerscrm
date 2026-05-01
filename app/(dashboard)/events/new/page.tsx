@@ -94,6 +94,7 @@ export default function NewEventPage() {
     supabase
       .from("teams")
       .select("id, name, slug")
+      .eq("is_active", true)
       .order("name")
       .then(({ data }) => setTeams(data || []))
   }, [supabase])
