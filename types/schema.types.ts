@@ -160,6 +160,49 @@ export interface Seasons {
   accounts?: Accounts;
 }
 
+export interface Events {
+  id: string /* primary key */;
+  account_id: string /* foreign key to accounts.id */;
+  team_id?: string | null /* foreign key to teams.id; null for account-level events */;
+  created_at?: string;
+  updated_at?: string;
+  name: string;
+  slug: string;
+  event_type: 'camp' | 'practice' | 'game' | 'other';
+  description?: string | null;
+  location?: string | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  arrival_time?: string | null;
+  registration_opens_at?: string | null;
+  registration_closes_at?: string | null;
+  capacity?: number | null;
+  /** smallest currency unit (cents); 0 when free */
+  fee_amount: number;
+  fee_description?: string | null;
+  is_published: boolean;
+  image_url?: string | null;
+  opponent_name?: string | null;
+  is_home?: boolean | null;
+  metadata?: any;
+  accounts?: Accounts;
+  teams?: Teams;
+  event_registrations?: EventRegistrations[];
+}
+
+export interface EventRegistrations {
+  id: string /* primary key */;
+  event_id: string /* foreign key to events.id */;
+  person_id: string /* foreign key to people.id */;
+  registered_by?: string /* foreign key to profiles.id */;
+  created_at?: string;
+  status: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted';
+  payment_id?: string;
+  metadata?: any;
+  events?: Events;
+  people?: People;
+}
+
 export interface Lists {
   id: string /* primary key */;
   created_at: string;

@@ -15,7 +15,7 @@ import { getInitials } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, DollarSign, CheckCircle, AlertCircle, X, Trophy, Pencil } from "lucide-react";
+import { Users, DollarSign, CheckCircle, AlertCircle, X, Trophy, Pencil, Calendar } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -284,8 +284,14 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <AddToRosterModal 
-              team={team} 
+            <Link href={`/teams/${id}/schedule`}>
+              <Button variant="outline" size="sm">
+                <Calendar className="mr-1.5 h-4 w-4" />
+                Schedule
+              </Button>
+            </Link>
+            <AddToRosterModal
+              team={team}
               accountId={account?.id}
               onSuccess={fetchTeam}
             />

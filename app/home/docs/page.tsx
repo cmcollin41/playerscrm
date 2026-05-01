@@ -212,7 +212,7 @@ export default function DocsPage() {
           id="endpoint-events"
           method="GET"
           path="/api/public/events"
-          description="Returns published events for an account, with a precomputed register_url that points at a hosted Stripe-powered checkout page on the account's branded domain."
+          description="Returns published events for an account — camps with hosted registration plus team-level practices and games. Use event_type and team filters to scope to a specific schedule."
         >
           <h3 className="text-lg font-semibold text-gray-900">
             Query parameters
@@ -233,6 +233,48 @@ export default function DocsPage() {
                   "If provided, returns a single event under an event key. Returns 404 if not found.",
               },
               {
+                name: "event_type",
+                type: "string (csv)",
+                required: false,
+                description:
+                  "Filter to one or more types: camp, practice, game, other. Comma-separated for multiple (e.g. practice,game).",
+              },
+              {
+                name: "team_id",
+                type: "string (UUID)",
+                required: false,
+                description:
+                  "Filter to events tied to one team. Useful for embedding a team's schedule.",
+              },
+              {
+                name: "team_slug",
+                type: "string",
+                required: false,
+                description:
+                  "Alternative to team_id — resolved against the account's teams.",
+              },
+              {
+                name: "starts_after",
+                type: "ISO datetime",
+                required: false,
+                description:
+                  "Only return events with starts_at on or after this timestamp.",
+              },
+              {
+                name: "starts_before",
+                type: "ISO datetime",
+                required: false,
+                description:
+                  "Only return events with starts_at on or before this timestamp.",
+              },
+              {
+                name: "limit",
+                type: "integer",
+                required: false,
+                description:
+                  "Max number of events to return (default 50, max 200).",
+              },
+              {
                 name: "include_past",
                 type: "boolean",
                 required: false,
@@ -251,23 +293,99 @@ export default function DocsPage() {
       "id": "uuid",
       "slug": "summer-camp-2026",
       "name": "Summer Skills Camp",
+      "event_type": "camp",
       "description": "Three-day skills intensive…",
       "location": "Main Gym",
       "starts_at": "2026-07-15T09:00:00Z",
       "ends_at": "2026-07-17T16:00:00Z",
+      "arrival_time": null,
+      "image_url": "https://…/event-images/{account_id}/{uuid}.jpg",
+      "team": null,
+      "opponent_name": null,
+      "is_home": null,
       "registration_opens_at": "2026-05-01T00:00:00Z",
       "registration_closes_at": "2026-07-10T23:59:59Z",
       "capacity": 50,
       "fee_amount": 15000,
       "fee_description": "Per camper",
-      "image_url": "https://…/event-images/{account_id}/{uuid}.jpg",
       "registration_open": true,
       "register_url": "https://yourname.athletes.app/register/summer-camp-2026"
+    },
+    {
+      "id": "uuid",
+      "slug": "practice-boys-varsity-20260915-1600",
+      "name": "Practice",
+      "event_type": "practice",
+      "description": null,
+      "location": "Main Gym",
+      "starts_at": "2026-09-15T22:00:00Z",
+      "ends_at": "2026-09-16T00:00:00Z",
+      "arrival_time": "2026-09-15T21:45:00Z",
+      "image_url": null,
+      "team": { "id": "uuid", "slug": "boys-varsity", "name": "Boys Varsity Basketball" },
+      "opponent_name": null,
+      "is_home": null,
+      "registration_opens_at": null,
+      "registration_closes_at": null,
+      "capacity": null,
+      "fee_amount": null,
+      "fee_description": null,
+      "registration_open": null,
+      "register_url": null
+    },
+    {
+      "id": "uuid",
+      "slug": "game-boys-varsity-vs-lone-peak-20260919",
+      "name": "vs Lone Peak",
+      "event_type": "game",
+      "description": null,
+      "location": "Lone Peak HS",
+      "starts_at": "2026-09-20T01:00:00Z",
+      "ends_at": null,
+      "arrival_time": "2026-09-20T00:00:00Z",
+      "image_url": null,
+      "team": { "id": "uuid", "slug": "boys-varsity", "name": "Boys Varsity Basketball" },
+      "opponent_name": "Lone Peak",
+      "is_home": false,
+      "registration_opens_at": null,
+      "registration_closes_at": null,
+      "capacity": null,
+      "fee_amount": null,
+      "fee_description": null,
+      "registration_open": null,
+      "register_url": null
     }
   ]
 }`}</CodeBlock>
 
           <FieldNotes>
+            <li>
+              <Code>event_type</Code> is one of <Code>camp</Code>,{" "}
+              <Code>practice</Code>, <Code>game</Code>, or <Code>other</Code>.
+              Camps are account-level events with paid registration; practices
+              and games belong to a team.
+            </li>
+            <li>
+              <Code>team</Code> is <Code>null</Code> for account-level events.
+              For team-level events it contains <Code>id</Code>,{" "}
+              <Code>slug</Code>, and <Code>name</Code>. Events for non-public
+              teams are hidden from this endpoint.
+            </li>
+            <li>
+              <Code>opponent_name</Code> and <Code>is_home</Code> are populated
+              only for <Code>event_type = &quot;game&quot;</Code>.
+            </li>
+            <li>
+              <Code>arrival_time</Code> is a separate &quot;be there by&quot;
+              timestamp common for practices and games. <Code>null</Code> when
+              not set.
+            </li>
+            <li>
+              Registration fields (<Code>fee_amount</Code>,{" "}
+              <Code>capacity</Code>, <Code>registration_open</Code>,{" "}
+              <Code>register_url</Code>, etc.) are only populated for camps.
+              They are <Code>null</Code> for practices and games.
+            </li>
             <li>
               <Code>fee_amount</Code> is in the smallest currency unit (cents
               for USD). <Code>15000</Code> = $150.00.
@@ -297,8 +415,15 @@ export default function DocsPage() {
             </li>
           </FieldNotes>
 
-          <h3 className="mt-6 text-lg font-semibold text-gray-900">Example</h3>
-          <CodeBlock>{`curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID'`}</CodeBlock>
+          <h3 className="mt-6 text-lg font-semibold text-gray-900">Examples</h3>
+          <CodeBlock>{`# All upcoming events for an account
+curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID'
+
+# A specific team's full schedule (practices + games)
+curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID&team_slug=boys-varsity&event_type=practice,game'
+
+# Just upcoming games in a date window
+curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID&event_type=game&starts_after=2026-09-01&starts_before=2026-12-01'`}</CodeBlock>
         </EndpointSection>
 
         <EndpointSection
@@ -581,6 +706,16 @@ const { players } = await res.json()`}</CodeBlock>
 
         <Section id="changelog" title="Changelog">
           <ul className="space-y-3">
+            <ChangelogEntry date="2026-05-01">
+              Extended <Code>GET /api/public/events</Code> to cover team-level
+              practices and games. New filters:{" "}
+              <Code>event_type</Code>, <Code>team_id</Code>,{" "}
+              <Code>team_slug</Code>, <Code>starts_after</Code>,{" "}
+              <Code>starts_before</Code>, <Code>limit</Code>. Each event now
+              includes <Code>event_type</Code>, <Code>team</Code>,{" "}
+              <Code>arrival_time</Code>, and (for games) <Code>opponent_name</Code> +{" "}
+              <Code>is_home</Code>.
+            </ChangelogEntry>
             <ChangelogEntry date="2026-04-28">
               Added <Code>GET /api/public/events</Code> with{" "}
               <Code>register_url</Code> for hosted checkout embedding.
