@@ -159,13 +159,15 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
     setSending(true)
 
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: email.trim(),
       options: {
+        shouldCreateUser: true,
         emailRedirectTo: `${window.location.origin}/register/${event.slug}`,
       },
     })
 
     if (error) {
+      console.error("signInWithOtp error:", error)
       toast.error(error.message)
       setSending(false)
       return
@@ -413,8 +415,17 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
             <Mail className="mx-auto h-10 w-10 text-gray-400 mb-4" />
             <h3 className="text-lg font-semibold">Check your email</h3>
             <p className="mt-2 text-sm text-gray-500 max-w-sm mx-auto">
-              We sent a sign-in link to <strong>{email}</strong>. Click the link in the email to continue registration.
+              We sent a sign-in link to <strong>{email}</strong>. It can take a minute to arrive — if you don&apos;t see it, check your spam folder.
             </p>
+            <button
+              onClick={() => {
+                setStep("email")
+                setSending(false)
+              }}
+              className="mt-4 text-xs text-gray-400 hover:text-gray-600"
+            >
+              Use a different email
+            </button>
           </CardContent>
         </Card>
       )}
