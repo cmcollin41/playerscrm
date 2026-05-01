@@ -124,8 +124,6 @@ export async function POST(req: Request) {
 }
 
 const updateSupabase = async (event: any, supabase: any) => {
-  console.log("EVENT: ", event);
-  
   // Handle invoice events
   if (event.type.startsWith('invoice.')) {
     const stripeInvoice = event.data.object;
@@ -133,20 +131,27 @@ const updateSupabase = async (event: any, supabase: any) => {
     const mappedStatus = status === 'succeeded' ? 'paid' : status;
 
     let invoiceId = stripeInvoice.metadata?.invoice_id;
+    let existingMetadata: Record<string, any> = {};
 
     // Fallback: if metadata.invoice_id is missing, look up by stripe_invoice_id
     if (!invoiceId && stripeInvoice.id) {
-      console.log(`No invoice_id in metadata, looking up by stripe_invoice_id: ${stripeInvoice.id}`);
       const { data: matchedInvoice } = await supabase
         .from("invoices")
-        .select("id")
+        .select("id, metadata")
         .eq("metadata->>stripe_invoice_id", stripeInvoice.id)
         .maybeSingle();
 
       if (matchedInvoice) {
         invoiceId = matchedInvoice.id;
-        console.log(`Found invoice via stripe_invoice_id fallback: ${invoiceId}`);
+        existingMetadata = matchedInvoice.metadata || {};
       }
+    } else if (invoiceId) {
+      const { data: existing } = await supabase
+        .from("invoices")
+        .select("metadata")
+        .eq("id", invoiceId)
+        .maybeSingle();
+      existingMetadata = existing?.metadata || {};
     }
 
     if (!invoiceId) {
@@ -159,6 +164,7 @@ const updateSupabase = async (event: any, supabase: any) => {
       .update({
         status: mappedStatus,
         metadata: {
+          ...existingMetadata,
           stripe_invoice_id: stripeInvoice.id,
           last_event: event.type,
           updated_at: new Date().toISOString(),
