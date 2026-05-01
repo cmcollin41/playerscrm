@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import {
@@ -50,11 +51,13 @@ interface Registration {
     email: string | null
     phone: string | null
     grade: string | null
+    dependent: boolean | null
   } | null
   payments: {
     status: string | null
     amount: number | null
   } | null
+  guardian_email: string | null
 }
 
 interface EventDetailClientProps {
@@ -159,13 +162,38 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
                   </tr>
                 </thead>
                 <tbody>
-                  {registrations.map((reg) => (
+                  {registrations.map((reg) => {
+                    const displayEmail = reg.people?.email || reg.guardian_email
+                    const isGuardianEmail = !reg.people?.email && !!reg.guardian_email
+                    return (
                     <tr key={reg.id} className="border-b last:border-0">
                       <td className="py-3 pr-4 font-medium">
-                        {reg.people?.first_name} {reg.people?.last_name}
+                        {reg.people?.id ? (
+                          <Link
+                            href={`/people/${reg.people.id}`}
+                            className="hover:underline"
+                          >
+                            {reg.people.first_name} {reg.people.last_name}
+                          </Link>
+                        ) : (
+                          <>
+                            {reg.people?.first_name} {reg.people?.last_name}
+                          </>
+                        )}
                       </td>
                       <td className="py-3 pr-4 text-gray-500">
-                        {reg.people?.email || "-"}
+                        {displayEmail ? (
+                          <span>
+                            {displayEmail}
+                            {isGuardianEmail && (
+                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-gray-400">
+                                (parent)
+                              </span>
+                            )}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       <td className="py-3 pr-4 text-gray-500">
                         {reg.people?.grade || "-"}
@@ -250,7 +278,8 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
                         </DropdownMenu>
                       </td>
                     </tr>
-                  ))}
+                  )
+                  })}
                 </tbody>
               </table>
             </div>

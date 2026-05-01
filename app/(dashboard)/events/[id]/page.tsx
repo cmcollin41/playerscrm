@@ -35,14 +35,43 @@ export default async function EventDetailPage({
 
   if (error || !event) notFound()
 
-  const { data: registrations } = await supabase
+  const { data: rawRegistrations } = await supabase
     .from("event_registrations")
-    .select("*, people(id, first_name, last_name, email, phone, grade), payments(status, amount)")
+    .select("*, people(id, first_name, last_name, email, phone, grade, dependent), payments(status, amount)")
     .eq("event_id", id)
     .order("created_at", { ascending: false })
 
-  const confirmed = registrations?.filter(r => r.status === "confirmed").length || 0
-  const pending = registrations?.filter(r => r.status === "pending").length || 0
+  // Resolve guardian emails for dependents without an email of their own.
+  const dependentsNeedingGuardian = (rawRegistrations || [])
+    .map((r) => r.people)
+    .filter((p): p is NonNullable<typeof p> => !!p && !!p.dependent && !p.email)
+    .map((p) => p.id)
+
+  const guardianEmailByDependentId = new Map<string, string>()
+  if (dependentsNeedingGuardian.length) {
+    const { data: rels } = await supabase
+      .from("relationships")
+      .select("relation_id, person_id, primary, people:person_id(id, email)")
+      .in("relation_id", dependentsNeedingGuardian)
+
+    // Prefer primary guardian; fall back to any guardian with an email.
+    const sorted = (rels || []).slice().sort((a: any, b: any) => Number(!!b.primary) - Number(!!a.primary))
+    for (const rel of sorted as any[]) {
+      const depId = rel.relation_id
+      const email = rel.people?.email
+      if (depId && email && !guardianEmailByDependentId.has(depId)) {
+        guardianEmailByDependentId.set(depId, email)
+      }
+    }
+  }
+
+  const registrations = (rawRegistrations || []).map((r) => ({
+    ...r,
+    guardian_email: r.people?.id ? guardianEmailByDependentId.get(r.people.id) || null : null,
+  }))
+
+  const confirmed = registrations.filter(r => r.status === "confirmed").length
+  const pending = registrations.filter(r => r.status === "pending").length
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -134,7 +163,7 @@ export default async function EventDetailPage({
         )}
       </div>
 
-      <EventDetailClient event={event} registrations={registrations || []} />
+      <EventDetailClient event={event} registrations={registrations} />
     </div>
   )
 }
