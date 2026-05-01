@@ -132,13 +132,27 @@ export async function proxy(request: NextRequest) {
       data: { session },
     } = await supabase.auth.getSession()
 
-    const publicPaths = ["/login", "/forgot-password", "/update-password"]
+    const publicPaths = [
+      "/login",
+      "/forgot-password",
+      "/update-password",
+      "/no-access",
+    ]
     const isPublicPath = publicPaths.some((p) => path.startsWith(p))
 
     if (!session && !isPublicPath) {
       return NextResponse.redirect(new URL("/login", request.url))
     } else if (session && path === "/login") {
       return NextResponse.redirect(new URL("/", request.url))
+    }
+
+    // Authenticated registrant landing on a dashboard path: bounce to the
+    // no-access page rather than letting the dashboard render at all.
+    if (session && !isPublicPath) {
+      const { data: accountIds } = await supabase.rpc("get_user_account_ids")
+      if (!accountIds || accountIds.length === 0) {
+        return NextResponse.redirect(new URL("/no-access", request.url))
+      }
     }
 
     return response
@@ -155,6 +169,7 @@ export async function proxy(request: NextRequest) {
     "/login",
     "/forgot-password",
     "/update-password",
+    "/no-access",
   ]
   const isPublicTenantPath = tenantPublicPaths.some((p) => path.startsWith(p))
 
@@ -167,6 +182,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url))
   } else if (session && path === "/login") {
     return NextResponse.redirect(new URL("/", request.url))
+  }
+
+  // Authenticated registrant landing on a dashboard path: bounce to the
+  // no-access page. Treats "/" on a tenant subdomain as dashboard too,
+  // since the subdomain home renders the dashboard for staff.
+  if (session && !isPublicTenantPath) {
+    const { data: accountIds } = await supabase.rpc("get_user_account_ids")
+    if (!accountIds || accountIds.length === 0) {
+      return NextResponse.redirect(new URL("/no-access", request.url))
+    }
   }
 
   response = NextResponse.next({
