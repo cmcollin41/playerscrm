@@ -14,28 +14,19 @@ export async function POST(req: Request) {
   // by anon RLS.
   const supabase = createAdminClient();
 
-  // Get the raw body
-  const rawBody = await req.text();
+  // Get the raw body as bytes — avoids any utf-8 decode/encode round trip
+  // that can subtly mutate the signed payload.
+  const rawBody = Buffer.from(await req.arrayBuffer());
 
-  const stripeAccount = req.headers.get("stripe-account");
   const signature = req.headers.get("stripe-signature");
 
-  // Choose the appropriate webhook secret based on the source.
+  // Both the platform endpoint and the Connect endpoint deliver to this same
+  // URL. Stripe does not send a `Stripe-Account` request header on webhook
+  // deliveries (the connected account id is only inside the signed body),
+  // so we can't pick a secret up-front. Try platform first, then connect —
+  // whichever verifies wins.
   const platformSecret = process.env.STRIPE_WEBHOOK_SECRET_KEY;
   const connectSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET_KEY;
-  const webhookSecret = stripeAccount ? connectSecret : platformSecret;
-
-  console.log("[stripe-webhook] incoming", {
-    stripe_account: stripeAccount || null,
-    has_signature: !!signature,
-    has_platform_secret: !!platformSecret,
-    has_connect_secret: !!connectSecret,
-    using: stripeAccount ? "connect" : "platform",
-    secret_prefix: webhookSecret ? webhookSecret.slice(0, 12) : null,
-    secret_length: webhookSecret?.length ?? 0,
-    body_length: rawBody.length,
-    sig_prefix: signature ? signature.slice(0, 30) : null,
-  });
 
   if (!signature) {
     console.error("[stripe-webhook] missing stripe-signature header");
@@ -45,29 +36,39 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!webhookSecret) {
-    console.error(
-      "[stripe-webhook] missing webhook secret env var",
-      stripeAccount
-        ? "STRIPE_CONNECT_WEBHOOK_SECRET_KEY"
-        : "STRIPE_WEBHOOK_SECRET_KEY",
-    );
+  if (!platformSecret && !connectSecret) {
+    console.error("[stripe-webhook] no webhook secrets configured");
     return NextResponse.json(
       { message: "Webhook secret not configured" },
       { status: 500 },
     );
   }
 
-  let event: any;
-  try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
-  } catch (err: any) {
-    console.error("[stripe-webhook] signature verification failed", {
-      message: err?.message,
-      using: stripeAccount ? "connect" : "platform",
+  const candidates: Array<{ name: "platform" | "connect"; secret: string }> = [];
+  if (platformSecret) candidates.push({ name: "platform", secret: platformSecret });
+  if (connectSecret) candidates.push({ name: "connect", secret: connectSecret });
+
+  let event: any = null;
+  let verifiedWith: "platform" | "connect" | null = null;
+  let lastError: any = null;
+
+  for (const c of candidates) {
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, signature, c.secret);
+      verifiedWith = c.name;
+      break;
+    } catch (err: any) {
+      lastError = err;
+    }
+  }
+
+  if (!event) {
+    console.error("[stripe-webhook] signature verification failed against all secrets", {
+      message: lastError?.message,
+      tried: candidates.map((c) => c.name),
     });
     return NextResponse.json(
-      { message: `Signature verification failed: ${err?.message || "unknown"}` },
+      { message: `Signature verification failed: ${lastError?.message || "unknown"}` },
       { status: 400 },
     );
   }
@@ -77,6 +78,7 @@ export async function POST(req: Request) {
     id: event.id,
     livemode: event.livemode,
     account: event.account || null,
+    verified_with: verifiedWith,
   });
 
   try {
