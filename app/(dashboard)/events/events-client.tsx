@@ -42,8 +42,19 @@ export function EventsClient({ events }: { events: EventWithRegistrations[] }) {
   const [filter, setFilter] = useState<"all" | EventType>("all")
 
   const filtered = useMemo(() => {
-    if (filter === "all") return events
-    return events.filter((e) => (e.event_type ?? "camp") === filter)
+    const list =
+      filter === "all"
+        ? events
+        : events.filter((e) => (e.event_type ?? "camp") === filter)
+
+    return [...list].sort((a, b) => {
+      const aIsCamp = (a.event_type ?? "camp") === "camp"
+      const bIsCamp = (b.event_type ?? "camp") === "camp"
+      if (aIsCamp !== bIsCamp) return aIsCamp ? -1 : 1
+      const aTime = a.starts_at ? new Date(a.starts_at).getTime() : Infinity
+      const bTime = b.starts_at ? new Date(b.starts_at).getTime() : Infinity
+      return aTime - bTime
+    })
   }, [events, filter])
 
   const copyLink = (slug: string) => {
