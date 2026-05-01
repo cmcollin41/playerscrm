@@ -67,7 +67,7 @@ interface RegisterClientProps {
   registrationOpen: boolean
 }
 
-type Step = "info" | "email" | "magic-link-sent" | "registrant-kind" | "select-kids" | "payment" | "success"
+type Step = "info" | "email" | "magic-link-sent" | "profile" | "registrant-kind" | "select-kids" | "payment" | "success"
 type RegistrantKind = "self" | "dependent" | "both"
 
 export function RegisterClient({ event, account, registrationOpen }: RegisterClientProps) {
@@ -87,6 +87,8 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   const [registerSelf, setRegisterSelf] = useState(false)
   const [selfName, setSelfName] = useState({ first_name: "", last_name: "", grade: "" })
   const [addingSelf, setAddingSelf] = useState(false)
+  const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "" })
+  const [savingProfile, setSavingProfile] = useState(false)
   const [clientSecret, setClientSecret] = useState<string | null>(null)
   const [stripeAccount, setStripeAccount] = useState<string | null>(null)
   const [hasSelfInList, setHasSelfInList] = useState(false)
@@ -115,11 +117,15 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
         const familyList = data.family || []
         setFamily(familyList)
         setHasSelfInList(data.hasSelf)
-        // Skip the "who are you registering" step if the user already has
-        // family on file — they've answered this question implicitly.
-        if (familyList.length > 0) {
+        // First-time signup: collect a name before anything else so we
+        // never end up with email-only auth users tied to dependents.
+        if (!data.hasSelf) {
+          setStep("profile")
+        } else if (familyList.length > 1) {
+          // Parent + at least one dependent on file — go straight to picker.
           setStep("select-kids")
         } else {
+          // Parent on file but no dependents yet — let them choose.
           setStep("registrant-kind")
         }
       } catch (err) {
@@ -153,6 +159,40 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
 
     return () => subscription.unsubscribe()
   }, [])
+
+  const handleSaveProfile = async () => {
+    const first = profileForm.first_name.trim()
+    const last = profileForm.last_name.trim()
+    if (!first || !last) {
+      toast.error("First and last name are required")
+      return
+    }
+
+    setSavingProfile(true)
+    try {
+      const res = await fetch("/api/register/people", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          event_id: event.id,
+          kind: "self",
+          first_name: first,
+          last_name: last,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Failed to save profile")
+
+      const person = data.person
+      setFamily([person])
+      setHasSelfInList(true)
+      setStep("registrant-kind")
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save profile")
+    } finally {
+      setSavingProfile(false)
+    }
+  }
 
   const handleSendMagicLink = async () => {
     if (!email) return
@@ -428,6 +468,74 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
             </button>
           </CardContent>
         </Card>
+      )}
+
+      {/* Step: Collect parent name on first sign-in */}
+      {step === "profile" && (
+        <>
+          <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2.5 mb-4 text-sm">
+            <span className="text-gray-500">
+              Signed in as <span className="font-medium text-gray-900">{user?.email}</span>
+            </span>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut()
+                setUser(null)
+                setFamily([])
+                setSelected(new Set())
+                setProfileForm({ first_name: "", last_name: "" })
+                setStep("info")
+              }}
+              className="text-gray-400 hover:text-gray-600 text-xs font-medium"
+            >
+              Sign out
+            </button>
+          </div>
+          <Card>
+            <CardHeader className="text-center">
+              <CardTitle className="text-lg">Tell us who you are</CardTitle>
+              <CardDescription>
+                A quick intro so we know who&apos;s registering
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label htmlFor="profile_first" className="text-xs">First Name *</Label>
+                  <Input
+                    id="profile_first"
+                    placeholder="First"
+                    value={profileForm.first_name}
+                    onChange={(e) =>
+                      setProfileForm((p) => ({ ...p, first_name: e.target.value }))
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && handleSaveProfile()}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="profile_last" className="text-xs">Last Name *</Label>
+                  <Input
+                    id="profile_last"
+                    placeholder="Last"
+                    value={profileForm.last_name}
+                    onChange={(e) =>
+                      setProfileForm((p) => ({ ...p, last_name: e.target.value }))
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && handleSaveProfile()}
+                  />
+                </div>
+              </div>
+              <Button
+                className="w-full"
+                onClick={handleSaveProfile}
+                disabled={savingProfile || !profileForm.first_name || !profileForm.last_name}
+              >
+                {savingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Continue
+              </Button>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {/* Step: Who are you registering? */}
