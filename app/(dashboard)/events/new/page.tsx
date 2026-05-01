@@ -30,6 +30,12 @@ import LoadingDots from "@/components/icons/loading-dots"
 
 type EventType = "camp" | "game" | "other"
 
+function localInputToIso(value: string): string | null {
+  if (!value) return null
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? null : d.toISOString()
+}
+
 const TYPE_OPTIONS: { value: EventType; label: string; description: string }[] = [
   {
     value: "camp",
@@ -159,9 +165,9 @@ export default function NewEventPage() {
         slug,
         description: description.trim() || null,
         location: location.trim() || null,
-        starts_at: startsAt || null,
-        ends_at: endsAt || null,
-        arrival_time: arrivalAt || null,
+        starts_at: localInputToIso(startsAt),
+        ends_at: localInputToIso(endsAt),
+        arrival_time: localInputToIso(arrivalAt),
         is_published: isPublished,
       }
 
@@ -170,8 +176,8 @@ export default function NewEventPage() {
         insertRow.is_home = isHome
       } else {
         insertRow.image_url = imageUrl
-        insertRow.registration_opens_at = registrationOpensAt || null
-        insertRow.registration_closes_at = registrationClosesAt || null
+        insertRow.registration_opens_at = localInputToIso(registrationOpensAt)
+        insertRow.registration_closes_at = localInputToIso(registrationClosesAt)
         insertRow.capacity = capacity ? parseInt(capacity) : null
         insertRow.fee_amount = feeInCents
         insertRow.fee_description = feeDescription.trim() || null

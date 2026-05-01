@@ -21,6 +21,12 @@ function toLocalInput(value: string | null): string {
   return new Date(d.getTime() - tzOffset).toISOString().slice(0, 16)
 }
 
+function localInputToIso(value: string): string | null {
+  if (!value) return null
+  const d = new Date(value)
+  return isNaN(d.getTime()) ? null : d.toISOString()
+}
+
 export function EventEditClient({ event }: { event: any }) {
   const router = useRouter()
   const supabase = createClient()
@@ -62,10 +68,10 @@ export function EventEditClient({ event }: { event: any }) {
           name: name.trim(),
           description: description.trim() || null,
           location: location.trim() || null,
-          starts_at: startsAt || null,
-          ends_at: endsAt || null,
-          registration_opens_at: registrationOpensAt || null,
-          registration_closes_at: registrationClosesAt || null,
+          starts_at: localInputToIso(startsAt),
+          ends_at: localInputToIso(endsAt),
+          registration_opens_at: localInputToIso(registrationOpensAt),
+          registration_closes_at: localInputToIso(registrationClosesAt),
           capacity: capacity ? parseInt(capacity) : null,
           fee_amount: feeInCents,
           fee_description: feeDescription.trim() || null,
