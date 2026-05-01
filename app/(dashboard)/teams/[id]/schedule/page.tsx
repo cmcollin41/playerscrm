@@ -106,7 +106,7 @@ export default function TeamSchedulePage({
               Add Practices
             </Button>
           </Link>
-          <Link href={`/teams/${id}/schedule/new-game`}>
+          <Link href={`/events/new?team=${id}&type=game`}>
             <Button>
               <Plus className="mr-1.5 h-4 w-4" />
               Add Game
@@ -131,7 +131,7 @@ export default function TeamSchedulePage({
               <Link href={`/teams/${id}/schedule/new-practice`}>
                 <Button variant="outline">Add Practices</Button>
               </Link>
-              <Link href={`/teams/${id}/schedule/new-game`}>
+              <Link href={`/events/new?team=${id}&type=game`}>
                 <Button>Add Game</Button>
               </Link>
             </div>
