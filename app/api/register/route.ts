@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 
@@ -24,8 +25,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing event_id or person_ids" }, { status: 400 })
     }
 
+    // Use the admin client for tenant data ops — registrants aren't members
+    // of the event's account, so RLS would hide the event under the
+    // authenticated role. Auth was already verified above.
+    const admin = createAdminClient()
+
     // Fetch event with account info
-    const { data: event, error: eventError } = await supabase
+    const { data: event, error: eventError } = await admin
       .from("events")
       .select("*, accounts(id, stripe_id, application_fee)")
       .eq("id", event_id)
@@ -41,7 +47,7 @@ export async function POST(req: Request) {
 
     // Check capacity
     if (event.capacity) {
-      const { count } = await supabase
+      const { count } = await admin
         .from("event_registrations")
         .select("id", { count: "exact", head: true })
         .eq("event_id", event_id)
@@ -60,7 +66,7 @@ export async function POST(req: Request) {
       status: event.fee_amount > 0 ? "pending" : "confirmed",
     }))
 
-    const { data: regs, error: regError } = await supabase
+    const { data: regs, error: regError } = await admin
       .from("event_registrations")
       .upsert(registrations, { onConflict: "event_id,person_id" })
       .select()
@@ -71,7 +77,7 @@ export async function POST(req: Request) {
 
     // Ensure account_people rows exist
     for (const person_id of person_ids) {
-      await supabase
+      await admin
         .from("account_people")
         .upsert(
           { account_id: event.account_id, person_id },
@@ -114,7 +120,7 @@ export async function POST(req: Request) {
       : await stripe.paymentIntents.create(paymentIntentParams)
 
     // Create payment record
-    const { data: payment } = await supabase
+    const { data: payment } = await admin
       .from("payments")
       .insert({
         account_id: event.account_id,
@@ -129,7 +135,7 @@ export async function POST(req: Request) {
 
     // Link payment to registrations
     if (payment) {
-      await supabase
+      await admin
         .from("event_registrations")
         .update({ payment_id: payment.id })
         .in("id", regs!.map((r: any) => r.id))
