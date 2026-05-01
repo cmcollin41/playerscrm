@@ -31,6 +31,10 @@ export async function POST(req: Request) {
     has_platform_secret: !!platformSecret,
     has_connect_secret: !!connectSecret,
     using: stripeAccount ? "connect" : "platform",
+    secret_prefix: webhookSecret ? webhookSecret.slice(0, 12) : null,
+    secret_length: webhookSecret?.length ?? 0,
+    body_length: rawBody.length,
+    sig_prefix: signature ? signature.slice(0, 30) : null,
   });
 
   if (!signature) {
