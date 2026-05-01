@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
+import { calculateApplicationFeeFromDollars } from "@/lib/fees";
 
 export async function POST(req: Request) {
   const { 
@@ -40,7 +41,17 @@ export async function POST(req: Request) {
       }
     }
 
-    const applicationFeeAmount = Math.round(amount * 100 * 0.03);
+    const { data: account, error: accountError } = await supabase
+      .from('accounts')
+      .select('application_fee, application_fee_flat')
+      .eq('id', accountId)
+      .single();
+
+    if (accountError || !account) {
+      throw new Error('Account not found for invoice');
+    }
+
+    const applicationFeeAmount = calculateApplicationFeeFromDollars(amount, account);
     const trimmedDesc =
       typeof description === "string" ? description.trim() : "";
     let invoiceDescription: string;
@@ -99,12 +110,11 @@ export async function POST(req: Request) {
     }
 
     // Create Stripe invoice
-    const stripeInvoice = await stripe.invoices.create({
+    const stripeInvoiceParams: Stripe.InvoiceCreateParams = {
       customer: customerId,
       collection_method: 'send_invoice',
       days_until_due: 30,
       pending_invoice_items_behavior: 'include',
-      application_fee_amount: applicationFeeAmount,
       metadata: {
         invoice_id: invoiceRecord.id,
         roster_id: resolvedRosterId,
@@ -113,7 +123,11 @@ export async function POST(req: Request) {
       },
       description: invoiceDescription,
       auto_advance: false
-    }, {
+    };
+    if (applicationFeeAmount > 0) {
+      stripeInvoiceParams.application_fee_amount = applicationFeeAmount;
+    }
+    const stripeInvoice = await stripe.invoices.create(stripeInvoiceParams, {
       stripeAccount: stripeAccountId,
     });
 

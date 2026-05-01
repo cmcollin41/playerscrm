@@ -7,6 +7,7 @@ export interface Accounts {
   logo?: string;
   stripe_id?: string;
   application_fee?: number;
+  application_fee_flat?: number;
   sport?: string;
   subdomain?: string;
   custom_domain?: string;

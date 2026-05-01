@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
+import { calculateApplicationFeeCents } from "@/lib/fees"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20" as any,
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
     // Fetch event with account info
     const { data: event, error: eventError } = await admin
       .from("events")
-      .select("*, accounts(id, stripe_id, application_fee)")
+      .select("*, accounts(id, stripe_id, application_fee, application_fee_flat)")
       .eq("id", event_id)
       .single()
 
@@ -93,9 +94,7 @@ export async function POST(req: Request) {
     // Create Stripe payment intent
     const account = event.accounts as any
     const totalAmount = event.fee_amount * person_ids.length
-    const applicationFee = account.application_fee
-      ? Math.round(totalAmount * (account.application_fee / 100))
-      : 0
+    const applicationFee = calculateApplicationFeeCents(totalAmount, account)
 
     const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
       amount: totalAmount,
@@ -109,7 +108,7 @@ export async function POST(req: Request) {
       },
     }
 
-    if (account.stripe_id) {
+    if (account.stripe_id && applicationFee > 0) {
       paymentIntentParams.application_fee_amount = applicationFee
     }
 

@@ -1,6 +1,7 @@
 import { NextResponse, NextRequest } from "next/server";
 import { stripe } from "@/lib/stripe";
 import { createClient } from "@/lib/supabase/server";
+import { calculateApplicationFeeFromDollars } from "@/lib/fees";
 
 
 export async function POST(req: NextRequest) {
@@ -88,50 +89,34 @@ export async function POST(req: NextRequest) {
 
     if (payment && payment.length === 0) {
       // Create a PaymentIntent with the customers amount and currency
-      let paymentIntent;
-      if (profile.accounts.stripe_id && profile.accounts.application_fee) {
-        paymentIntent = await stripe.paymentIntents.create(
-          {
-            amount: Math.round(chargeDollars * 100),
-            customer: customer.id,
-            currency: "usd",
-            setup_future_usage: "off_session",
-            receipt_email: profile.email,
-            automatic_payment_methods: {
-              enabled: true,
-            },
-            application_fee_amount:
-              chargeDollars * profile.accounts.application_fee,
-            metadata: {
-              fee_id: fee.id,
-              roster_id: roster.id,
-              profile_id: profile.id,
-              person_id: person.id,
-            },
-          },
-          {
-            stripeAccount: profile.accounts.stripe_id,
-          },
-        );
-      } else {
-        paymentIntent = await stripe.paymentIntents.create({
-          amount: Math.round(chargeDollars * 100),
-          customer: customer.id,
-          currency: "usd",
-          setup_future_usage: "off_session",
-          receipt_email: profile.email,
-          automatic_payment_methods: {
-            enabled: true,
-          },
-
-          metadata: {
-            fee_id: fee.id,
-            roster_id: roster.id,
-            profile_id: profile.id,
-            person_id: person.id,
-          },
-        });
+      const applicationFeeAmount = calculateApplicationFeeFromDollars(
+        chargeDollars,
+        profile.accounts,
+      );
+      const paymentIntentParams: any = {
+        amount: Math.round(chargeDollars * 100),
+        customer: customer.id,
+        currency: "usd",
+        setup_future_usage: "off_session",
+        receipt_email: profile.email,
+        automatic_payment_methods: {
+          enabled: true,
+        },
+        metadata: {
+          fee_id: fee.id,
+          roster_id: roster.id,
+          profile_id: profile.id,
+          person_id: person.id,
+        },
+      };
+      if (profile.accounts.stripe_id && applicationFeeAmount > 0) {
+        paymentIntentParams.application_fee_amount = applicationFeeAmount;
       }
+      const paymentIntent = profile.accounts.stripe_id
+        ? await stripe.paymentIntents.create(paymentIntentParams, {
+            stripeAccount: profile.accounts.stripe_id,
+          })
+        : await stripe.paymentIntents.create(paymentIntentParams);
 
       if (!paymentIntent) throw new Error("paymentIntent could not be created");
 
