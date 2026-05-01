@@ -1,5 +1,5 @@
 import { stripe } from "@/lib/stripe";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createAdminClient } from "@/lib/supabase/admin";
 import { sendEventConfirmations } from "@/lib/events/event-confirmation";
 import { NextResponse } from "next/server";
 
@@ -9,36 +9,73 @@ export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  
+  // Stripe webhooks have no auth cookies — use the service-role admin client
+  // so cross-tenant updates (event_registrations, payments) aren't filtered
+  // by anon RLS.
+  const supabase = createAdminClient();
+
   // Get the raw body
   const rawBody = await req.text();
-  
-  try {
-    // Get the Stripe-Account header to identify if this is from a connected account
-    const stripeAccount = req.headers.get("stripe-account");
-    
-    // Choose the appropriate webhook secret based on the source
-    const webhookSecret = stripeAccount 
-      ? process.env.STRIPE_CONNECT_WEBHOOK_SECRET_KEY 
-      : process.env.STRIPE_WEBHOOK_SECRET_KEY;
 
-    const signature = req.headers.get("stripe-signature");
-    
-    if (!signature) {
-      throw new Error("No stripe signature found");
-    }
+  const stripeAccount = req.headers.get("stripe-account");
+  const signature = req.headers.get("stripe-signature");
 
-    const event = stripe.webhooks.constructEvent(
-      rawBody,
-      signature,
-      webhookSecret as string
+  // Choose the appropriate webhook secret based on the source.
+  const platformSecret = process.env.STRIPE_WEBHOOK_SECRET_KEY;
+  const connectSecret = process.env.STRIPE_CONNECT_WEBHOOK_SECRET_KEY;
+  const webhookSecret = stripeAccount ? connectSecret : platformSecret;
+
+  console.log("[stripe-webhook] incoming", {
+    stripe_account: stripeAccount || null,
+    has_signature: !!signature,
+    has_platform_secret: !!platformSecret,
+    has_connect_secret: !!connectSecret,
+    using: stripeAccount ? "connect" : "platform",
+  });
+
+  if (!signature) {
+    console.error("[stripe-webhook] missing stripe-signature header");
+    return NextResponse.json(
+      { message: "Missing stripe-signature" },
+      { status: 400 },
     );
+  }
 
-    // Log the source of the webhook
-    console.log(`Webhook received from ${stripeAccount ? 'connected account: ' + stripeAccount : 'platform account'}`);
-    console.log('Event type:', event.type);
+  if (!webhookSecret) {
+    console.error(
+      "[stripe-webhook] missing webhook secret env var",
+      stripeAccount
+        ? "STRIPE_CONNECT_WEBHOOK_SECRET_KEY"
+        : "STRIPE_WEBHOOK_SECRET_KEY",
+    );
+    return NextResponse.json(
+      { message: "Webhook secret not configured" },
+      { status: 500 },
+    );
+  }
 
+  let event: any;
+  try {
+    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+  } catch (err: any) {
+    console.error("[stripe-webhook] signature verification failed", {
+      message: err?.message,
+      using: stripeAccount ? "connect" : "platform",
+    });
+    return NextResponse.json(
+      { message: `Signature verification failed: ${err?.message || "unknown"}` },
+      { status: 400 },
+    );
+  }
+
+  console.log("[stripe-webhook] verified event", {
+    type: event.type,
+    id: event.id,
+    livemode: event.livemode,
+    account: event.account || null,
+  });
+
+  try {
     switch (event.type) {
       case "payment_intent.created":
       case "payment_intent.canceled":
@@ -54,10 +91,11 @@ export async function POST(req: Request) {
         await updateSupabase(event, supabase);
         break;
       default:
-        console.log(`Unhandled event type ${event.type}`);
+        console.log(`[stripe-webhook] unhandled event type ${event.type}`);
+        // Return 200 so Stripe doesn't retry events we don't care about.
         return NextResponse.json(
-          { message: "UNHANDLED EVENT TYPE: FAILED" },
-          { status: 400 },
+          { message: "Unhandled event type — ignored" },
+          { status: 200 },
         );
     }
 
@@ -65,10 +103,15 @@ export async function POST(req: Request) {
       { message: "EVENT PROCESSED SUCCESSFULLY" },
       { status: 200 },
     );
-  } catch (err) {
-    console.error("Error processing event:", err);
+  } catch (err: any) {
+    console.error("[stripe-webhook] handler error", {
+      type: event?.type,
+      id: event?.id,
+      message: err?.message,
+      stack: err?.stack,
+    });
     return NextResponse.json(
-      { message: "Internal server error" },
+      { message: `Handler error: ${err?.message || "unknown"}` },
       { status: 500 },
     );
   }
@@ -119,7 +162,7 @@ const updateSupabase = async (event: any, supabase: any) => {
 
     if (invoiceError) {
       console.log("Error updating invoice status:", invoiceError);
-      throw new Error(invoiceError);
+      throw new Error(`invoice update failed: ${invoiceError.message}`);
     }
 
     console.log(`Invoice ${invoiceId} updated to status: ${mappedStatus}`);
@@ -150,7 +193,7 @@ const updateSupabase = async (event: any, supabase: any) => {
 
         if (paymentError) {
           console.log("Error creating payment record:", paymentError);
-          throw new Error(paymentError);
+          throw new Error(`payment row write failed: ${paymentError.message}`);
         }
       } else {
         console.log(`Payment record already exists for invoice ${invoiceId}, skipping`);
@@ -234,7 +277,7 @@ const updateSupabase = async (event: any, supabase: any) => {
 
       if (paymentError) {
         console.log("Error updating payment record:", paymentError);
-        throw new Error(paymentError);
+        throw new Error(`payment row write failed: ${paymentError.message}`);
       }
     }
   }
