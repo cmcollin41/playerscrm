@@ -711,9 +711,16 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium">
-                        {person.first_name} {person.last_name}
+                        {person.dependent
+                          ? `${person.first_name} ${person.last_name}`
+                          : "Myself"}
                       </p>
-                      {person.grade && (
+                      {!person.dependent && (person.first_name || person.last_name) && (
+                        <p className="text-xs text-gray-500">
+                          {person.first_name} {person.last_name}
+                        </p>
+                      )}
+                      {person.dependent && person.grade && (
                         <p className="text-xs text-gray-500">Grade {person.grade}</p>
                       )}
                     </div>
