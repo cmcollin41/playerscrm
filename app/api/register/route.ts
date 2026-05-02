@@ -46,6 +46,24 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Event is not open for registration" }, { status: 400 })
     }
 
+    // event_registrations.registered_by → profiles(id). Race-safe upsert so two
+    // concurrent registers can't both INSERT and one 500 on the PK.
+    const { error: profileUpsertError } = await admin
+      .from("profiles")
+      .upsert(
+        {
+          id: user.id,
+          email: user.email,
+          account_id: event.account_id,
+          current_account_id: event.account_id,
+          role: "general",
+        },
+        { onConflict: "id", ignoreDuplicates: true }
+      )
+    if (profileUpsertError) {
+      return NextResponse.json({ error: profileUpsertError.message }, { status: 500 })
+    }
+
     // Check capacity
     if (event.capacity) {
       const { count } = await admin

@@ -37,15 +37,28 @@ export async function GET(req: Request) {
     if (lookupEmail) {
       const { data } = await admin
         .from("people")
-        .select("id, first_name, last_name, grade, email, dependent")
+        .select("id, first_name, last_name, grade, email, dependent, account_id")
         .eq("email", lookupEmail)
         .limit(1)
         .maybeSingle()
       selfPerson = data
 
-      // Backfill profiles.people_id so future loads use the direct path
-      if (selfPerson && profile && !profile.people_id) {
-        await admin.from("profiles").update({ people_id: selfPerson.id }).eq("id", user.id)
+      if (selfPerson) {
+        if (profile && !profile.people_id) {
+          await admin.from("profiles").update({ people_id: selfPerson.id }).eq("id", user.id)
+        } else if (!profile) {
+          // No profile row yet — create one so registered_by FK holds later.
+          await admin.from("profiles").insert({
+            id: user.id,
+            email: user.email,
+            first_name: selfPerson.first_name,
+            last_name: selfPerson.last_name,
+            account_id: selfPerson.account_id,
+            current_account_id: selfPerson.account_id,
+            people_id: selfPerson.id,
+            role: "general",
+          })
+        }
       }
     }
   }

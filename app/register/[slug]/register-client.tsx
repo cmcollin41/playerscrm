@@ -551,8 +551,10 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
             <button
               onClick={() => {
                 setRegistrantKind("self")
-                setRegisterSelf(true)
+                setRegisterSelf(!hasSelfInList)
                 setShowAddChild(false)
+                const self = family.find(p => !p.dependent)
+                if (self) setSelected(prev => new Set(prev).add(self.id))
                 setStep("select-kids")
               }}
               className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left hover:border-gray-400 transition-colors"
@@ -566,7 +568,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
               onClick={() => {
                 setRegistrantKind("dependent")
                 setRegisterSelf(false)
-                setShowAddChild(true)
+                setShowAddChild(false)
                 setStep("select-kids")
               }}
               className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left hover:border-gray-400 transition-colors"
@@ -579,8 +581,10 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
             <button
               onClick={() => {
                 setRegistrantKind("both")
-                setRegisterSelf(true)
+                setRegisterSelf(!hasSelfInList)
                 setShowAddChild(false)
+                const self = family.find(p => !p.dependent)
+                if (self) setSelected(prev => new Set(prev).add(self.id))
                 setStep("select-kids")
               }}
               className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left hover:border-gray-400 transition-colors"
