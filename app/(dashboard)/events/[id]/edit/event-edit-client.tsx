@@ -168,22 +168,38 @@ export function EventEditClient({
         if (delErr) throw delErr
       }
 
-      const sessionsToUpsert = sessions.map((s, idx) => ({
-        ...(s.id ? { id: s.id } : {}),
-        event_id: event.id,
-        title: s.title.trim(),
-        description: s.description.trim() || null,
-        location: s.location.trim() || null,
-        starts_at: localInputToIso(s.startsAt),
-        ends_at: localInputToIso(s.endsAt),
-        ordering: idx,
+      const sessionRows = sessions.map((s, idx) => ({
+        id: s.id,
+        payload: {
+          event_id: event.id,
+          title: s.title.trim(),
+          description: s.description.trim() || null,
+          location: s.location.trim() || null,
+          starts_at: localInputToIso(s.startsAt),
+          ends_at: localInputToIso(s.endsAt),
+          ordering: idx,
+        },
       }))
 
-      if (sessionsToUpsert.length) {
-        const { error: sessErr } = await supabase
+      const sessionUpdates = sessionRows
+        .filter((r) => r.id)
+        .map((r) => ({ id: r.id as string, ...r.payload }))
+      const sessionInserts = sessionRows
+        .filter((r) => !r.id)
+        .map((r) => r.payload)
+
+      if (sessionUpdates.length) {
+        const { error: updErr } = await supabase
           .from("event_sessions")
-          .upsert(sessionsToUpsert)
-        if (sessErr) throw sessErr
+          .upsert(sessionUpdates)
+        if (updErr) throw updErr
+      }
+
+      if (sessionInserts.length) {
+        const { error: insErr } = await supabase
+          .from("event_sessions")
+          .insert(sessionInserts)
+        if (insErr) throw insErr
       }
 
       toast.success("Event updated")
