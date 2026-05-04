@@ -360,7 +360,6 @@ export default function PersonSheet({
       const slug = baseSlug ? ensureUniqueSlug(baseSlug, existingSlugs) : null;
 
       const personData = {
-        account_id: account.id,
         first_name: values.firstName,
         last_name: values.lastName,
         name: `${values.firstName} ${values.lastName}`,
@@ -380,67 +379,33 @@ export default function PersonSheet({
         slug,
       };
 
-      // Create or update person
-      const { data: savedPerson, error: personError } = await supabase
-        .from("people")
-        .upsert([
-          person?.id
-            ? { ...personData, id: person.id }
-            : personData
-        ])
-        .select()
-        .single();
-
-      // Dual-write: ensure account_people row exists
-      if (savedPerson && !personError) {
-        await supabase
-          .from("account_people")
-          .upsert(
-            { account_id: account.id, person_id: savedPerson.id, tags: values.tags },
-            { onConflict: "account_id,person_id" }
-          )
+      const payload = {
+        account_id: account.id,
+        person: personData,
+        relationships: values.dependent
+          ? (values.relationships ?? []).map((rel) => ({
+              id: rel.id,
+              name: rel.name,
+              primary: rel.primary ?? false,
+            }))
+          : undefined,
       }
 
-      if (personError) {
-        if (personError.code === '23505') {
-          throw new Error("A person with this email already exists");
-        }
-        throw new Error(`Failed to save person: ${personError.message}`);
+      const url = person?.id ? `/api/people/${person.id}` : "/api/people"
+      const method = person?.id ? "PATCH" : "POST"
+      const res = await fetch(url, {
+        method,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to save person")
       }
+      const savedPerson = json.person
 
       if (!savedPerson) {
         throw new Error("Failed to create/update person: No data returned");
-      }
-
-      // Handle relationships if person is dependent
-      if (values.dependent) {
-        // Use savedPerson.id instead of person?.id
-        const { error: deleteError } = await supabase
-          .from("relationships")
-          .delete()
-          .eq('relation_id', savedPerson.id);
-
-        if (deleteError) {
-          throw new Error(`Failed to update relationships: ${deleteError.message}`);
-        }
-
-        // Insert new relationships
-        if (values.relationships?.length) {
-          const relationshipData = values.relationships.map(rel => ({
-            person_id: rel.id,
-            relation_id: savedPerson.id, // Use savedPerson.id here
-            name: rel.name,
-            primary: rel.primary || false,
-          }));
-
-          const { error: insertError } = await supabase
-            .from("relationships")
-            .insert(relationshipData);
-
-          if (insertError) {
-            throw new Error(`Failed to create relationships: ${insertError.message}`);
-          }
-        }
       }
 
       toast.success(person ? "Person updated successfully" : "Person created successfully");
@@ -486,19 +451,14 @@ export default function PersonSheet({
     try {
       setIsDeleting(true)
 
-      const { error: relError } = await supabase
-        .from("relationships")
-        .delete()
-        .or(`person_id.eq.${person.id},relation_id.eq.${person.id}`)
-
-      if (relError) throw new Error(`Failed to remove relationships: ${relError.message}`)
-
-      const { error: deleteError } = await supabase
-        .from("people")
-        .delete()
-        .eq("id", person.id)
-
-      if (deleteError) throw new Error(`Failed to delete person: ${deleteError.message}`)
+      const res = await fetch(
+        `/api/people/${person.id}?account_id=${encodeURIComponent(account.id)}`,
+        { method: "DELETE" },
+      )
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to delete person")
+      }
 
       toast.success("Person deleted successfully")
       setOpen(false)
