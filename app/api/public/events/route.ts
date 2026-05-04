@@ -10,6 +10,16 @@ interface PublicTeamRef {
   name: string | null
 }
 
+interface PublicSession {
+  id: string
+  title: string
+  description: string | null
+  location: string | null
+  starts_at: string | null
+  ends_at: string | null
+  ordering: number
+}
+
 interface PublicEvent {
   id: string
   slug: string
@@ -24,7 +34,9 @@ interface PublicEvent {
   team: PublicTeamRef | null
   opponent_name: string | null
   is_home: boolean | null
-  // camp/registration-only fields — null for practices/games
+  is_registerable: boolean
+  is_paid: boolean
+  // registration fields — null when is_registerable is false
   registration_opens_at: string | null
   registration_closes_at: string | null
   capacity: number | null
@@ -32,6 +44,7 @@ interface PublicEvent {
   fee_description: string | null
   registration_open: boolean | null
   register_url: string | null
+  sessions: PublicSession[]
 }
 
 const CORS_HEADERS = {
@@ -136,7 +149,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("events")
       .select(
-        "id, slug, name, event_type, description, location, starts_at, ends_at, arrival_time, registration_opens_at, registration_closes_at, capacity, fee_amount, fee_description, image_url, team_id, opponent_name, is_home, teams(id, slug, name, is_public)",
+        "id, slug, name, event_type, description, location, starts_at, ends_at, arrival_time, is_registerable, is_paid, registration_opens_at, registration_closes_at, capacity, fee_amount, fee_description, image_url, team_id, opponent_name, is_home, teams(id, slug, name, is_public), event_sessions(id, title, description, location, starts_at, ends_at, ordering)",
       )
       .eq("account_id", accountId)
       .eq("is_published", true)
@@ -186,9 +199,8 @@ export async function GET(request: NextRequest) {
       })
       .map((e: any) => {
         const eventType = (e.event_type as EventType) ?? "camp"
-        // Games and practices are calendar items; camps and "other" can take
-        // registrations (free or paid).
-        const isRegisterable = eventType === "camp" || eventType === "other"
+        const isRegisterable = !!e.is_registerable
+        const isPaid = !!e.is_paid
 
         const opensAt = e.registration_opens_at
           ? new Date(e.registration_opens_at)
@@ -204,6 +216,23 @@ export async function GET(request: NextRequest) {
           ? { id: e.teams.id, slug: e.teams.slug, name: e.teams.name }
           : null
 
+        const sessions: PublicSession[] = (e.event_sessions ?? [])
+          .map((s: any) => ({
+            id: s.id,
+            title: s.title,
+            description: s.description,
+            location: s.location,
+            starts_at: s.starts_at,
+            ends_at: s.ends_at,
+            ordering: s.ordering ?? 0,
+          }))
+          .sort((a: PublicSession, b: PublicSession) => {
+            if (a.ordering !== b.ordering) return a.ordering - b.ordering
+            const aStart = a.starts_at ? Date.parse(a.starts_at) : Infinity
+            const bStart = b.starts_at ? Date.parse(b.starts_at) : Infinity
+            return aStart - bStart
+          })
+
         return {
           id: e.id,
           slug: e.slug,
@@ -218,13 +247,16 @@ export async function GET(request: NextRequest) {
           team,
           opponent_name: eventType === "game" ? e.opponent_name : null,
           is_home: eventType === "game" ? e.is_home : null,
+          is_registerable: isRegisterable,
+          is_paid: isPaid,
           registration_opens_at: isRegisterable ? e.registration_opens_at : null,
           registration_closes_at: isRegisterable ? e.registration_closes_at : null,
           capacity: isRegisterable ? e.capacity : null,
           fee_amount: isRegisterable ? e.fee_amount : null,
-          fee_description: isRegisterable ? e.fee_description : null,
+          fee_description: isRegisterable && isPaid ? e.fee_description : null,
           registration_open: registrationOpen,
           register_url: isRegisterable ? buildRegisterUrl(account, e.slug) : null,
+          sessions,
         }
       })
 

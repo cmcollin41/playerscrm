@@ -11,7 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { EventDetailClient, DeleteEventButton } from "./event-detail-client"
+import { EventDetailClient, DeleteEventButton, ShareLinkBanner } from "./event-detail-client"
 
 export default async function EventDetailPage({
   params,
@@ -104,6 +104,10 @@ export default async function EventDetailPage({
           <DeleteEventButton eventId={event.id} />
         </div>
       </div>
+
+      {event.is_published && event.is_registerable && (
+        <ShareLinkBanner slug={event.slug} />
+      )}
 
       <div className="grid gap-4 md:grid-cols-4">
         {event.starts_at && (

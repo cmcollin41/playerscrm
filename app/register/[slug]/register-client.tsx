@@ -375,7 +375,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
                 {event.location}
               </span>
             )}
-            {event.fee_amount > 0 && (
+            {event.is_paid && (
               <span className="flex items-center gap-1.5">
                 <DollarSign className="h-4 w-4" />
                 ${(event.fee_amount / 100).toFixed(2)} per person
@@ -387,6 +387,53 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
           </div>
         </CardContent>
       </Card>
+
+      {Array.isArray(event.event_sessions) && event.event_sessions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Sessions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {[...event.event_sessions]
+              .sort((a: any, b: any) => {
+                if ((a.ordering ?? 0) !== (b.ordering ?? 0)) {
+                  return (a.ordering ?? 0) - (b.ordering ?? 0)
+                }
+                const aStart = a.starts_at ? Date.parse(a.starts_at) : Infinity
+                const bStart = b.starts_at ? Date.parse(b.starts_at) : Infinity
+                return aStart - bStart
+              })
+              .map((s: any) => (
+                <div key={s.id} className="rounded-lg border p-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-sm font-medium">{s.title}</p>
+                    {s.starts_at && (
+                      <p className="text-xs text-gray-500">
+                        {new Date(s.starts_at).toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                        {s.ends_at &&
+                          ` – ${new Date(s.ends_at).toLocaleTimeString(undefined, {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}`}
+                      </p>
+                    )}
+                  </div>
+                  {s.location && (
+                    <p className="mt-1 text-xs text-gray-500">{s.location}</p>
+                  )}
+                  {s.description && (
+                    <p className="mt-2 text-sm text-gray-700">{s.description}</p>
+                  )}
+                </div>
+              ))}
+          </CardContent>
+        </Card>
+      )}
 
       {authLoading && step === "info" && (
         <Card>
@@ -801,7 +848,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
             )}
 
             <div className="pt-4 border-t">
-              {event.fee_amount > 0 && selected.size > 0 && (
+              {event.is_paid && selected.size > 0 && (
                 <p className="mb-3 text-sm text-gray-600 text-center">
                   Total: <strong>${((event.fee_amount * selected.size) / 100).toFixed(2)}</strong>
                   {selected.size > 1 && (
@@ -817,7 +864,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
               >
                 {registering ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : event.fee_amount > 0 ? (
+                ) : event.is_paid ? (
                   "Continue to Payment"
                 ) : (
                   "Complete Registration"

@@ -212,7 +212,7 @@ export default function DocsPage() {
           id="endpoint-events"
           method="GET"
           path="/api/public/events"
-          description="Returns published events for an account — registerable events (camps and other) with hosted registration plus team-level practices and games. Use event_type and team filters to scope to a specific schedule."
+          description="Returns published events for an account — anything from informational announcements to multi-session camps with hosted registration. Whether an event takes signups is driven by the is_registerable flag, not by event_type. Use event_type and team filters to scope to a specific schedule."
         >
           <h3 className="text-lg font-semibold text-gray-900">
             Query parameters
@@ -303,13 +303,35 @@ export default function DocsPage() {
       "team": null,
       "opponent_name": null,
       "is_home": null,
+      "is_registerable": true,
+      "is_paid": true,
       "registration_opens_at": "2026-05-01T00:00:00Z",
       "registration_closes_at": "2026-07-10T23:59:59Z",
       "capacity": 50,
       "fee_amount": 15000,
       "fee_description": "Per camper",
       "registration_open": true,
-      "register_url": "https://yourname.athletes.app/register/summer-camp-2026"
+      "register_url": "https://yourname.athletes.app/register/summer-camp-2026",
+      "sessions": [
+        {
+          "id": "uuid",
+          "title": "Day 1 — Skills",
+          "description": "Ball-handling and shooting fundamentals",
+          "location": "Main Gym",
+          "starts_at": "2026-07-15T15:00:00Z",
+          "ends_at": "2026-07-15T21:00:00Z",
+          "ordering": 0
+        },
+        {
+          "id": "uuid",
+          "title": "Day 2 — Team play",
+          "description": null,
+          "location": null,
+          "starts_at": "2026-07-16T15:00:00Z",
+          "ends_at": "2026-07-16T21:00:00Z",
+          "ordering": 1
+        }
+      ]
     },
     {
       "id": "uuid",
@@ -325,13 +347,16 @@ export default function DocsPage() {
       "team": { "id": "uuid", "slug": "boys-varsity", "name": "Boys Varsity Basketball" },
       "opponent_name": null,
       "is_home": null,
+      "is_registerable": false,
+      "is_paid": false,
       "registration_opens_at": null,
       "registration_closes_at": null,
       "capacity": null,
       "fee_amount": null,
       "fee_description": null,
       "registration_open": null,
-      "register_url": null
+      "register_url": null,
+      "sessions": []
     },
     {
       "id": "uuid",
@@ -347,25 +372,40 @@ export default function DocsPage() {
       "team": { "id": "uuid", "slug": "boys-varsity", "name": "Boys Varsity Basketball" },
       "opponent_name": "Lone Peak",
       "is_home": false,
+      "is_registerable": false,
+      "is_paid": false,
       "registration_opens_at": null,
       "registration_closes_at": null,
       "capacity": null,
       "fee_amount": null,
       "fee_description": null,
       "registration_open": null,
-      "register_url": null
+      "register_url": null,
+      "sessions": []
     }
   ]
 }`}</CodeBlock>
 
           <FieldNotes>
             <li>
-              <Code>event_type</Code> is one of <Code>camp</Code>,{" "}
-              <Code>practice</Code>, <Code>game</Code>, or <Code>other</Code>.
-              Camps and <Code>other</Code> events take registrations (free or
-              paid) and can be account-level or attached to a team. Practices
-              and games are calendar items that always belong to a team and
-              don&apos;t take registrations.
+              <Code>event_type</Code> is a presentation hint — one of{" "}
+              <Code>camp</Code>, <Code>practice</Code>, <Code>game</Code>, or{" "}
+              <Code>other</Code>. Whether an event takes signups is driven by{" "}
+              <Code>is_registerable</Code>, not by <Code>event_type</Code>.
+            </li>
+            <li>
+              <Code>is_registerable</Code> is <Code>true</Code> when the event
+              has hosted registration. When <Code>false</Code>, all the
+              registration-only fields (<Code>fee_amount</Code>,{" "}
+              <Code>capacity</Code>, <Code>registration_open</Code>,{" "}
+              <Code>register_url</Code>, etc.) are <Code>null</Code>.
+            </li>
+            <li>
+              <Code>is_paid</Code> is <Code>true</Code> when registration
+              charges a fee through Stripe. A registerable event with{" "}
+              <Code>is_paid: false</Code> is free to sign up for.{" "}
+              <Code>fee_description</Code> is only returned when both flags are
+              true.
             </li>
             <li>
               <Code>team</Code> is <Code>null</Code> for account-level events.
@@ -383,23 +423,23 @@ export default function DocsPage() {
               not set.
             </li>
             <li>
-              Registration fields (<Code>fee_amount</Code>,{" "}
-              <Code>capacity</Code>, <Code>registration_open</Code>,{" "}
-              <Code>register_url</Code>, etc.) are populated for{" "}
-              <Code>camp</Code> and <Code>other</Code> events. They are{" "}
-              <Code>null</Code> for practices and games. A{" "}
-              <Code>fee_amount</Code> of <Code>0</Code> means a free
-              registration.
-            </li>
-            <li>
               <Code>fee_amount</Code> is in the smallest currency unit (cents
-              for USD). <Code>15000</Code> = $150.00.
+              for USD). <Code>15000</Code> = $150.00. <Code>0</Code> means a
+              free registration.
             </li>
             <li>
               <Code>registration_open</Code> is computed server-side based on
               <Code>registration_opens_at</Code> and{" "}
               <Code>registration_closes_at</Code>. Use it to disable buttons in
               your UI.
+            </li>
+            <li>
+              <Code>sessions</Code> is an array of optional sub-events with
+              their own <Code>title</Code>, <Code>description</Code>,{" "}
+              <Code>location</Code>, <Code>starts_at</Code>,{" "}
+              <Code>ends_at</Code>, and <Code>ordering</Code>. Empty array when
+              the event has no sessions. Sorted by <Code>ordering</Code>, then{" "}
+              <Code>starts_at</Code>.
             </li>
             <li>
               <Code>register_url</Code> resolves to the account&apos;s custom

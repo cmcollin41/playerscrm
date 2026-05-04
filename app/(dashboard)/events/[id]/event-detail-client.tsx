@@ -78,12 +78,6 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null)
 
-  const copyLink = () => {
-    const url = `${window.location.origin}/register/${event.slug}`
-    navigator.clipboard.writeText(url)
-    toast.success("Registration link copied")
-  }
-
   async function updateStatus(regId: string, status: string) {
     setPendingId(regId)
     const { error } = await supabase
@@ -119,21 +113,6 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
 
   return (
     <>
-      {event.is_published && (
-        <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
-          <p className="flex-1 text-sm text-blue-800">
-            Share this link with families to let them register:
-          </p>
-          <code className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-900">
-            {typeof window !== "undefined" ? window.location.origin : ""}/register/{event.slug}
-          </code>
-          <Button size="sm" variant="outline" className="shrink-0" onClick={copyLink}>
-            <ExternalLink className="mr-1 h-3 w-3" />
-            Copy
-          </Button>
-        </div>
-      )}
-
       <Card>
         <CardHeader>
           <CardTitle>Registrations ({registrations.length})</CardTitle>
@@ -312,6 +291,29 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
         </AlertDialogContent>
       </AlertDialog>
     </>
+  )
+}
+
+export function ShareLinkBanner({ slug }: { slug: string }) {
+  const url =
+    typeof window !== "undefined" ? `${window.location.origin}/register/${slug}` : ""
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(`${window.location.origin}/register/${slug}`)
+    toast.success("Registration link copied")
+  }
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+      <p className="flex-1 text-sm text-blue-800">
+        Share this link with families to let them register:
+      </p>
+      <code className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-900">{url}</code>
+      <Button size="sm" variant="outline" className="shrink-0" onClick={copyLink}>
+        <ExternalLink className="mr-1 h-3 w-3" />
+        Copy
+      </Button>
+    </div>
   )
 }
 
