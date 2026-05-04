@@ -182,6 +182,8 @@ export interface Events {
   fee_amount: number;
   fee_description?: string | null;
   is_published: boolean;
+  is_registerable: boolean;
+  is_paid: boolean;
   image_url?: string | null;
   opponent_name?: string | null;
   is_home?: boolean | null;
@@ -189,6 +191,20 @@ export interface Events {
   accounts?: Accounts;
   teams?: Teams;
   event_registrations?: EventRegistrations[];
+  event_sessions?: EventSessions[];
+}
+
+export interface EventSessions {
+  id: string /* primary key */;
+  event_id: string /* foreign key to events.id */;
+  created_at?: string;
+  updated_at?: string;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  starts_at?: string | null;
+  ends_at?: string | null;
+  ordering: number;
 }
 
 export interface EventRegistrations {

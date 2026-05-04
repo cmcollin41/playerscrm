@@ -87,9 +87,7 @@ export default async function RegisterPage({
   const now = new Date()
   const regOpen = event.registration_opens_at ? new Date(event.registration_opens_at) <= now : true
   const regClosed = event.registration_closes_at ? new Date(event.registration_closes_at) < now : false
-  const atCapacity = event.capacity
-    ? false // We'll check actual count client-side
-    : false
+  const isRegisterable = event.is_registerable !== false
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -97,7 +95,7 @@ export default async function RegisterPage({
         <RegisterClient
           event={event}
           account={event.accounts}
-          registrationOpen={regOpen && !regClosed}
+          registrationOpen={isRegisterable && regOpen && !regClosed}
         />
       </div>
     </div>

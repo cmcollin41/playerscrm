@@ -24,5 +24,12 @@ export default async function EventEditPage({
 
   if (error || !event) notFound()
 
-  return <EventEditClient event={event} />
+  const { data: sessions } = await supabase
+    .from("event_sessions")
+    .select("*")
+    .eq("event_id", id)
+    .order("ordering", { ascending: true })
+    .order("starts_at", { ascending: true })
+
+  return <EventEditClient event={event} initialSessions={sessions || []} />
 }

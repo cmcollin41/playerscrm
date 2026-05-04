@@ -41,6 +41,13 @@ export default async function EventDetailPage({
     .eq("event_id", id)
     .order("created_at", { ascending: false })
 
+  const { data: sessions } = await supabase
+    .from("event_sessions")
+    .select("*")
+    .eq("event_id", id)
+    .order("ordering", { ascending: true })
+    .order("starts_at", { ascending: true })
+
   // Resolve guardian emails for dependents without an email of their own.
   const dependentsNeedingGuardian = (rawRegistrations || [])
     .map((r) => r.people)
@@ -162,6 +169,35 @@ export default async function EventDetailPage({
           </Card>
         )}
       </div>
+
+      {sessions && sessions.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Sessions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {sessions.map((s) => (
+              <div key={s.id} className="rounded-lg border p-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <p className="text-sm font-medium">{s.title}</p>
+                  {s.starts_at && (
+                    <p className="text-xs text-gray-500">
+                      {new Date(s.starts_at).toLocaleString()}
+                      {s.ends_at && ` – ${new Date(s.ends_at).toLocaleTimeString()}`}
+                    </p>
+                  )}
+                </div>
+                {s.location && (
+                  <p className="mt-1 text-xs text-gray-500">{s.location}</p>
+                )}
+                {s.description && (
+                  <p className="mt-2 text-sm text-gray-700">{s.description}</p>
+                )}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       <EventDetailClient event={event} registrations={registrations} />
     </div>

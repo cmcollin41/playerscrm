@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ImageDropzone } from "@/components/ui/image-dropzone"
+import { Trash2, Plus } from "lucide-react"
 import { toast } from "sonner"
 import LoadingDots from "@/components/icons/loading-dots"
 
@@ -27,7 +28,35 @@ function localInputToIso(value: string): string | null {
   return isNaN(d.getTime()) ? null : d.toISOString()
 }
 
-export function EventEditClient({ event }: { event: any }) {
+interface SessionDraft {
+  id: string | null // null = new, not yet persisted
+  title: string
+  description: string
+  location: string
+  startsAt: string
+  endsAt: string
+  ordering: number
+}
+
+function sessionFromRow(row: any): SessionDraft {
+  return {
+    id: row.id,
+    title: row.title || "",
+    description: row.description || "",
+    location: row.location || "",
+    startsAt: toLocalInput(row.starts_at),
+    endsAt: toLocalInput(row.ends_at),
+    ordering: row.ordering ?? 0,
+  }
+}
+
+export function EventEditClient({
+  event,
+  initialSessions,
+}: {
+  event: any
+  initialSessions: any[]
+}) {
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
@@ -37,6 +66,8 @@ export function EventEditClient({ event }: { event: any }) {
   const [location, setLocation] = useState(event.location || "")
   const [startsAt, setStartsAt] = useState(toLocalInput(event.starts_at))
   const [endsAt, setEndsAt] = useState(toLocalInput(event.ends_at))
+  const [isRegisterable, setIsRegisterable] = useState(!!event.is_registerable)
+  const [isPaid, setIsPaid] = useState(!!event.is_paid)
   const [registrationOpensAt, setRegistrationOpensAt] = useState(
     toLocalInput(event.registration_opens_at)
   )
@@ -51,6 +82,38 @@ export function EventEditClient({ event }: { event: any }) {
   const [isPublished, setIsPublished] = useState(!!event.is_published)
   const [imageUrl, setImageUrl] = useState<string | null>(event.image_url || null)
 
+  const [sessions, setSessions] = useState<SessionDraft[]>(initialSessions.map(sessionFromRow))
+  const [removedSessionIds, setRemovedSessionIds] = useState<string[]>([])
+
+  const updateSession = (idx: number, patch: Partial<SessionDraft>) => {
+    setSessions((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
+  }
+
+  const addSession = () => {
+    setSessions((prev) => [
+      ...prev,
+      {
+        id: null,
+        title: "",
+        description: "",
+        location: "",
+        startsAt: "",
+        endsAt: "",
+        ordering: prev.length,
+      },
+    ])
+  }
+
+  const removeSession = (idx: number) => {
+    setSessions((prev) => {
+      const target = prev[idx]
+      if (target?.id) {
+        setRemovedSessionIds((ids) => [...ids, target.id!])
+      }
+      return prev.filter((_, i) => i !== idx)
+    })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) {
@@ -58,9 +121,17 @@ export function EventEditClient({ event }: { event: any }) {
       return
     }
 
+    for (const s of sessions) {
+      if (!s.title.trim()) {
+        toast.error("Every session needs a title")
+        return
+      }
+    }
+
     setSaving(true)
     try {
-      const feeInCents = feeAmount ? Math.round(parseFloat(feeAmount) * 100) : 0
+      const feeInCents =
+        isRegisterable && isPaid && feeAmount ? Math.round(parseFloat(feeAmount) * 100) : 0
 
       const { error } = await supabase
         .from("events")
@@ -70,17 +141,50 @@ export function EventEditClient({ event }: { event: any }) {
           location: location.trim() || null,
           starts_at: localInputToIso(startsAt),
           ends_at: localInputToIso(endsAt),
-          registration_opens_at: localInputToIso(registrationOpensAt),
-          registration_closes_at: localInputToIso(registrationClosesAt),
-          capacity: capacity ? parseInt(capacity) : null,
+          is_registerable: isRegisterable,
+          is_paid: isRegisterable && isPaid,
+          registration_opens_at: isRegisterable
+            ? localInputToIso(registrationOpensAt)
+            : null,
+          registration_closes_at: isRegisterable
+            ? localInputToIso(registrationClosesAt)
+            : null,
+          capacity: isRegisterable && capacity ? parseInt(capacity) : null,
           fee_amount: feeInCents,
-          fee_description: feeDescription.trim() || null,
+          fee_description:
+            isRegisterable && isPaid ? feeDescription.trim() || null : null,
           is_published: isPublished,
           image_url: imageUrl,
         })
         .eq("id", event.id)
 
       if (error) throw error
+
+      if (removedSessionIds.length) {
+        const { error: delErr } = await supabase
+          .from("event_sessions")
+          .delete()
+          .in("id", removedSessionIds)
+        if (delErr) throw delErr
+      }
+
+      const sessionsToUpsert = sessions.map((s, idx) => ({
+        ...(s.id ? { id: s.id } : {}),
+        event_id: event.id,
+        title: s.title.trim(),
+        description: s.description.trim() || null,
+        location: s.location.trim() || null,
+        starts_at: localInputToIso(s.startsAt),
+        ends_at: localInputToIso(s.endsAt),
+        ordering: idx,
+      }))
+
+      if (sessionsToUpsert.length) {
+        const { error: sessErr } = await supabase
+          .from("event_sessions")
+          .upsert(sessionsToUpsert)
+        if (sessErr) throw sessErr
+      }
 
       toast.success("Event updated")
       router.push(`/events/${event.id}`)
@@ -157,6 +261,9 @@ export function EventEditClient({ event }: { event: any }) {
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Schedule</CardTitle>
+            <CardDescription>
+              Overall event window. Use sessions below for multi-day breakdowns.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -179,26 +286,81 @@ export function EventEditClient({ event }: { event: any }) {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="reg_opens">Registration Opens</Label>
-                <Input
-                  id="reg_opens"
-                  type="datetime-local"
-                  value={registrationOpensAt}
-                  onChange={(e) => setRegistrationOpensAt(e.target.value)}
-                />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Sessions</CardTitle>
+            <CardDescription>
+              Optional sub-events with their own time and description (e.g., camp days, tournament rounds).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {sessions.length === 0 && (
+              <p className="text-sm text-gray-500">No sessions added yet.</p>
+            )}
+            {sessions.map((s, idx) => (
+              <div key={s.id ?? `new-${idx}`} className="space-y-3 rounded-lg border p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Session {idx + 1}</p>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeSession(idx)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label>Title *</Label>
+                  <Input
+                    value={s.title}
+                    onChange={(e) => updateSession(idx, { title: e.target.value })}
+                    placeholder="Day 1 — Skills"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={s.description}
+                    onChange={(e) => updateSession(idx, { description: e.target.value })}
+                    rows={2}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Location</Label>
+                  <Input
+                    value={s.location}
+                    onChange={(e) => updateSession(idx, { location: e.target.value })}
+                    placeholder="Defaults to event location"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Starts</Label>
+                    <Input
+                      type="datetime-local"
+                      value={s.startsAt}
+                      onChange={(e) => updateSession(idx, { startsAt: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Ends</Label>
+                    <Input
+                      type="datetime-local"
+                      value={s.endsAt}
+                      onChange={(e) => updateSession(idx, { endsAt: e.target.value })}
+                    />
+                  </div>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="reg_closes">Registration Closes</Label>
-                <Input
-                  id="reg_closes"
-                  type="datetime-local"
-                  value={registrationClosesAt}
-                  onChange={(e) => setRegistrationClosesAt(e.target.value)}
-                />
-              </div>
-            </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={addSession}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add session
+            </Button>
           </CardContent>
         </Card>
 
@@ -207,44 +369,93 @@ export function EventEditClient({ event }: { event: any }) {
             <CardTitle className="text-lg">Registration</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="fee">Fee ($)</Label>
-                <Input
-                  id="fee"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={feeAmount}
-                  onChange={(e) => setFeeAmount(e.target.value)}
-                />
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <p className="text-sm font-medium">Registerable</p>
+                <p className="text-xs text-gray-500">
+                  Off for informational events with no signup
+                </p>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="capacity">Max Capacity</Label>
-                <Input
-                  id="capacity"
-                  type="number"
-                  min="1"
-                  placeholder="Unlimited"
-                  value={capacity}
-                  onChange={(e) => setCapacity(e.target.value)}
-                />
-              </div>
+              <Switch checked={isRegisterable} onCheckedChange={setIsRegisterable} />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="fee_desc">Fee Description</Label>
-              <Input
-                id="fee_desc"
-                value={feeDescription}
-                onChange={(e) => setFeeDescription(e.target.value)}
-              />
-            </div>
+
+            {isRegisterable && (
+              <>
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div>
+                    <p className="text-sm font-medium">Paid</p>
+                    <p className="text-xs text-gray-500">
+                      Charge a fee through Stripe at registration time
+                    </p>
+                  </div>
+                  <Switch checked={isPaid} onCheckedChange={setIsPaid} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reg_opens">Registration Opens</Label>
+                    <Input
+                      id="reg_opens"
+                      type="datetime-local"
+                      value={registrationOpensAt}
+                      onChange={(e) => setRegistrationOpensAt(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reg_closes">Registration Closes</Label>
+                    <Input
+                      id="reg_closes"
+                      type="datetime-local"
+                      value={registrationClosesAt}
+                      onChange={(e) => setRegistrationClosesAt(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {isPaid && (
+                    <div className="space-y-2">
+                      <Label htmlFor="fee">Fee ($)</Label>
+                      <Input
+                        id="fee"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={feeAmount}
+                        onChange={(e) => setFeeAmount(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="capacity">Max Capacity</Label>
+                    <Input
+                      id="capacity"
+                      type="number"
+                      min="1"
+                      placeholder="Unlimited"
+                      value={capacity}
+                      onChange={(e) => setCapacity(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {isPaid && (
+                  <div className="space-y-2">
+                    <Label htmlFor="fee_desc">Fee Description</Label>
+                    <Input
+                      id="fee_desc"
+                      value={feeDescription}
+                      onChange={(e) => setFeeDescription(e.target.value)}
+                    />
+                  </div>
+                )}
+              </>
+            )}
             <div className="flex items-center justify-between rounded-lg border p-4">
               <div>
                 <p className="text-sm font-medium">Publish Event</p>
                 <p className="text-xs text-gray-500">
-                  When published, anyone with the link can view and register
+                  When published, anyone with the link can view
+                  {isRegisterable ? " and register" : ""}
                 </p>
               </div>
               <Switch checked={isPublished} onCheckedChange={setIsPublished} />

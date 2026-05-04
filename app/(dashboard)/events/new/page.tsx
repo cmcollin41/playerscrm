@@ -89,7 +89,9 @@ export default function NewEventPage() {
   const [opponent, setOpponent] = useState("")
   const [isHome, setIsHome] = useState(true)
 
-  // Camp/other registration
+  // Registration
+  const [isRegisterable, setIsRegisterable] = useState(true)
+  const [isPaid, setIsPaid] = useState(false)
   const [registrationOpensAt, setRegistrationOpensAt] = useState("")
   const [registrationClosesAt, setRegistrationClosesAt] = useState("")
   const [capacity, setCapacity] = useState("")
@@ -105,13 +107,24 @@ export default function NewEventPage() {
       .then(({ data }) => setTeams(data || []))
   }, [supabase])
 
-  // Default publish: games default to published, camps/other default to draft.
+  // Sensible defaults per type (user can override either toggle).
   useEffect(() => {
-    setIsPublished(eventType === "game")
+    if (eventType === "game") {
+      setIsPublished(true)
+      setIsRegisterable(false)
+      setIsPaid(false)
+    } else if (eventType === "camp") {
+      setIsPublished(false)
+      setIsRegisterable(true)
+      setIsPaid(true)
+    } else {
+      setIsPublished(false)
+      setIsRegisterable(true)
+      setIsPaid(false)
+    }
   }, [eventType])
 
   const isGame = eventType === "game"
-  const showRegistration = !isGame
   const team = teams.find((t) => t.id === teamId) || null
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,7 +168,9 @@ export default function NewEventPage() {
       }
 
       const feeInCents =
-        showRegistration && feeAmount ? Math.round(parseFloat(feeAmount) * 100) : 0
+        isRegisterable && isPaid && feeAmount
+          ? Math.round(parseFloat(feeAmount) * 100)
+          : 0
 
       const insertRow: any = {
         account_id: account.id,
@@ -169,6 +184,9 @@ export default function NewEventPage() {
         ends_at: localInputToIso(endsAt),
         arrival_time: localInputToIso(arrivalAt),
         is_published: isPublished,
+        is_registerable: isRegisterable,
+        is_paid: isRegisterable && isPaid,
+        fee_amount: feeInCents,
       }
 
       if (isGame) {
@@ -176,10 +194,12 @@ export default function NewEventPage() {
         insertRow.is_home = isHome
       } else {
         insertRow.image_url = imageUrl
+      }
+
+      if (isRegisterable) {
         insertRow.registration_opens_at = localInputToIso(registrationOpensAt)
         insertRow.registration_closes_at = localInputToIso(registrationClosesAt)
         insertRow.capacity = capacity ? parseInt(capacity) : null
-        insertRow.fee_amount = feeInCents
         insertRow.fee_description = feeDescription.trim() || null
       }
 
@@ -390,72 +410,98 @@ export default function NewEventPage() {
           </CardContent>
         </Card>
 
-        {showRegistration && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Registration</CardTitle>
-              <CardDescription>
-                Set fee, capacity, and the window when people can sign up.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reg_opens">Registration Opens</Label>
-                  <Input
-                    id="reg_opens"
-                    type="datetime-local"
-                    value={registrationOpensAt}
-                    onChange={(e) => setRegistrationOpensAt(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="reg_closes">Registration Closes</Label>
-                  <Input
-                    id="reg_closes"
-                    type="datetime-local"
-                    value={registrationClosesAt}
-                    onChange={(e) => setRegistrationClosesAt(e.target.value)}
-                  />
-                </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Registration</CardTitle>
+            <CardDescription>
+              Turn on registration if people need to sign up to attend.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-lg border p-4">
+              <div>
+                <p className="text-sm font-medium">Registerable</p>
+                <p className="text-xs text-gray-500">
+                  Off for informational events with no signup
+                </p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fee">Fee ($)</Label>
-                  <Input
-                    id="fee"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={feeAmount}
-                    onChange={(e) => setFeeAmount(e.target.value)}
-                  />
+              <Switch checked={isRegisterable} onCheckedChange={setIsRegisterable} />
+            </div>
+
+            {isRegisterable && (
+              <>
+                <div className="flex items-center justify-between rounded-lg border p-4">
+                  <div>
+                    <p className="text-sm font-medium">Paid</p>
+                    <p className="text-xs text-gray-500">
+                      Charge a fee through Stripe at registration time
+                    </p>
+                  </div>
+                  <Switch checked={isPaid} onCheckedChange={setIsPaid} />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="capacity">Max Capacity</Label>
-                  <Input
-                    id="capacity"
-                    type="number"
-                    min="1"
-                    placeholder="Unlimited"
-                    value={capacity}
-                    onChange={(e) => setCapacity(e.target.value)}
-                  />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reg_opens">Registration Opens</Label>
+                    <Input
+                      id="reg_opens"
+                      type="datetime-local"
+                      value={registrationOpensAt}
+                      onChange={(e) => setRegistrationOpensAt(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reg_closes">Registration Closes</Label>
+                    <Input
+                      id="reg_closes"
+                      type="datetime-local"
+                      value={registrationClosesAt}
+                      onChange={(e) => setRegistrationClosesAt(e.target.value)}
+                    />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="fee_desc">Fee Description</Label>
-                <Input
-                  id="fee_desc"
-                  placeholder="Includes camp t-shirt and lunch"
-                  value={feeDescription}
-                  onChange={(e) => setFeeDescription(e.target.value)}
-                />
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                <div className="grid grid-cols-2 gap-4">
+                  {isPaid && (
+                    <div className="space-y-2">
+                      <Label htmlFor="fee">Fee ($)</Label>
+                      <Input
+                        id="fee"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={feeAmount}
+                        onChange={(e) => setFeeAmount(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="capacity">Max Capacity</Label>
+                    <Input
+                      id="capacity"
+                      type="number"
+                      min="1"
+                      placeholder="Unlimited"
+                      value={capacity}
+                      onChange={(e) => setCapacity(e.target.value)}
+                    />
+                  </div>
+                </div>
+                {isPaid && (
+                  <div className="space-y-2">
+                    <Label htmlFor="fee_desc">Fee Description</Label>
+                    <Input
+                      id="fee_desc"
+                      placeholder="Includes camp t-shirt and lunch"
+                      value={feeDescription}
+                      onChange={(e) => setFeeDescription(e.target.value)}
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
 
         <Card>
           <CardContent className="flex items-center justify-between p-4">
