@@ -389,7 +389,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       </Card>
 
       {Array.isArray(event.event_sessions) && event.event_sessions.length > 0 && (
-        <Card>
+        <Card className="mb-6">
           <CardHeader>
             <CardTitle className="text-base">Sessions</CardTitle>
           </CardHeader>
