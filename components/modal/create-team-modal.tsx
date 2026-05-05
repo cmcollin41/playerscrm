@@ -14,6 +14,7 @@ import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Camera, X, DollarSign } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SeasonSelect } from "@/components/season-select";
 import { slugify, ensureUniqueSlug } from "@/lib/slug";
 
 const TEAM_LEVELS = [
@@ -38,6 +39,7 @@ export default function CreateTeamModal({ account }: { account: any }) {
     { id: string; name: string; amount: number }[]
   >([]);
   const [defaultRosterFeeId, setDefaultRosterFeeId] = useState("none");
+  const [seasonId, setSeasonId] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -130,6 +132,7 @@ export default function CreateTeamModal({ account }: { account: any }) {
           is_public: isPublic,
           slug,
           fee_id: defaultRosterFeeId === "none" ? null : defaultRosterFeeId,
+          season_id: seasonId,
         },
       ]);
 
@@ -219,6 +222,17 @@ export default function CreateTeamModal({ account }: { account: any }) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Season */}
+        <div className="space-y-2">
+          <Label htmlFor="season">Season</Label>
+          <SeasonSelect
+            id="season"
+            accountId={account.id}
+            value={seasonId}
+            onChange={setSeasonId}
+          />
         </div>
 
         {/* Default Roster Fee */}

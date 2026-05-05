@@ -63,6 +63,13 @@ export type Team = {
   is_active: boolean;
   icon?: string;
   rosters: any;
+  seasons?: {
+    id: string;
+    year_start: number;
+    year_end: number;
+    display_name: string;
+    is_current?: boolean;
+  } | null;
   staff: {
     people: {
       name: string;
@@ -115,6 +122,21 @@ const columns: ColumnDef<Team>[] = [
         <div className="font-medium">{row.getValue("name")}</div>
       </div>
     ),
+  },
+  {
+    id: "season",
+    accessorFn: (row) => row.seasons?.year_start ?? null,
+    header: "Season",
+    cell: ({ row }) => {
+      const season = row.original.seasons;
+      if (!season) return <div className="text-gray-400">—</div>;
+      return <div className="font-mono text-sm">{season.display_name}</div>;
+    },
+    sortingFn: (a, b) => {
+      const ay = a.original.seasons?.year_start ?? -Infinity;
+      const by = b.original.seasons?.year_start ?? -Infinity;
+      return ay - by;
+    },
   },
   {
     accessorKey: "level",

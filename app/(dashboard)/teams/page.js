@@ -19,16 +19,23 @@ export default async function TeamsPage() {
 
   const account = await getAccount();
 
-  const { data: teams, error } = await supabase
+  const { data: rawTeams, error } = await supabase
     .from("teams")
     .select(`
       *,
+      seasons(id, year_start, year_end, display_name, slug, is_current),
       rosters(*, people(*)),
       staff(*, people(name))
     `)
-    .eq("account_id", account.id)
-    .order("is_active", { ascending: false })
-    .order("created_at", { ascending: false });
+    .eq("account_id", account.id);
+
+  const teams = (rawTeams ?? []).slice().sort((a, b) => {
+    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+    const ay = a.seasons?.year_start ?? -Infinity;
+    const by = b.seasons?.year_start ?? -Infinity;
+    if (ay !== by) return by - ay;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 
   const totalTeams = teams?.length || 0;
   const activeTeams = teams?.filter(t => t.is_active).length || 0;

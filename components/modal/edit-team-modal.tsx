@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { Loader2, Camera, X, Plus, Trophy, Pencil, DollarSign } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { SeasonSelect } from "@/components/season-select";
 import { getInitials } from "@/lib/utils";
 import { slugify, ensureUniqueSlug } from "@/lib/slug";
 
@@ -59,6 +60,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
     { id: string; name: string; amount: number }[]
   >([]);
   const [defaultRosterFeeId, setDefaultRosterFeeId] = useState<string>("none");
+  const [seasonId, setSeasonId] = useState<string | null>(team?.season_id ?? null);
 
   // Sync all state whenever the team prop changes (including after onRefresh)
   useEffect(() => {
@@ -70,6 +72,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
       setLevel(team.level || "bantam");
       setImagePreview(team.icon || null);
       setAwards(team.team_awards ?? []);
+      setSeasonId(team.season_id ?? null);
     } else {
       setValue("is_active", true);
       setValue("is_public", false);
@@ -222,6 +225,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
         icon: imagePreview,
         slug,
         fee_id: defaultRosterFeeId === "none" ? null : defaultRosterFeeId,
+        season_id: seasonId,
       };
 
       let error;
@@ -321,6 +325,19 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
             </SelectContent>
           </Select>
         </div>
+
+        {/* Season */}
+        {team?.account_id ? (
+          <div className="space-y-2">
+            <Label htmlFor="season">Season</Label>
+            <SeasonSelect
+              id="season"
+              accountId={team.account_id}
+              value={seasonId}
+              onChange={setSeasonId}
+            />
+          </div>
+        ) : null}
 
         {/* Default Roster Fee */}
         {team?.id ? (
