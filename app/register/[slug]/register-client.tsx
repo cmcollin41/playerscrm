@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
-import { loadStripe } from "@stripe/stripe-js"
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -11,8 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Calendar, MapPin, DollarSign, Mail, Check, Plus, Loader2 } from "lucide-react"
 import { toast } from "sonner"
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
 
 function formatEventDateRange(starts: string | null, ends: string | null) {
   if (!starts) return null
@@ -67,7 +63,7 @@ interface RegisterClientProps {
   registrationOpen: boolean
 }
 
-type Step = "info" | "email" | "magic-link-sent" | "profile" | "registrant-kind" | "select-kids" | "payment" | "success"
+type Step = "info" | "email" | "magic-link-sent" | "profile" | "registrant-kind" | "select-kids" | "success"
 type RegistrantKind = "self" | "dependent" | "both"
 
 export function RegisterClient({ event, account, registrationOpen }: RegisterClientProps) {
@@ -89,8 +85,6 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   const [addingSelf, setAddingSelf] = useState(false)
   const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "" })
   const [savingProfile, setSavingProfile] = useState(false)
-  const [clientSecret, setClientSecret] = useState<string | null>(null)
-  const [stripeAccount, setStripeAccount] = useState<string | null>(null)
   const [hasSelfInList, setHasSelfInList] = useState(false)
   const [registrantKind, setRegistrantKind] = useState<RegistrantKind | null>(null)
 
@@ -320,19 +314,18 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
 
-      // If free event, go straight to success
-      if (!data.client_secret) {
+      // Free event → in-page success
+      if (!data.url) {
         setStep("success")
+        setRegistering(false)
         return
       }
 
-      // Show Stripe payment form
-      setClientSecret(data.client_secret)
-      setStripeAccount(data.stripe_account)
-      setStep("payment")
+      // Paid event → redirect to Stripe-hosted Checkout. Don't clear the
+      // loading state — we're navigating away.
+      window.location.href = data.url
     } catch (err: any) {
       toast.error(err.message || "Registration failed")
-    } finally {
       setRegistering(false)
     }
   }
@@ -876,35 +869,6 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
         </>
       )}
 
-      {/* Step: Payment */}
-      {step === "payment" && clientSecret && (
-        <Card>
-          <CardHeader className="text-center">
-            <CardTitle className="text-lg">Payment</CardTitle>
-            <CardDescription>
-              ${((event.fee_amount * selected.size) / 100).toFixed(2)} for {selected.size} {selected.size === 1 ? "person" : "people"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Elements
-              stripe={stripeAccount
-                ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!, { stripeAccount })
-                : stripePromise
-              }
-              options={{
-                clientSecret,
-                appearance: {
-                  theme: "stripe",
-                  variables: { colorPrimary: "#18181b" },
-                },
-              }}
-            >
-              <PaymentForm onSuccess={() => setStep("success")} />
-            </Elements>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Step: Success */}
       {step === "success" && (
         <Card>
@@ -920,46 +884,5 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
         </Card>
       )}
     </>
-  )
-}
-
-function PaymentForm({ onSuccess }: { onSuccess: () => void }) {
-  const stripe = useStripe()
-  const elements = useElements()
-  const [paying, setPaying] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!stripe || !elements) return
-
-    setPaying(true)
-    setError(null)
-
-    const { error: confirmError } = await stripe.confirmPayment({
-      elements,
-      redirect: "if_required",
-    })
-
-    if (confirmError) {
-      setError(confirmError.message || "Payment failed")
-      setPaying(false)
-      return
-    }
-
-    onSuccess()
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement options={{ layout: "tabs" }} />
-      {error && (
-        <p className="text-sm text-red-600 text-center">{error}</p>
-      )}
-      <Button type="submit" className="w-full" size="lg" disabled={paying || !stripe}>
-        {paying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-        {paying ? "Processing..." : "Pay Now"}
-      </Button>
-    </form>
   )
 }

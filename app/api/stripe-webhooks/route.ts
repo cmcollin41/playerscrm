@@ -88,6 +88,7 @@ export async function POST(req: Request) {
       case "payment_intent.processing":
       case "payment_intent.payment_failed":
       case "payment_intent.succeeded":
+      case "checkout.session.expired":
       case "invoice.created":
       case "invoice.finalized":
       case "invoice.paid":
@@ -124,6 +125,42 @@ export async function POST(req: Request) {
 }
 
 const updateSupabase = async (event: any, supabase: any) => {
+  // Checkout Session abandoned/timed out — flip any still-pending
+  // registrations linked to this session's payment to "cancelled".
+  if (event.type === "checkout.session.expired") {
+    const session = event.data.object;
+    const piId =
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : session.payment_intent?.id || null;
+
+    if (!piId) return;
+
+    const { data: pay } = await supabase
+      .from("payments")
+      .select("id")
+      .eq("payment_intent_id", piId)
+      .maybeSingle();
+
+    if (!pay) return;
+
+    // Filter on payment_id so a re-attempt that re-pointed regs to a newer
+    // payment row is left alone.
+    await supabase
+      .from("event_registrations")
+      .update({ status: "cancelled" })
+      .eq("payment_id", pay.id)
+      .eq("status", "pending");
+
+    await supabase
+      .from("payments")
+      .update({ status: "expired" })
+      .eq("id", pay.id)
+      .eq("status", "pending");
+
+    return;
+  }
+
   // Handle invoice events
   if (event.type.startsWith('invoice.')) {
     const stripeInvoice = event.data.object;
@@ -260,11 +297,22 @@ const updateSupabase = async (event: any, supabase: any) => {
             console.error("Event confirmation email failed:", emailErr);
           }
         }
-      } else if (event.type === "payment_intent.canceled" && registrationIds.length > 0) {
-        await supabase
-          .from("event_registrations")
-          .update({ status: "cancelled" })
-          .in("id", registrationIds);
+      } else if (event.type === "payment_intent.canceled") {
+        // Cancel only registrations still linked to THIS payment. A
+        // re-attempt would have re-pointed regs to a newer payment_id, so
+        // this filter prevents stomping the new pending state.
+        const { data: pay } = await supabase
+          .from("payments")
+          .select("id")
+          .eq("payment_intent_id", paymentIntent.id)
+          .maybeSingle();
+        if (pay) {
+          await supabase
+            .from("event_registrations")
+            .update({ status: "cancelled" })
+            .eq("payment_id", pay.id)
+            .eq("status", "pending");
+        }
       }
 
       return;

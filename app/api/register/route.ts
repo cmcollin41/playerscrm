@@ -109,32 +109,61 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, registrations: regs })
     }
 
-    // Create Stripe payment intent
+    // Create Stripe-hosted Checkout Session
     const account = event.accounts as any
     const totalAmount = event.fee_amount * person_ids.length
     const applicationFee = calculateApplicationFeeCents(totalAmount, account)
 
-    const paymentIntentParams: Stripe.PaymentIntentCreateParams = {
-      amount: totalAmount,
-      currency: "usd",
-      automatic_payment_methods: { enabled: true },
+    const origin = req.headers.get("origin") || new URL(req.url).origin
+    const registrationIdsCsv = regs!.map((r: any) => r.id).join(",")
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: event.name,
+              ...(event.description ? { description: event.description } : {}),
+            },
+            unit_amount: event.fee_amount,
+          },
+          quantity: person_ids.length,
+        },
+      ],
+      success_url: `${origin}/register/${event.slug}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/register/${event.slug}?canceled=1`,
+      // Stripe minimum is 30 minutes; 1 hour gives a comfortable buffer.
+      expires_at: Math.floor(Date.now() / 1000) + 60 * 60,
       metadata: {
         event_id,
-        person_ids: person_ids.join(","),
-        registration_ids: regs!.map((r: any) => r.id).join(","),
+        registration_ids: registrationIdsCsv,
         account_id: event.account_id,
+      },
+      payment_intent_data: {
+        metadata: {
+          event_id,
+          person_ids: person_ids.join(","),
+          registration_ids: registrationIdsCsv,
+          account_id: event.account_id,
+        },
+        ...(account.stripe_id && applicationFee > 0
+          ? { application_fee_amount: applicationFee }
+          : {}),
       },
     }
 
-    if (account.stripe_id && applicationFee > 0) {
-      paymentIntentParams.application_fee_amount = applicationFee
-    }
-
-    const paymentIntent = account.stripe_id
-      ? await stripe.paymentIntents.create(paymentIntentParams, {
+    const session = account.stripe_id
+      ? await stripe.checkout.sessions.create(sessionParams, {
           stripeAccount: account.stripe_id,
         })
-      : await stripe.paymentIntents.create(paymentIntentParams)
+      : await stripe.checkout.sessions.create(sessionParams)
+
+    const paymentIntentId =
+      typeof session.payment_intent === "string"
+        ? session.payment_intent
+        : session.payment_intent?.id || null
 
     // Create payment record
     const { data: payment } = await admin
@@ -144,8 +173,13 @@ export async function POST(req: Request) {
         person_id: person_ids[0],
         amount: totalAmount,
         status: "pending",
-        payment_intent_id: paymentIntent.id,
-        data: { event_id, person_ids, registration_ids: regs!.map((r: any) => r.id) },
+        payment_intent_id: paymentIntentId,
+        data: {
+          event_id,
+          person_ids,
+          registration_ids: regs!.map((r: any) => r.id),
+          stripe_checkout_session_id: session.id,
+        },
       })
       .select("id")
       .single()
@@ -160,8 +194,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      client_secret: paymentIntent.client_secret,
-      stripe_account: account.stripe_id || null,
+      url: session.url,
       registrations: regs,
     })
   } catch (error: any) {
