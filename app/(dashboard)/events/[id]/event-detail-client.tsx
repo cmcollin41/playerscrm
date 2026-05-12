@@ -237,44 +237,35 @@ function renderInvoiceLink(reg: Registration) {
   const receiptUrl = reg.payments?.data?.receipt_url || null
   const stripePaid = reg.payments?.status === "succeeded"
 
-  // Paid via invoice → "Receipt" link to the Stripe-hosted invoice (still
+  // Paid via invoice → "Receipt" button to the Stripe-hosted invoice (still
   // works after payment).
   if (invoice && invoicePaid && invoiceUrl)
     return (
-      <a
-        href={invoiceUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-xs text-green-700 hover:underline"
-      >
-        <Receipt className="h-3 w-3" /> Receipt
-      </a>
+      <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+        <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">
+          <Receipt className="mr-1 h-3 w-3" /> Receipt
+        </a>
+      </Button>
     )
 
-  // Outstanding invoice → "Invoice" link
+  // Outstanding invoice → "Invoice" button
   if (invoice && !invoicePaid && invoiceUrl)
     return (
-      <a
-        href={invoiceUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
-      >
-        <FileText className="h-3 w-3" /> Invoice
-      </a>
+      <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+        <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">
+          <FileText className="mr-1 h-3 w-3" /> Invoice
+        </a>
+      </Button>
     )
 
-  // Stripe Checkout paid (no invoice was ever created) → Receipt link
+  // Stripe Checkout paid (no invoice was ever created) → Receipt button
   if (stripePaid && receiptUrl)
     return (
-      <a
-        href={receiptUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-xs text-green-700 hover:underline"
-      >
-        <Receipt className="h-3 w-3" /> Receipt
-      </a>
+      <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+        <a href={receiptUrl} target="_blank" rel="noopener noreferrer">
+          <Receipt className="mr-1 h-3 w-3" /> Receipt
+        </a>
+      </Button>
     )
 
   return <span className="text-xs text-gray-400">—</span>
