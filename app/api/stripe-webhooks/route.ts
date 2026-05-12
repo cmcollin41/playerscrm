@@ -129,17 +129,15 @@ const updateSupabase = async (event: any, supabase: any) => {
   // registrations linked to this session's payment to "cancelled".
   if (event.type === "checkout.session.expired") {
     const session = event.data.object;
-    const piId =
-      typeof session.payment_intent === "string"
-        ? session.payment_intent
-        : session.payment_intent?.id || null;
 
-    if (!piId) return;
-
+    // Match by checkout session id, not PI id. The PI may not exist
+    // (customer never opened the checkout page), and even when it does we
+    // don't store it on the payment row until payment_intent.succeeded
+    // backfills it.
     const { data: pay } = await supabase
       .from("payments")
       .select("id")
-      .eq("payment_intent_id", piId)
+      .eq("data->>stripe_checkout_session_id", session.id)
       .maybeSingle();
 
     if (!pay) return;
@@ -264,11 +262,47 @@ const updateSupabase = async (event: any, supabase: any) => {
         .map((s: string) => s.trim())
         .filter(Boolean);
 
-      // Update payments row status (matched by payment_intent_id)
-      await supabase
+      // Resolve the payment row. Legacy direct-PI rows have payment_intent_id
+      // set at insert time; Checkout Session rows don't know the PI id until
+      // this webhook fires, so we backfill via the registration linkage.
+      const { data: byPi } = await supabase
         .from("payments")
-        .update({ status: paymentIntent.status })
+        .select("id")
         .eq("payment_intent_id", paymentIntent.id);
+
+      let paymentIds: string[] = (byPi ?? []).map((p: any) => p.id);
+
+      if (paymentIds.length) {
+        await supabase
+          .from("payments")
+          .update({ status: paymentIntent.status })
+          .in("id", paymentIds);
+      } else if (event.type === "payment_intent.succeeded") {
+        // Checkout Session path — fall back to the registration linkage and
+        // backfill payment_intent_id. Scoped to .succeeded because if the
+        // user re-registered after abandonment, the regs now point at a
+        // newer payment row and a .canceled fallback would mis-cancel it.
+        const { data: linkedRegs } = await supabase
+          .from("event_registrations")
+          .select("payment_id")
+          .in("id", registrationIds);
+        paymentIds = Array.from(
+          new Set(
+            (linkedRegs ?? [])
+              .map((r: any) => r.payment_id)
+              .filter(Boolean)
+          )
+        ) as string[];
+        if (paymentIds.length) {
+          await supabase
+            .from("payments")
+            .update({
+              status: paymentIntent.status,
+              payment_intent_id: paymentIntent.id,
+            })
+            .in("id", paymentIds);
+        }
+      }
 
       if (event.type === "payment_intent.succeeded" && registrationIds.length > 0) {
         // Idempotency guard: only flip + email if at least one reg is still pending
@@ -297,22 +331,15 @@ const updateSupabase = async (event: any, supabase: any) => {
             console.error("Event confirmation email failed:", emailErr);
           }
         }
-      } else if (event.type === "payment_intent.canceled") {
+      } else if (event.type === "payment_intent.canceled" && paymentIds.length) {
         // Cancel only registrations still linked to THIS payment. A
         // re-attempt would have re-pointed regs to a newer payment_id, so
         // this filter prevents stomping the new pending state.
-        const { data: pay } = await supabase
-          .from("payments")
-          .select("id")
-          .eq("payment_intent_id", paymentIntent.id)
-          .maybeSingle();
-        if (pay) {
-          await supabase
-            .from("event_registrations")
-            .update({ status: "cancelled" })
-            .eq("payment_id", pay.id)
-            .eq("status", "pending");
-        }
+        await supabase
+          .from("event_registrations")
+          .update({ status: "cancelled" })
+          .in("payment_id", paymentIds)
+          .eq("status", "pending");
       }
 
       return;
