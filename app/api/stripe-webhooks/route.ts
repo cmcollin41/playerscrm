@@ -305,6 +305,39 @@ const updateSupabase = async (event: any, supabase: any) => {
       }
 
       if (event.type === "payment_intent.succeeded" && registrationIds.length > 0) {
+        // Capture the Stripe-hosted receipt URL so the registrations table
+        // can show a "Receipt" link for Checkout-paid registrants (who
+        // never had an invoice generated on our side).
+        const latestChargeId =
+          typeof paymentIntent.latest_charge === "string"
+            ? paymentIntent.latest_charge
+            : paymentIntent.latest_charge?.id || null;
+
+        if (latestChargeId && paymentIds.length) {
+          try {
+            const charge = await stripe.charges.retrieve(
+              latestChargeId,
+              event.account ? { stripeAccount: event.account } : undefined,
+            );
+            if (charge.receipt_url) {
+              const { data: existing } = await supabase
+                .from("payments")
+                .select("id, data")
+                .in("id", paymentIds);
+              for (const p of existing ?? []) {
+                await supabase
+                  .from("payments")
+                  .update({
+                    data: { ...(p.data ?? {}), receipt_url: charge.receipt_url },
+                  })
+                  .eq("id", p.id);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to fetch charge for receipt URL:", err);
+          }
+        }
+
         // Idempotency guard: only flip + email if at least one reg is still pending
         const { data: existingRegs } = await supabase
           .from("event_registrations")

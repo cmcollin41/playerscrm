@@ -43,9 +43,27 @@ export default async function EventDetailPage({
 
   const { data: rawRegistrations } = await supabase
     .from("event_registrations")
-    .select("*, people(id, first_name, last_name, email, phone, grade, dependent), payments(status, amount)")
+    .select("*, people(id, first_name, last_name, email, phone, grade, dependent), payments(status, amount, data)")
     .eq("event_id", id)
     .order("created_at", { ascending: false })
+
+  // Pull all invoices tied to this event (via metadata) so we can show a
+  // per-registrant Invoice/Receipt link in the registrations table.
+  const { data: eventInvoices } = await supabase
+    .from("invoices")
+    .select("id, status, metadata, created_at")
+    .eq("account_id", event.account_id)
+    .eq("metadata->>event_id", id)
+    .order("created_at", { ascending: false })
+
+  // First (newest) invoice per event_registration_id wins.
+  const invoiceByRegistrationId = new Map<string, any>()
+  for (const inv of eventInvoices ?? []) {
+    const regId = (inv.metadata as any)?.event_registration_id
+    if (regId && !invoiceByRegistrationId.has(regId)) {
+      invoiceByRegistrationId.set(regId, inv)
+    }
+  }
 
   const { data: sessions } = await supabase
     .from("event_sessions")
@@ -85,6 +103,7 @@ export default async function EventDetailPage({
     ...r,
     guardian_email: r.people?.id ? guardianEmailByDependentId.get(r.people.id) || null : null,
     guardian_person_id: r.people?.id ? guardianPersonIdByDependentId.get(r.people.id) || null : null,
+    invoice: invoiceByRegistrationId.get(r.id) || null,
   }))
 
   const confirmed = registrations.filter(r => r.status === "confirmed").length

@@ -199,15 +199,21 @@ export async function POST(req: Request) {
       { stripeAccount: stripeAccountId }
     );
 
-    // Update invoice status and add Stripe invoice ID
+    // Update invoice status and add Stripe invoice ID + hosted URL so we
+    // can link straight to the Stripe-hosted invoice from the UI without
+    // needing to round-trip through the API.
     const { error: updateError } = await supabase
       .from('invoices')
-      .update({ 
+      .update({
         status: 'sent',
         invoice_number: sentInvoice.number,
         metadata: {
           ...invoiceRecord.metadata,
-          stripe_invoice_id: sentInvoice.id
+          stripe_invoice_id: sentInvoice.id,
+          ...(sentInvoice.hosted_invoice_url
+            ? { hosted_invoice_url: sentInvoice.hosted_invoice_url }
+            : {}),
+          ...(sentInvoice.invoice_pdf ? { invoice_pdf: sentInvoice.invoice_pdf } : {}),
         }
       })
       .eq('id', invoiceRecord.id);

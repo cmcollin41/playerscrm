@@ -51,6 +51,7 @@ import {
   Clock,
   DollarSign,
   ExternalLink,
+  FileText,
   Hourglass,
   Loader2,
   MoreHorizontal,
@@ -81,11 +82,21 @@ interface Registration {
   payments: {
     status: string | null
     amount: number | null
+    data: { receipt_url?: string | null } | null
   } | null
   payment_status: "paid" | "waived" | null
   payment_status_note: string | null
   guardian_email: string | null
   guardian_person_id: string | null
+  invoice: {
+    id: string
+    status: string | null
+    metadata: {
+      hosted_invoice_url?: string | null
+      invoice_pdf?: string | null
+      stripe_invoice_id?: string | null
+    } | null
+  } | null
 }
 
 interface EventDetailClientProps {
@@ -219,6 +230,56 @@ function renderPayment(reg: Registration, feeAmount: number) {
   return <span className="text-xs text-gray-400">—</span>
 }
 
+function renderInvoiceLink(reg: Registration) {
+  const invoice = reg.invoice
+  const invoiceUrl = invoice?.metadata?.hosted_invoice_url || null
+  const invoicePaid = invoice?.status === "paid" || invoice?.status === "succeeded"
+  const receiptUrl = reg.payments?.data?.receipt_url || null
+  const stripePaid = reg.payments?.status === "succeeded"
+
+  // Paid via invoice → "Receipt" link to the Stripe-hosted invoice (still
+  // works after payment).
+  if (invoice && invoicePaid && invoiceUrl)
+    return (
+      <a
+        href={invoiceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-xs text-green-700 hover:underline"
+      >
+        <Receipt className="h-3 w-3" /> Receipt
+      </a>
+    )
+
+  // Outstanding invoice → "Invoice" link
+  if (invoice && !invoicePaid && invoiceUrl)
+    return (
+      <a
+        href={invoiceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-xs text-blue-700 hover:underline"
+      >
+        <FileText className="h-3 w-3" /> Invoice
+      </a>
+    )
+
+  // Stripe Checkout paid (no invoice was ever created) → Receipt link
+  if (stripePaid && receiptUrl)
+    return (
+      <a
+        href={receiptUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-xs text-green-700 hover:underline"
+      >
+        <Receipt className="h-3 w-3" /> Receipt
+      </a>
+    )
+
+  return <span className="text-xs text-gray-400">—</span>
+}
+
 export function EventDetailClient({ event, registrations }: EventDetailClientProps) {
   const router = useRouter()
   const supabase = createClient()
@@ -319,6 +380,7 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
                     <th className="pb-3 pr-4">Grade</th>
                     <th className="pb-3 pr-4">Status</th>
                     <th className="pb-3 pr-4">Payment</th>
+                    <th className="pb-3 pr-4">Doc</th>
                     <th className="pb-3 pr-4">Date</th>
                     <th className="pb-3 w-8"></th>
                   </tr>
@@ -365,6 +427,9 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
                       </td>
                       <td className="py-3 pr-4">
                         {renderPayment(reg, event.fee_amount)}
+                      </td>
+                      <td className="py-3 pr-4">
+                        {renderInvoiceLink(reg)}
                       </td>
                       <td className="py-3 pr-4 text-gray-500">
                         {new Date(reg.created_at).toLocaleDateString()}
