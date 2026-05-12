@@ -22,7 +22,7 @@ export interface PostEventInvoiceParams {
 
 export async function postEventInvoice(
   params: PostEventInvoiceParams,
-): Promise<void> {
+): Promise<{ resent: boolean }> {
   const {
     eventRegistrationId,
     eventId,
@@ -88,4 +88,9 @@ export async function postEventInvoice(
     const errorData = await invoiceResponse.json()
     throw new Error(errorData.error || "Failed to create invoice")
   }
+
+  const data = (await invoiceResponse.json().catch(() => ({}))) as {
+    resent?: boolean
+  }
+  return { resent: !!data.resent }
 }

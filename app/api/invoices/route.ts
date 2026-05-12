@@ -71,6 +71,45 @@ export async function POST(req: Request) {
     const resolvedRosterId = rosterId ?? null;
     const isEventInvoice = !!eventRegistrationId;
 
+    // Idempotency for event invoices: if an unpaid invoice already exists
+    // for this event_registration_id, re-send the email for the existing
+    // Stripe invoice instead of creating a duplicate.
+    if (isEventInvoice) {
+      const { data: existingInvoices } = await supabase
+        .from("invoices")
+        .select("id, status, metadata, invoice_number")
+        .eq("account_id", accountId)
+        .eq("metadata->>event_registration_id", eventRegistrationId)
+        .not("status", "in", "(paid,succeeded,void)")
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const existing = existingInvoices?.[0];
+      const existingStripeId = existing?.metadata?.stripe_invoice_id;
+
+      if (existing && existingStripeId) {
+        try {
+          const resent = await stripe.invoices.sendInvoice(
+            existingStripeId,
+            { stripeAccount: stripeAccountId },
+          );
+          return NextResponse.json({
+            invoice: resent,
+            invoiceId: existing.id,
+            invoiceNumber: existing.invoice_number,
+            resent: true,
+          });
+        } catch (resendErr: any) {
+          console.error(
+            "Failed to resend existing event invoice; falling back to create:",
+            resendErr?.message,
+          );
+          // Fall through and create a new one — better to over-invoice than
+          // to leave the user thinking nothing happened.
+        }
+      }
+    }
+
     // Log the data we're trying to insert
     console.log('Attempting to insert invoice with data:', {
       account_id: accountId,

@@ -626,7 +626,7 @@ function SendEventInvoiceModal({
     // registrant pays for themselves.
     const payerPersonId = reg.guardian_person_id || reg.people.id
 
-    await postEventInvoice({
+    return await postEventInvoice({
       eventRegistrationId: reg.id,
       eventId: event.id,
       eventName: event.name,
@@ -656,28 +656,31 @@ function SendEventInvoiceModal({
     setSending(true)
     try {
       if (target.mode === "single") {
-        await sendOne(target.reg, amt, memo.trim())
-        toast.success("Invoice sent")
+        const { resent } = await sendOne(target.reg, amt, memo.trim())
+        toast.success(resent ? "Existing invoice resent" : "Invoice sent")
       } else {
         // Sequential to avoid duplicate Stripe customer creation when siblings
         // share a guardian (race in /api/stripe-customers on first send).
         let ok = 0
+        let resentCount = 0
         let firstErr: Error | null = null
         for (const r of target.regs) {
           try {
-            await sendOne(r, amt, memo.trim())
+            const { resent } = await sendOne(r, amt, memo.trim())
             ok++
+            if (resent) resentCount++
           } catch (e) {
             if (!firstErr) firstErr = e instanceof Error ? e : new Error(String(e))
           }
         }
         const fail = target.regs.length - ok
+        const suffix = resentCount > 0 ? ` (${resentCount} resent)` : ""
         if (fail === 0) {
-          toast.success(`Sent ${ok} invoice${ok === 1 ? "" : "s"}`)
+          toast.success(`Sent ${ok} invoice${ok === 1 ? "" : "s"}${suffix}`)
         } else if (ok === 0) {
           toast.error(firstErr?.message || "All invoices failed")
         } else {
-          toast.success(`Sent ${ok}, ${fail} failed`)
+          toast.success(`Sent ${ok}, ${fail} failed${suffix}`)
         }
       }
       onSent()
