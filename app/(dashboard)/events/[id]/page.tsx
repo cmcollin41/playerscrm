@@ -2,6 +2,12 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Calendar, MapPin, Users, DollarSign, Pencil } from "lucide-react"
@@ -180,30 +186,38 @@ export default async function EventDetailPage({
 
       {sessions && sessions.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Sessions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {sessions.map((s) => (
-              <div key={s.id} className="rounded-lg border p-3">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-sm font-medium">{s.title}</p>
-                  {s.starts_at && (
-                    <p className="text-xs text-gray-500">
-                      {new Date(s.starts_at).toLocaleString()}
-                      {s.ends_at && ` – ${new Date(s.ends_at).toLocaleTimeString()}`}
-                    </p>
-                  )}
+          <Accordion type="single" collapsible>
+            <AccordionItem value="sessions" className="border-b-0">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                <span className="text-lg font-semibold leading-none tracking-tight">
+                  Sessions ({sessions.length})
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-3 px-6 pb-2">
+                  {sessions.map((s) => (
+                    <div key={s.id} className="rounded-lg border p-3">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <p className="text-sm font-medium">{s.title}</p>
+                        {s.starts_at && (
+                          <p className="text-xs text-gray-500">
+                            {new Date(s.starts_at).toLocaleString()}
+                            {s.ends_at && ` – ${new Date(s.ends_at).toLocaleTimeString()}`}
+                          </p>
+                        )}
+                      </div>
+                      {s.location && (
+                        <p className="mt-1 text-xs text-gray-500">{s.location}</p>
+                      )}
+                      {s.description && (
+                        <p className="mt-2 text-sm text-gray-700">{s.description}</p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-                {s.location && (
-                  <p className="mt-1 text-xs text-gray-500">{s.location}</p>
-                )}
-                {s.description && (
-                  <p className="mt-2 text-sm text-gray-700">{s.description}</p>
-                )}
-              </div>
-            ))}
-          </CardContent>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
         </Card>
       )}
 
