@@ -51,12 +51,14 @@ import {
   Clock,
   DollarSign,
   ExternalLink,
+  Hourglass,
   Loader2,
   MoreHorizontal,
   Receipt,
   Send,
   ShieldCheck,
   Trash2,
+  UserCheck,
   UserMinus,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -96,22 +98,25 @@ function formatAmount(cents: number | null | undefined): string | null {
   return `$${(cents / 100).toFixed(2)}`
 }
 
+// Registration status answers "are they in?" — keep visually distinct from
+// the Payment column so green+check ≠ money in. Confirmed uses blue with a
+// person-check icon, not the green-money treatment.
 function renderRegistrationStatus(status: string) {
   if (status === "confirmed")
     return (
-      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
-        <CheckCircle className="mr-1 h-3 w-3" /> Confirmed
+      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+        <UserCheck className="mr-1 h-3 w-3" /> Confirmed
       </Badge>
     )
   if (status === "pending")
     return (
       <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
-        <Clock className="mr-1 h-3 w-3" /> Pending
+        <Hourglass className="mr-1 h-3 w-3" /> Pending
       </Badge>
     )
   if (status === "waitlisted")
     return (
-      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
+      <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
         <UserMinus className="mr-1 h-3 w-3" /> Waitlisted
       </Badge>
     )
