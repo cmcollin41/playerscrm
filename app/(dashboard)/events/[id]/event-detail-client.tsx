@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import {
@@ -11,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -41,18 +43,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  ExternalLink,
-  MoreHorizontal,
-  CheckCircle2,
+  AlertCircle,
   Ban,
+  Banknote,
+  CheckCircle,
+  CheckCircle2,
   Clock,
-  UserMinus,
-  Trash2,
-  Receipt,
-  Loader2,
-  Send,
   DollarSign,
+  ExternalLink,
+  Loader2,
+  MoreHorizontal,
+  Receipt,
+  Send,
   ShieldCheck,
+  Trash2,
+  UserMinus,
 } from "lucide-react"
 import { toast } from "sonner"
 import { postEventInvoice } from "@/lib/post-event-invoice"
@@ -86,11 +91,127 @@ interface EventDetailClientProps {
   registrations: Registration[]
 }
 
-const STATUS_STYLE: Record<string, string> = {
-  confirmed: "bg-green-100 text-green-800",
-  pending: "bg-amber-100 text-amber-800",
-  cancelled: "bg-red-100 text-red-800",
-  waitlisted: "bg-blue-100 text-blue-800",
+function formatAmount(cents: number | null | undefined): string | null {
+  if (!cents || cents <= 0) return null
+  return `$${(cents / 100).toFixed(2)}`
+}
+
+function renderRegistrationStatus(status: string) {
+  if (status === "confirmed")
+    return (
+      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+        <CheckCircle className="mr-1 h-3 w-3" /> Confirmed
+      </Badge>
+    )
+  if (status === "pending")
+    return (
+      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+        <Clock className="mr-1 h-3 w-3" /> Pending
+      </Badge>
+    )
+  if (status === "waitlisted")
+    return (
+      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
+        <UserMinus className="mr-1 h-3 w-3" /> Waitlisted
+      </Badge>
+    )
+  if (status === "cancelled")
+    return (
+      <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+        <Ban className="mr-1 h-3 w-3" /> Cancelled
+      </Badge>
+    )
+  return (
+    <Badge variant="outline" className="capitalize">
+      {status}
+    </Badge>
+  )
+}
+
+function renderPayment(reg: Registration, feeAmount: number) {
+  const amountText = formatAmount(feeAmount)
+
+  if (reg.payment_status === "paid") {
+    const method = reg.payment_status_note
+    if (method === "venmo")
+      return (
+        <Badge className="bg-[#e8f0fe] gap-2 px-2 py-1 hover:bg-[#e8f0fe]">
+          <Image src="/venmo-logo.svg" alt="Venmo" width={48} height={10} className="h-2.5 w-auto" />
+          {amountText && <span className="text-xs text-gray-700">{amountText}</span>}
+        </Badge>
+      )
+    if (method === "cashapp")
+      return (
+        <Badge className="bg-[#00D54B]/10 gap-2 px-2 py-1 hover:bg-[#00D54B]/10">
+          <Image src="/cashapp-logo.svg" alt="Cash App" width={60} height={12} className="h-3 w-auto" />
+          {amountText && <span className="text-xs text-gray-700">{amountText}</span>}
+        </Badge>
+      )
+    if (method === "cash")
+      return (
+        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+          <Banknote className="mr-1 h-3 w-3" /> {amountText || "Cash"}
+        </Badge>
+      )
+    if (method === "other")
+      return (
+        <Badge variant="outline" className="text-muted-foreground">
+          <DollarSign className="mr-1 h-3 w-3" /> {amountText || "Paid"}
+        </Badge>
+      )
+    return (
+      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+        <CheckCircle className="mr-1 h-3 w-3" /> {amountText || "Paid"}
+      </Badge>
+    )
+  }
+
+  if (reg.payment_status === "waived")
+    return (
+      <Badge className="bg-violet-100 text-violet-800 hover:bg-violet-100">
+        <ShieldCheck className="mr-1 h-3 w-3" /> Waived
+      </Badge>
+    )
+
+  const stripeStatus = reg.payments?.status
+  if (stripeStatus === "succeeded")
+    return (
+      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+        <CheckCircle className="mr-1 h-3 w-3" /> {amountText || "Paid"}
+      </Badge>
+    )
+  if (stripeStatus === "processing" || stripeStatus === "requires_action")
+    return (
+      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
+        <Clock className="mr-1 h-3 w-3" /> Processing
+      </Badge>
+    )
+  if (stripeStatus === "canceled" || stripeStatus === "expired")
+    return (
+      <Badge variant="outline" className="border-gray-200 bg-gray-50 text-gray-600 capitalize">
+        {stripeStatus}
+      </Badge>
+    )
+  if (stripeStatus === "payment_failed" || stripeStatus === "failed")
+    return (
+      <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+        <AlertCircle className="mr-1 h-3 w-3" /> Failed
+      </Badge>
+    )
+  if (stripeStatus === "pending")
+    return (
+      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+        <Clock className="mr-1 h-3 w-3" /> Pending
+      </Badge>
+    )
+  if (stripeStatus)
+    return (
+      <Badge variant="outline" className="capitalize text-muted-foreground">
+        {stripeStatus.replace(/_/g, " ")}
+      </Badge>
+    )
+
+  return <span className="text-xs text-gray-400">—</span>
 }
 
 export function EventDetailClient({ event, registrations }: EventDetailClientProps) {
@@ -235,30 +356,10 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
                         {reg.people?.grade || "-"}
                       </td>
                       <td className="py-3 pr-4">
-                        <span
-                          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                            STATUS_STYLE[reg.status] || "bg-gray-100 text-gray-800"
-                          }`}
-                        >
-                          {reg.status}
-                        </span>
+                        {renderRegistrationStatus(reg.status)}
                       </td>
-                      <td className="py-3 pr-4 text-gray-500">
-                        {reg.payment_status === "paid" ? (
-                          <span className="text-green-600">
-                            Paid{reg.payment_status_note ? ` (${reg.payment_status_note})` : ""}
-                          </span>
-                        ) : reg.payment_status === "waived" ? (
-                          <span className="text-violet-700">Waived</span>
-                        ) : reg.payments?.status === "succeeded" ? (
-                          <span className="text-green-600">Paid</span>
-                        ) : reg.payments?.status ? (
-                          <span className="capitalize">
-                            {reg.payments.status.replace(/_/g, " ")}
-                          </span>
-                        ) : (
-                          "-"
-                        )}
+                      <td className="py-3 pr-4">
+                        {renderPayment(reg, event.fee_amount)}
                       </td>
                       <td className="py-3 pr-4 text-gray-500">
                         {new Date(reg.created_at).toLocaleDateString()}
