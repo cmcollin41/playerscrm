@@ -29,7 +29,7 @@ export default async function EventDetailPage({
 
   const { data: event, error } = await supabase
     .from("events")
-    .select("*")
+    .select("*, accounts(id, stripe_id)")
     .eq("id", id)
     .single()
 
@@ -55,6 +55,7 @@ export default async function EventDetailPage({
     .map((p) => p.id)
 
   const guardianEmailByDependentId = new Map<string, string>()
+  const guardianPersonIdByDependentId = new Map<string, string>()
   if (dependentsNeedingGuardian.length) {
     const { data: rels } = await supabase
       .from("relationships")
@@ -66,8 +67,10 @@ export default async function EventDetailPage({
     for (const rel of sorted as any[]) {
       const depId = rel.relation_id
       const email = rel.people?.email
+      const guardianId = rel.people?.id
       if (depId && email && !guardianEmailByDependentId.has(depId)) {
         guardianEmailByDependentId.set(depId, email)
+        if (guardianId) guardianPersonIdByDependentId.set(depId, guardianId)
       }
     }
   }
@@ -75,6 +78,7 @@ export default async function EventDetailPage({
   const registrations = (rawRegistrations || []).map((r) => ({
     ...r,
     guardian_email: r.people?.id ? guardianEmailByDependentId.get(r.people.id) || null : null,
+    guardian_person_id: r.people?.id ? guardianPersonIdByDependentId.get(r.people.id) || null : null,
   }))
 
   const confirmed = registrations.filter(r => r.status === "confirmed").length

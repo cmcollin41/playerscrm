@@ -215,6 +215,8 @@ export interface EventRegistrations {
   created_at?: string;
   status: 'pending' | 'confirmed' | 'cancelled' | 'waitlisted';
   payment_id?: string;
+  payment_status?: 'paid' | 'waived' | null;
+  payment_status_note?: string | null;
   metadata?: any;
   events?: Events;
   people?: People;

@@ -4,17 +4,20 @@ import { createClient } from "@/lib/supabase/server";
 import { calculateApplicationFeeFromDollars } from "@/lib/fees";
 
 export async function POST(req: Request) {
-  const { 
-    customerId, 
-    rosterId, 
-    athleteName, 
-    teamName, 
+  const {
+    customerId,
+    rosterId,
+    athleteName,
+    teamName,
     amount,
     accountId,
     stripeAccountId,
     person_id,
     description,
-    isCustomInvoice
+    isCustomInvoice,
+    eventRegistrationId,
+    eventId,
+    eventName,
   } = await req.json();
 
   try {
@@ -59,11 +62,14 @@ export async function POST(req: Request) {
       invoiceDescription = trimmedDesc;
     } else if (isCustomInvoice) {
       invoiceDescription = "Invoice";
+    } else if (eventRegistrationId && eventName) {
+      invoiceDescription = `Event Registration - ${athleteName} - ${eventName}`;
     } else {
       invoiceDescription = `Team Roster Fee - ${athleteName} - ${teamName}`;
     }
 
     const resolvedRosterId = rosterId ?? null;
+    const isEventInvoice = !!eventRegistrationId;
 
     // Log the data we're trying to insert
     console.log('Attempting to insert invoice with data:', {
@@ -97,7 +103,10 @@ export async function POST(req: Request) {
           stripe_customer_id: customerId,
           stripe_account_id: stripeAccountId,
           application_fee_amount: applicationFeeAmount / 100,
-          is_custom_invoice: isCustomInvoice
+          is_custom_invoice: isCustomInvoice,
+          ...(isEventInvoice
+            ? { event_registration_id: eventRegistrationId, event_id: eventId }
+            : {}),
         }
       })
       .select()
@@ -119,7 +128,14 @@ export async function POST(req: Request) {
         invoice_id: invoiceRecord.id,
         roster_id: resolvedRosterId,
         person_id,
-        is_custom_invoice: isCustomInvoice
+        is_custom_invoice: isCustomInvoice,
+        ...(isEventInvoice
+          ? {
+              event_registration_id: eventRegistrationId,
+              event_id: eventId,
+              account_id: accountId,
+            }
+          : {}),
       },
       description: invoiceDescription,
       auto_advance: false
@@ -144,13 +160,42 @@ export async function POST(req: Request) {
 
     // Finalize and send the invoice
     const finalizedInvoice = await stripe.invoices.finalizeInvoice(
-      stripeInvoice.id, 
-      { auto_advance: false }, 
+      stripeInvoice.id,
+      { auto_advance: false },
       { stripeAccount: stripeAccountId }
     );
 
+    // For event invoices, thread the registration metadata onto the underlying
+    // PaymentIntent so the existing payment_intent.succeeded webhook flips
+    // the registration to "confirmed" and triggers the confirmation email.
+    if (isEventInvoice) {
+      const piId =
+        typeof finalizedInvoice.payment_intent === "string"
+          ? finalizedInvoice.payment_intent
+          : finalizedInvoice.payment_intent?.id;
+
+      if (piId) {
+        try {
+          await stripe.paymentIntents.update(
+            piId,
+            {
+              metadata: {
+                registration_ids: eventRegistrationId,
+                event_id: eventId,
+                account_id: accountId,
+                source: "invoice",
+              },
+            },
+            { stripeAccount: stripeAccountId },
+          );
+        } catch (piErr) {
+          console.error("Failed to update PI metadata for event invoice:", piErr);
+        }
+      }
+    }
+
     const sentInvoice = await stripe.invoices.sendInvoice(
-      finalizedInvoice.id, 
+      finalizedInvoice.id,
       { stripeAccount: stripeAccountId }
     );
 
