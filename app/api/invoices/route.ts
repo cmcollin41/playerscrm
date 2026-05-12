@@ -63,9 +63,9 @@ export async function POST(req: Request) {
     } else if (isCustomInvoice) {
       invoiceDescription = "Invoice";
     } else if (eventRegistrationId && eventName) {
-      invoiceDescription = `Event Registration - ${athleteName} - ${eventName}`;
+      invoiceDescription = `Invoice to complete registration for ${athleteName} -- ${eventName}`;
     } else {
-      invoiceDescription = `Team Roster Fee - ${athleteName} - ${teamName}`;
+      invoiceDescription = `Invoice to complete registration for ${athleteName} -- ${teamName}`;
     }
 
     const resolvedRosterId = rosterId ?? null;

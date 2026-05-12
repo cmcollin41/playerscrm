@@ -111,7 +111,7 @@ export function RosterBillingModal({
   const openSessionRef = useRef(false)
 
   const personName = `${person.first_name} ${person.last_name}`
-  const defaultInvoiceMemo = `Team Roster Fee - ${personName} - ${teamName}`
+  const defaultInvoiceMemo = `Invoice to complete registration for ${personName} -- ${teamName}`
   const guardianEmail = person.primary_contacts?.[0]?.email
   const [savedFeeAmount, setSavedFeeAmount] = useState<number | null>(null)
   const currentFeeAmount = savedFeeAmount ?? rosterTemplateDollars(roster)

@@ -572,7 +572,11 @@ function SendEventInvoiceModal({
               rows={2}
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
-              placeholder={`Event Registration - ${event.name}`}
+              placeholder={
+                target?.mode === "single"
+                  ? `Invoice to complete registration for ${targetName || "registrant"} -- ${event.name}`
+                  : `Invoice to complete registration for {registrant} -- ${event.name}`
+              }
               disabled={sending}
             />
           </div>
