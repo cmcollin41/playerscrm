@@ -48,14 +48,37 @@ export function accountHasActiveSubscription(
   return ACCESS_GRANTING_STATUSES.has(status)
 }
 
-export function getSubscriptionPriceId(): string {
-  const id = process.env.STRIPE_SUBSCRIPTION_PRICE_ID
-  if (!id) {
+/**
+ * Stripe price lookup_keys. Storing keys rather than raw price IDs lets us
+ * swap prices in Stripe (e.g. a price hike) without a deploy — just point
+ * the lookup_key at a new active price.
+ */
+export const PRICE_LOOKUP_KEYS = {
+  annual: "athletes_app_annual_v1",
+  monthly: "athletes_app_monthly_v1",
+} as const
+
+export type SubscriptionPlan = keyof typeof PRICE_LOOKUP_KEYS
+
+/**
+ * Resolve a plan slug to a live Stripe price ID via lookup_key. The lookup
+ * is fast (~one Stripe API call) and is only called at checkout creation,
+ * so the latency is irrelevant in practice.
+ */
+export async function resolvePriceId(plan: SubscriptionPlan): Promise<string> {
+  const lookupKey = PRICE_LOOKUP_KEYS[plan]
+  const result = await stripe.prices.list({
+    lookup_keys: [lookupKey],
+    active: true,
+    limit: 1,
+  })
+  const price = result.data[0]
+  if (!price) {
     throw new Error(
-      "STRIPE_SUBSCRIPTION_PRICE_ID is not set. Create a $99/year recurring price in Stripe and add its ID to .env.local.",
+      `No active Stripe price found for lookup_key "${lookupKey}". Create the price in Stripe with this lookup_key, or update PRICE_LOOKUP_KEYS in lib/billing.ts.`,
     )
   }
-  return id
+  return price.id
 }
 
 function getBillingBaseUrl(): string {
@@ -105,6 +128,8 @@ export async function getOrCreatePlatformCustomer(
 }
 
 interface CheckoutSessionOptions {
+  /** annual ($99/yr) or monthly ($10/mo). Defaults to annual. */
+  plan?: SubscriptionPlan
   /** Where Stripe sends the user after success. */
   successPath?: string
   /** Where Stripe sends the user after cancel. */
@@ -116,15 +141,17 @@ interface CheckoutSessionOptions {
 }
 
 /**
- * Create a Stripe Checkout session for the $99/year subscription. Returns
- * the redirect URL. Either customerId or customerEmail must be provided.
+ * Create a Stripe Checkout session for the Athletes App subscription.
+ * Returns the redirect URL. Either customerId or customerEmail must be
+ * provided.
  */
 export async function createSubscriptionCheckoutSession(
   accountId: string,
   opts: CheckoutSessionOptions,
 ): Promise<string> {
   const baseUrl = getBillingBaseUrl()
-  const priceId = getSubscriptionPriceId()
+  const plan = opts.plan ?? "annual"
+  const priceId = await resolvePriceId(plan)
 
   const successUrl = `${baseUrl}${opts.successPath ?? "/billing/success"}?session_id={CHECKOUT_SESSION_ID}`
   const cancelUrl = `${baseUrl}${opts.cancelPath ?? "/billing"}`
@@ -140,10 +167,12 @@ export async function createSubscriptionCheckoutSession(
     subscription_data: {
       metadata: {
         account_id: accountId,
+        plan,
       },
     },
     metadata: {
       account_id: accountId,
+      plan,
     },
     allow_promotion_codes: true,
   })
