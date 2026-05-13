@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth"
 import { encryptId } from "@/app/utils/ecryption"
 import { sendTransactionalEmail } from "@/lib/email-service"
+import { resolveSender } from "@/lib/sender"
 import { NextResponse } from "next/server"
 import { render } from "@react-email/render"
 import { BasicTemplate } from "@/components/emails/basic-template"
@@ -117,7 +118,7 @@ export async function POST(req: Request) {
 
     const { data: account, error: accountErr } = await supabase
       .from("accounts")
-      .select("id, name, senders(id, name, email)")
+      .select("id, name, default_invoice_sender_id, default_sender_id, senders(id, name, email)")
       .eq("id", activeAccountId)
       .single()
 
@@ -125,17 +126,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 })
     }
 
-    const senders = (account as { senders?: { email?: string }[] }).senders || []
-    const sender = senders[0]?.email
-      ? `${account.name} <${senders[0].email}>`
-      : null
-
-    if (!sender) {
-      return NextResponse.json(
-        { error: "No sender email configured for this account" },
-        { status: 400 },
-      )
-    }
+    const sender = resolveSender(account as any, "default")
 
     const encryptedEmail = encryptId(email)
     const signupUrl = new URL("/login", appOrigin)

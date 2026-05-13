@@ -33,20 +33,33 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const [{ data: domains }, { data: senders }] = await Promise.all([
-    supabase
-      .from("sender_domains")
-      .select("*")
-      .eq("account_id", accountId)
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("senders")
-      .select("*")
-      .eq("account_id", accountId)
-      .order("created_at", { ascending: false }),
-  ])
+  const [{ data: domains }, { data: senders }, { data: account }] =
+    await Promise.all([
+      supabase
+        .from("sender_domains")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("senders")
+        .select("*")
+        .eq("account_id", accountId)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("accounts")
+        .select("default_invoice_sender_id, default_sender_id")
+        .eq("id", accountId)
+        .single(),
+    ])
 
-  return NextResponse.json({ domains: domains || [], senders: senders || [] })
+  return NextResponse.json({
+    domains: domains || [],
+    senders: senders || [],
+    defaults: {
+      default_invoice_sender_id: account?.default_invoice_sender_id ?? null,
+      default_sender_id: account?.default_sender_id ?? null,
+    },
+  })
 }
 
 // POST — add a sender domain or sender email
@@ -187,6 +200,57 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ sender })
+  }
+
+  if (action === "set_defaults") {
+    const { default_invoice_sender_id, default_sender_id } = body as {
+      default_invoice_sender_id?: string | null
+      default_sender_id?: string | null
+    }
+
+    const idsToCheck = [default_invoice_sender_id, default_sender_id].filter(
+      (v): v is string => typeof v === "string" && v.length > 0,
+    )
+
+    if (idsToCheck.length > 0) {
+      const { data: ownedSenders } = await supabase
+        .from("senders")
+        .select("id")
+        .eq("account_id", accountId)
+        .in("id", idsToCheck)
+
+      const owned = new Set((ownedSenders || []).map((s: any) => s.id))
+      if (
+        idsToCheck.some((id) => !owned.has(id))
+      ) {
+        return NextResponse.json(
+          { error: "Sender does not belong to this account" },
+          { status: 400 },
+        )
+      }
+    }
+
+    const { error: upErr } = await supabase
+      .from("accounts")
+      .update({
+        default_invoice_sender_id: default_invoice_sender_id ?? null,
+        default_sender_id: default_sender_id ?? null,
+      })
+      .eq("id", accountId)
+
+    if (upErr) {
+      return NextResponse.json(
+        { error: "Failed to save defaults" },
+        { status: 500 },
+      )
+    }
+
+    return NextResponse.json({
+      defaults: {
+        default_invoice_sender_id: default_invoice_sender_id ?? null,
+        default_sender_id: default_sender_id ?? null,
+      },
+    })
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 })

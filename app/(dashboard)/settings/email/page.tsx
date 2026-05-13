@@ -44,6 +44,13 @@ export default function EmailSettingsPage() {
   const [domains, setDomains] = useState<SenderDomain[]>([])
   const [senders, setSenders] = useState<Sender[]>([])
 
+  // Sender purpose defaults
+  const [defaultInvoiceSenderId, setDefaultInvoiceSenderId] = useState<string>("")
+  const [defaultSenderId, setDefaultSenderId] = useState<string>("")
+  const [savedInvoiceSenderId, setSavedInvoiceSenderId] = useState<string>("")
+  const [savedSenderId, setSavedSenderId] = useState<string>("")
+  const [savingDefaults, setSavingDefaults] = useState(false)
+
   // Domain form
   const [showDomainForm, setShowDomainForm] = useState(false)
   const [newDomain, setNewDomain] = useState("")
@@ -101,6 +108,39 @@ export default function EmailSettingsPage() {
       const data = await res.json()
       setDomains(data.domains)
       setSenders(data.senders)
+      const invId = data.defaults?.default_invoice_sender_id ?? ""
+      const defId = data.defaults?.default_sender_id ?? ""
+      setDefaultInvoiceSenderId(invId)
+      setDefaultSenderId(defId)
+      setSavedInvoiceSenderId(invId)
+      setSavedSenderId(defId)
+    }
+  }
+
+  async function handleSaveDefaults() {
+    setSavingDefaults(true)
+    try {
+      const res = await fetch("/api/sender-domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_defaults",
+          default_invoice_sender_id: defaultInvoiceSenderId || null,
+          default_sender_id: defaultSenderId || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        toast.error(data.error || "Failed to save defaults")
+        return
+      }
+      toast.success("Sender defaults saved")
+      setSavedInvoiceSenderId(defaultInvoiceSenderId)
+      setSavedSenderId(defaultSenderId)
+    } catch {
+      toast.error("Failed to save defaults")
+    } finally {
+      setSavingDefaults(false)
     }
   }
 
@@ -537,6 +577,98 @@ export default function EmailSettingsPage() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Sender defaults */}
+      <div>
+        <div className="mb-3">
+          <h2 className="text-lg font-semibold">Sender defaults</h2>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Pick which sender address each type of email goes from. Unassigned
+            types fall back to the platform default ({" "}
+            <span className="font-mono">invoices@e.athletes.app</span> for
+            invoices, <span className="font-mono">noreply@e.athletes.app</span>{" "}
+            otherwise).
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-gray-200 bg-white p-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-gray-900">
+                Invoice emails
+              </span>
+              <span className="text-muted-foreground text-xs">
+                Used when an invoice is sent or resent.
+              </span>
+              <select
+                value={defaultInvoiceSenderId}
+                onChange={(e) => setDefaultInvoiceSenderId(e.target.value)}
+                disabled={senders.length === 0}
+                className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">
+                  Platform default (invoices@e.athletes.app)
+                </option>
+                {senders.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} — {s.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-sm font-medium text-gray-900">
+                All other emails
+              </span>
+              <span className="text-muted-foreground text-xs">
+                Confirmations, invites, notifications.
+              </span>
+              <select
+                value={defaultSenderId}
+                onChange={(e) => setDefaultSenderId(e.target.value)}
+                disabled={senders.length === 0}
+                className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">
+                  Platform default (noreply@e.athletes.app)
+                </option>
+                {senders.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} — {s.email}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="mt-4 flex items-center justify-end gap-2">
+            {(defaultInvoiceSenderId !== savedInvoiceSenderId ||
+              defaultSenderId !== savedSenderId) && (
+              <button
+                onClick={() => {
+                  setDefaultInvoiceSenderId(savedInvoiceSenderId)
+                  setDefaultSenderId(savedSenderId)
+                }}
+                className="rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              onClick={handleSaveDefaults}
+              disabled={
+                savingDefaults ||
+                (defaultInvoiceSenderId === savedInvoiceSenderId &&
+                  defaultSenderId === savedSenderId)
+              }
+              className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-gray-800 disabled:opacity-50"
+            >
+              {savingDefaults ? <LoadingDots color="#fff" /> : "Save defaults"}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Help text */}

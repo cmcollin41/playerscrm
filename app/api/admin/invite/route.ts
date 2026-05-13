@@ -2,6 +2,7 @@ import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { requireAccountAdminApi } from "@/lib/auth"
 import { NextResponse } from "next/server"
 import { sendTransactionalEmail } from "@/lib/email-service"
+import { resolveSender } from "@/lib/sender"
 import { encryptId } from "@/app/utils/ecryption"
 
 export async function POST(req: Request) {
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
 
     const { data: account } = await supabase
       .from("accounts")
-      .select("id, name, senders(id, name, email)")
+      .select("id, name, default_invoice_sender_id, default_sender_id, senders(id, name, email)")
       .eq("id", activeAccountId)
       .single()
 
@@ -74,12 +75,9 @@ export async function POST(req: Request) {
     if (firstName) signupUrl.searchParams.set("first_name", firstName)
     if (lastName) signupUrl.searchParams.set("last_name", lastName)
 
-    const senders = (account as any).senders || []
-    const sender = senders[0]
-      ? `${account.name} <${senders[0].email}>`
-      : null
+    const sender = resolveSender(account as any, "default")
 
-    if (sender) {
+    {
       const inviterName = [callerProfile.first_name, callerProfile.last_name]
         .filter(Boolean)
         .join(" ") || user.email
@@ -123,7 +121,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       signupUrl: signupUrl.toString(),
-      emailSent: !!sender,
+      emailSent: true,
     })
   } catch (error: any) {
     console.error("Error in /api/admin/invite:", error)

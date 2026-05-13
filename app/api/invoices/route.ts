@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { calculateApplicationFeeFromDollars } from "@/lib/fees";
+import { sendInvoiceEmail } from "@/lib/send-invoice-email";
 
 export async function POST(req: Request) {
   const {
@@ -89,15 +90,16 @@ export async function POST(req: Request) {
 
       if (existing && existingStripeId) {
         try {
-          const resent = await stripe.invoices.sendInvoice(
-            existingStripeId,
-            { stripeAccount: stripeAccountId },
-          );
+          const resendResult = await sendInvoiceEmail(existing.id);
+          if (!resendResult.success) {
+            throw new Error(resendResult.error || "Failed to resend invoice email");
+          }
           return NextResponse.json({
-            invoice: resent,
             invoiceId: existing.id,
             invoiceNumber: existing.invoice_number,
             resent: true,
+            sent_count: resendResult.sent_count,
+            failed_count: resendResult.failed_count,
           });
         } catch (resendErr: any) {
           console.error(
@@ -233,26 +235,23 @@ export async function POST(req: Request) {
       }
     }
 
-    const sentInvoice = await stripe.invoices.sendInvoice(
-      finalizedInvoice.id,
-      { stripeAccount: stripeAccountId }
-    );
-
-    // Update invoice status and add Stripe invoice ID + hosted URL so we
-    // can link straight to the Stripe-hosted invoice from the UI without
-    // needing to round-trip through the API.
+    // Persist Stripe invoice ID + hosted URL on the DB row first so the
+    // email helper can find the payment link without an extra Stripe call.
+    // We skip stripe.invoices.sendInvoice on purpose — Stripe always emails
+    // from invoice+statements@stripe.com, and we want all customer-facing
+    // mail to come from the account's verified Resend domain instead.
     const { error: updateError } = await supabase
       .from('invoices')
       .update({
         status: 'sent',
-        invoice_number: sentInvoice.number,
+        invoice_number: finalizedInvoice.number,
         metadata: {
           ...invoiceRecord.metadata,
-          stripe_invoice_id: sentInvoice.id,
-          ...(sentInvoice.hosted_invoice_url
-            ? { hosted_invoice_url: sentInvoice.hosted_invoice_url }
+          stripe_invoice_id: finalizedInvoice.id,
+          ...(finalizedInvoice.hosted_invoice_url
+            ? { hosted_invoice_url: finalizedInvoice.hosted_invoice_url }
             : {}),
-          ...(sentInvoice.invoice_pdf ? { invoice_pdf: sentInvoice.invoice_pdf } : {}),
+          ...(finalizedInvoice.invoice_pdf ? { invoice_pdf: finalizedInvoice.invoice_pdf } : {}),
         }
       })
       .eq('id', invoiceRecord.id);
@@ -261,9 +260,20 @@ export async function POST(req: Request) {
       throw new Error('Failed to update invoice record');
     }
 
-    return NextResponse.json({ 
-      invoice: sentInvoice,
-      internal_invoice: invoiceRecord
+    const emailResult = await sendInvoiceEmail(invoiceRecord.id);
+    if (!emailResult.success) {
+      console.error('Invoice email send failed:', emailResult.error);
+    }
+
+    return NextResponse.json({
+      invoice: finalizedInvoice,
+      internal_invoice: invoiceRecord,
+      email: {
+        success: emailResult.success,
+        sent_count: emailResult.sent_count,
+        failed_count: emailResult.failed_count,
+        error: emailResult.error,
+      },
     });
   } catch (error: any) {
     console.error('Invoice creation error:', error);

@@ -1,4 +1,5 @@
 import { sendTransactionalEmail } from "@/lib/email-service"
+import { resolveSender } from "@/lib/sender"
 
 interface Recipient {
   email: string
@@ -15,7 +16,7 @@ export async function sendEventConfirmations(opts: {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, name, description, location, starts_at, ends_at, fee_amount, account_id, account:accounts(id, name, senders(id, name, email))")
+    .select("id, name, description, location, starts_at, ends_at, fee_amount, account_id, account:accounts(id, name, default_invoice_sender_id, default_sender_id, senders(id, name, email))")
     .eq("id", eventId)
     .single()
 
@@ -28,16 +29,7 @@ export async function sendEventConfirmations(opts: {
 
   if (!registrations?.length) return
 
-  const senders = event.account?.senders || []
-  const preferredSender = senders.find((s: any) => s.email?.includes("youth")) || senders[0]
-  const sender = preferredSender?.email
-    ? `${event.account.name} <${preferredSender.email}>`
-    : null
-
-  if (!sender) {
-    console.warn(`[event-confirmation] No sender configured for account ${event.account_id}`)
-    return
-  }
+  const sender = resolveSender(event.account, "default")
 
   const registeredNames = registrations
     .map((r: any) => {

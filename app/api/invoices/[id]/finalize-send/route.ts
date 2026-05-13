@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
+import { sendInvoiceEmail } from "@/lib/send-invoice-email";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -9,6 +10,7 @@ interface RouteParams {
 /**
  * Finalize and email an existing Stripe invoice that is still in draft.
  * DB row must be status draft with metadata.stripe_invoice_id (and stripe account).
+ * Email is sent from the account's Resend sender (not Stripe).
  */
 export async function POST(_req: Request, { params }: RouteParams) {
   try {
@@ -75,18 +77,18 @@ export async function POST(_req: Request, { params }: RouteParams) {
       { stripeAccount: stripeAccountId },
     );
 
-    const sent = await stripe.invoices.sendInvoice(finalized.id, {
-      stripeAccount: stripeAccountId,
-    });
-
     const { error: upErr } = await supabase
       .from("invoices")
       .update({
         status: "sent",
-        invoice_number: sent.number,
+        invoice_number: finalized.number,
         metadata: {
           ...meta,
-          stripe_invoice_id: sent.id,
+          stripe_invoice_id: finalized.id,
+          ...(finalized.hosted_invoice_url
+            ? { hosted_invoice_url: finalized.hosted_invoice_url }
+            : {}),
+          ...(finalized.invoice_pdf ? { invoice_pdf: finalized.invoice_pdf } : {}),
         },
       })
       .eq("id", invoiceId);
@@ -95,7 +97,20 @@ export async function POST(_req: Request, { params }: RouteParams) {
       return NextResponse.json({ error: upErr.message }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true });
+    const emailResult = await sendInvoiceEmail(invoiceId);
+    if (!emailResult.success) {
+      console.error("Invoice email send failed:", emailResult.error);
+    }
+
+    return NextResponse.json({
+      ok: true,
+      email: {
+        success: emailResult.success,
+        sent_count: emailResult.sent_count,
+        failed_count: emailResult.failed_count,
+        error: emailResult.error,
+      },
+    });
   } catch (e: unknown) {
     const message = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
