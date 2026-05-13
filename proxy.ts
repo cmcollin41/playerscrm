@@ -134,24 +134,47 @@ export async function proxy(request: NextRequest) {
 
     const publicPaths = [
       "/login",
+      "/portal-login",
+      "/portal/auth",
       "/forgot-password",
       "/update-password",
       "/no-access",
     ]
     const isPublicPath = publicPaths.some((p) => path.startsWith(p))
+    const isPortalPath = path === "/portal" || path.startsWith("/portal/")
 
     if (!session && !isPublicPath) {
-      return NextResponse.redirect(new URL("/login", request.url))
+      // Send unauth users hitting a private portal path to the magic-link
+      // entry instead of the password-only /login.
+      const loginPath = isPortalPath ? "/portal-login" : "/login"
+      return NextResponse.redirect(new URL(loginPath, request.url))
     } else if (session && path === "/login") {
       return NextResponse.redirect(new URL("/", request.url))
     }
 
-    // Authenticated registrant landing on a dashboard path: bounce to the
-    // no-access page rather than letting the dashboard render at all.
+    // Authenticated user on a private path: figure out whether they're a
+    // staff/admin (has account_members), a parent (profile.people_id but no
+    // account_members), or truly unbound.
     if (session && !isPublicPath) {
       const { data: accountIds } = await supabase.rpc("get_user_account_ids")
-      if (!accountIds || accountIds.length === 0) {
-        return NextResponse.redirect(new URL("/no-access", request.url))
+      const isStaff = !!accountIds && accountIds.length > 0
+
+      if (!isStaff) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("people_id")
+          .eq("id", session.user.id)
+          .maybeSingle()
+
+        if (profile?.people_id) {
+          // Parent. Allow through if they're already inside /portal/*; route
+          // them there otherwise.
+          if (!isPortalPath) {
+            return NextResponse.redirect(new URL("/portal/welcome", request.url))
+          }
+        } else {
+          return NextResponse.redirect(new URL("/no-access", request.url))
+        }
       }
     }
 
@@ -167,11 +190,14 @@ export async function proxy(request: NextRequest) {
   const tenantPublicPaths = [
     "/register",
     "/login",
+    "/portal-login",
+    "/portal/auth",
     "/forgot-password",
     "/update-password",
     "/no-access",
   ]
   const isPublicTenantPath = tenantPublicPaths.some((p) => path.startsWith(p))
+  const isPortalPath = path === "/portal" || path.startsWith("/portal/")
 
   // Check auth for protected tenant routes
   const {
@@ -179,18 +205,32 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getSession()
 
   if (!session && !isPublicTenantPath && path !== "/") {
-    return NextResponse.redirect(new URL("/login", request.url))
+    const loginPath = isPortalPath ? "/portal-login" : "/login"
+    return NextResponse.redirect(new URL(loginPath, request.url))
   } else if (session && path === "/login") {
     return NextResponse.redirect(new URL("/", request.url))
   }
 
-  // Authenticated registrant landing on a dashboard path: bounce to the
-  // no-access page. Treats "/" on a tenant subdomain as dashboard too,
-  // since the subdomain home renders the dashboard for staff.
+  // Authenticated user on a private path: staff (account_members), parent
+  // (profile.people_id only), or unbound. Parents are routed to /portal/*.
   if (session && !isPublicTenantPath) {
     const { data: accountIds } = await supabase.rpc("get_user_account_ids")
-    if (!accountIds || accountIds.length === 0) {
-      return NextResponse.redirect(new URL("/no-access", request.url))
+    const isStaff = !!accountIds && accountIds.length > 0
+
+    if (!isStaff) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("people_id")
+        .eq("id", session.user.id)
+        .maybeSingle()
+
+      if (profile?.people_id) {
+        if (!isPortalPath) {
+          return NextResponse.redirect(new URL("/portal/welcome", request.url))
+        }
+      } else {
+        return NextResponse.redirect(new URL("/no-access", request.url))
+      }
     }
   }
 
