@@ -115,25 +115,25 @@ function formatAmount(cents: number | null | undefined): string | null {
 function renderRegistrationStatus(status: string) {
   if (status === "confirmed")
     return (
-      <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100">
+      <Badge className="border-0 bg-blue-50 text-blue-700 hover:bg-blue-50">
         <UserCheck className="mr-1 h-3 w-3" /> Confirmed
       </Badge>
     )
   if (status === "pending")
     return (
-      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+      <Badge className="border-0 bg-amber-50 text-amber-700 hover:bg-amber-50">
         <Hourglass className="mr-1 h-3 w-3" /> Pending
       </Badge>
     )
   if (status === "waitlisted")
     return (
-      <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-700">
+      <Badge className="border-0 bg-gray-100 text-gray-600 hover:bg-gray-100">
         <UserMinus className="mr-1 h-3 w-3" /> Waitlisted
       </Badge>
     )
   if (status === "cancelled")
     return (
-      <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+      <Badge className="border-0 bg-rose-50 text-rose-700 hover:bg-rose-50">
         <Ban className="mr-1 h-3 w-3" /> Cancelled
       </Badge>
     )
@@ -165,7 +165,7 @@ function renderPayment(reg: Registration, feeAmount: number) {
       )
     if (method === "cash")
       return (
-        <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+        <Badge className="border-0 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
           <Banknote className="mr-1 h-3 w-3" /> {amountText || "Cash"}
         </Badge>
       )
@@ -176,7 +176,7 @@ function renderPayment(reg: Registration, feeAmount: number) {
         </Badge>
       )
     return (
-      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+      <Badge className="border-0 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
         <CheckCircle className="mr-1 h-3 w-3" /> {amountText || "Paid"}
       </Badge>
     )
@@ -184,7 +184,7 @@ function renderPayment(reg: Registration, feeAmount: number) {
 
   if (reg.payment_status === "waived")
     return (
-      <Badge className="bg-violet-100 text-violet-800 hover:bg-violet-100">
+      <Badge className="border-0 bg-blue-50 text-blue-700 hover:bg-blue-50">
         <ShieldCheck className="mr-1 h-3 w-3" /> Waived
       </Badge>
     )
@@ -192,7 +192,7 @@ function renderPayment(reg: Registration, feeAmount: number) {
   const stripeStatus = reg.payments?.status
   if (stripeStatus === "succeeded")
     return (
-      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+      <Badge className="border-0 bg-emerald-50 text-emerald-700 hover:bg-emerald-50">
         <CheckCircle className="mr-1 h-3 w-3" /> {amountText || "Paid"}
       </Badge>
     )

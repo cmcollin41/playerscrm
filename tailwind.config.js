@@ -9,6 +9,9 @@ module.exports = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        display: ["var(--font-cal)", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
       animation: {
         "fade-in": "fade-in 0.5s linear forwards",
         marquee: "marquee var(--marquee-duration) linear infinite",

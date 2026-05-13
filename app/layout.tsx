@@ -6,10 +6,11 @@ import { Analytics } from "@vercel/analytics/react";
 import { Providers } from "./providers";
 import { Metadata } from "next";
 import { ModalProvider } from "@/components/modal/provider";
+import { inter, cal } from "@/styles/fonts";
 
-
-const title = "Provo Basketball";
-const description = "A CRM for your athletes and parents.";
+const title = "Athletes App — the operating system for sports programs";
+const description =
+  "The all-in-one platform for sports programs: rosters, events, payments, public profiles, and parent communications. Built for clubs, high schools, and youth programs.";
 
 const image = "/og-image.png";
 
@@ -27,21 +28,20 @@ export const metadata: Metadata = {
     title,
     description,
     images: [image],
-    creator: "@provobasketball",
   },
-  metadataBase: new URL("https://app.provobasketball.com"),
+  metadataBase: new URL("https://athletes.app"),
 };
 
 export default async function RootLayout(props: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className={`${cal.variable}`}>
       <head>
         <link
           href="https://releases.transloadit.com/uppy/v3.13.1/uppy.min.css"
           rel="stylesheet"
         />
       </head>
-      <body>
+      <body className={inter.className}>
         <Providers>
           <ModalProvider>{props.children}</ModalProvider>
           <Analytics />

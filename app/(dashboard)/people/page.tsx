@@ -4,6 +4,7 @@ import { PeopleTableWrapper } from "./people-table-wrapper";
 import { getAccount } from "@/lib/fetchers/server";
 import PersonSheet from "@/components/modal/person-sheet";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatTile } from "@/components/ui/sports-ui";
 
 export default async function PeoplePage() {
   const supabase = await createClient();
@@ -40,9 +41,14 @@ export default async function PeoplePage() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">People</h1>
-            <p className="text-muted-foreground">
-              Manage your athletes, families, and contacts
+            <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
+              Roster
+            </p>
+            <h1 className="mt-2 font-display text-4xl leading-tight tracking-tight text-gray-900 sm:text-5xl">
+              People
+            </h1>
+            <p className="mt-1 text-base text-gray-600">
+              Manage your athletes, families, and contacts.
             </p>
           </div>
           <PersonSheet
@@ -55,55 +61,27 @@ export default async function PeoplePage() {
         </div>
       </div>
 
-      {/* Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total People</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalPeople}</div>
-            <p className="text-xs text-muted-foreground">
-              In your organization
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Primary Contacts</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{primaryContacts}</div>
-            <p className="text-xs text-muted-foreground">
-              Adult contacts
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Dependents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dependents}</div>
-            <p className="text-xs text-muted-foreground">
-              Athletes and children
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">With Email</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{withEmail}</div>
-            <p className="text-xs text-muted-foreground">
-              {((withEmail / totalPeople) * 100).toFixed(0)}% of total
-            </p>
-          </CardContent>
-        </Card>
+        <StatTile
+          label="Total people"
+          value={totalPeople}
+          hint="In your organization"
+        />
+        <StatTile
+          label="Primary contacts"
+          value={primaryContacts}
+          hint="Adult contacts"
+        />
+        <StatTile
+          label="Dependents"
+          value={dependents}
+          hint="Athletes and children"
+        />
+        <StatTile
+          label="With email"
+          value={withEmail}
+          hint={`${totalPeople > 0 ? ((withEmail / totalPeople) * 100).toFixed(0) : 0}% of total`}
+        />
       </div>
 
       {/* People Table */}

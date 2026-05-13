@@ -1,6 +1,6 @@
 "use client"
 
-import { Users, Mail, Receipt, DollarSign, Activity } from "lucide-react"
+import { Users, Mail, Receipt, Activity } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Bar, BarChart, XAxis, YAxis } from "recharts"
 
@@ -21,16 +21,18 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 
-import { Badge } from "@/components/ui/badge"
+import { Eyebrow, StatTile } from "@/components/ui/sports-ui"
 
 const revenueChartConfig = {
   collected: {
+    // emerald-500
     label: "Collected",
-    color: "hsl(142, 71%, 45%)",
+    color: "hsl(160, 84%, 39%)",
   },
   outstanding: {
+    // amber-500
     label: "Outstanding",
-    color: "hsl(48, 96%, 53%)",
+    color: "hsl(38, 92%, 50%)",
   },
 } satisfies ChartConfig
 
@@ -79,74 +81,39 @@ export function DashboardClient({ profile, stats, account }: DashboardClientProp
     : 0
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">
-              Welcome back, {profile?.first_name || profile?.email}
-            </h1>
-            <p className="text-muted-foreground">
-              Here&apos;s what&apos;s happening with your organization
-            </p>
-          </div>
-        </div>
+    <div className="flex flex-col gap-8 p-6">
+      <div>
+        <Eyebrow>Dashboard</Eyebrow>
+        <h1 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight text-gray-900 sm:text-5xl">
+          Welcome back, {profile?.first_name || profile?.email}.
+        </h1>
+        <p className="mt-2 text-base text-gray-600">
+          Here&apos;s what&apos;s happening with your program.
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Teams</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalTeams}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.activeTeams} active
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total People</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalPeople}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.totalPrimaryContacts} contacts, {stats.totalDependents} dependents
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Invoices</CardTitle>
-            <Receipt className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalInvoices}</div>
-            <p className="text-xs text-muted-foreground">
-              {stats.paidInvoices} paid
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              {formatDollars(stats.paidAmount)}
-            </div>
-            <p className="text-xs text-muted-foreground">
-              {formatDollars(stats.totalInvoiceAmount)} total billed
-            </p>
-          </CardContent>
-        </Card>
+        <StatTile
+          label="Teams"
+          value={stats.totalTeams}
+          hint={`${stats.activeTeams} active`}
+        />
+        <StatTile
+          label="People"
+          value={stats.totalPeople}
+          hint={`${stats.totalPrimaryContacts} contacts · ${stats.totalDependents} dependents`}
+        />
+        <StatTile
+          label="Invoices"
+          value={stats.totalInvoices}
+          hint={`${stats.paidInvoices} paid`}
+        />
+        <StatTile
+          label="Revenue"
+          tone="emerald"
+          value={formatDollars(stats.paidAmount)}
+          hint={`${formatDollars(stats.totalInvoiceAmount)} total billed`}
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -201,28 +168,36 @@ export function DashboardClient({ profile, stats, account }: DashboardClientProp
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
+            <div className="mt-4 grid grid-cols-2 gap-4 border-t pt-4">
               <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">Total Billed</p>
-                <p className="text-lg font-bold">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Total billed
+                </p>
+                <p className="font-display text-xl text-gray-900">
                   {formatDollars(stats.totalInvoiceAmount)}
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">Collected</p>
-                <p className="text-lg font-bold text-green-600">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Collected
+                </p>
+                <p className="font-display text-xl text-emerald-700">
                   {formatDollars(stats.paidAmount)}
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">Outstanding</p>
-                <p className="text-lg font-bold text-yellow-600">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Outstanding
+                </p>
+                <p className="font-display text-xl text-amber-700">
                   {formatDollars(stats.pendingAmount)}
                 </p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-medium text-muted-foreground">Collection Rate</p>
-                <p className="text-lg font-bold">{collectionRate}%</p>
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                  Collection rate
+                </p>
+                <p className="font-display text-xl text-gray-900">{collectionRate}%</p>
               </div>
             </div>
           </CardContent>
@@ -244,8 +219,8 @@ export function DashboardClient({ profile, stats, account }: DashboardClientProp
                   >
                     <div className={`mt-1 rounded-full p-2 ${
                       activity.type === "team"
-                        ? "bg-blue-100 text-blue-600"
-                        : "bg-purple-100 text-purple-600"
+                        ? "bg-orange-50 text-orange-600"
+                        : "bg-blue-50 text-blue-600"
                     }`}>
                       {activity.type === "team" ? (
                         <Users className="h-4 w-4" />
@@ -261,9 +236,9 @@ export function DashboardClient({ profile, stats, account }: DashboardClientProp
                         {activity.description}
                       </p>
                     </div>
-                    <Badge variant="outline" className="text-xs">
+                    <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
                       {activity.type}
-                    </Badge>
+                    </span>
                   </div>
                 ))
               ) : (

@@ -84,16 +84,21 @@ export default function SettingsHubPage() {
   return (
     <div className="flex flex-col space-y-10 py-8">
       <div>
-        <h1 className="font-cal text-3xl font-bold dark:text-white">Settings</h1>
-        <p className="text-muted-foreground mt-1 text-sm max-w-xl">
+        <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
+          Configuration
+        </p>
+        <h1 className="mt-2 font-display text-4xl leading-tight tracking-tight text-gray-900 sm:text-5xl dark:text-white">
+          Settings
+        </h1>
+        <p className="mt-2 max-w-xl text-base text-gray-600">
           Your personal sign-in and profile, plus workspace configuration for the account
-          you’re viewing if you’re an admin.
+          you&rsquo;re viewing if you&rsquo;re an admin.
         </p>
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2 sm:gap-8">
         <section>
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-orange-600">
             You
           </h2>
           <Link
@@ -115,7 +120,7 @@ export default function SettingsHubPage() {
 
         {workspaceAdmin ? (
           <section>
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-orange-600">
               Workspace
             </h2>
             <Link
@@ -138,7 +143,7 @@ export default function SettingsHubPage() {
           </section>
         ) : (
           <section>
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-orange-600">
               Workspace
             </h2>
             <p className="text-muted-foreground text-sm">
