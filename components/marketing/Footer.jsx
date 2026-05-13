@@ -1,24 +1,9 @@
-import Image from "next/image";
 import Link from "next/link";
 
-import { Button } from "@/components/marketing/Button";
 import { Container } from "@/components/marketing/Container";
-import { TextField } from "@/components/marketing/Fields";
-import { Logomark } from "@/components/marketing/Logo";
 import { NavLinks } from "@/components/marketing/NavLinks";
-import qrCode from "@/images/qr-code.svg";
-
-function QrCodeBorder(props) {
-  return (
-    <svg viewBox="0 0 96 96" fill="none" aria-hidden="true" {...props}>
-      <path
-        d="M1 17V9a8 8 0 0 1 8-8h8M95 17V9a8 8 0 0 0-8-8h-8M1 79v8a8 8 0 0 0 8 8h8M95 79v8a8 8 0 0 1-8 8h-8"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 export function Footer() {
   return (
@@ -28,7 +13,7 @@ export function Footer() {
           <div>
             <div className="flex items-center text-gray-900">
               <div className="ml-0">
-                <img src="/athletes-logo.png" className="w-16" />
+                <img src="/athletes-logo.png" className="w-16" alt="Athletes App" />
               </div>
             </div>
             <nav className="mt-11 flex gap-8">
@@ -40,28 +25,32 @@ export function Footer() {
               href="/portal-login"
               className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-6 py-3 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              <img src="/athletes-logo.png" className="w-6 mr-2" />
+              <img src="/athletes-logo.png" className="mr-2 w-6" alt="" />
               Parent Portal
             </Link>
           </div>
         </div>
-        <div className="flex flex-col items-center border-t border-gray-200 pb-12 pt-8 md:flex-row-reverse md:justify-between md:pt-6">
-          <form className="flex w-full justify-center md:w-auto">
-            <TextField
+        <div className="flex flex-col items-center gap-6 border-t border-gray-200 pb-12 pt-8 md:flex-row-reverse md:justify-between md:gap-0 md:pt-6">
+          <form className="flex w-full max-w-md items-center gap-2 md:w-auto">
+            <Input
               type="email"
               aria-label="Email address"
               placeholder="Email address"
               autoComplete="email"
               required
-              className="w-60 min-w-0 shrink"
+              className="flex-1 md:w-60"
             />
-            <Button type="submit" color="cyan" className="ml-4 flex-none">
+            <Button
+              type="submit"
+              className="flex-none bg-gray-900 font-semibold hover:bg-gray-800"
+            >
               <span className="hidden lg:inline">Join our newsletter</span>
-              <span className="lg:hidden">Join newsletter</span>
+              <span className="lg:hidden">Subscribe</span>
             </Button>
           </form>
-          <p className="mt-6 text-sm text-gray-500 md:mt-0">
-            &copy; AlumUp LLC {new Date().getFullYear()}. All rights reserved.
+          <p className="text-sm text-gray-500">
+            &copy; basketball.dev LLC {new Date().getFullYear()}. All rights
+            reserved.
           </p>
         </div>
       </Container>
