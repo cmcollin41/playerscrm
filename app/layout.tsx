@@ -8,28 +8,50 @@ import { Metadata } from "next";
 import { ModalProvider } from "@/components/modal/provider";
 import { inter, cal } from "@/styles/fonts";
 
-const title = "Athletes App — the operating system for sports programs";
+const defaultTitle =
+  "Athletes App — the operating system for your sports program";
 const description =
   "The all-in-one platform for sports programs: rosters, events, payments, public profiles, and parent communications. Built for clubs, high schools, and youth programs.";
 
-const image = "/og-image.png";
-
 export const metadata: Metadata = {
-  title,
+  metadataBase: new URL("https://athletes.app"),
+  title: {
+    default: defaultTitle,
+    template: "%s · Athletes App",
+  },
   description,
-  icons: ["/athletes-logo.png"],
+  applicationName: "Athletes App",
+  keywords: [
+    "sports CRM",
+    "team management",
+    "athlete registration",
+    "club management software",
+    "youth sports platform",
+    "team website builder",
+    "sports payments",
+    "roster management",
+  ],
+  icons: {
+    icon: "/athletes-logo.png",
+    apple: "/athletes-logo.png",
+  },
   openGraph: {
-    title,
+    type: "website",
+    locale: "en_US",
+    url: "https://athletes.app",
+    siteName: "Athletes App",
+    title: defaultTitle,
     description,
-    images: [image],
   },
   twitter: {
     card: "summary_large_image",
-    title,
+    title: defaultTitle,
     description,
-    images: [image],
   },
-  metadataBase: new URL("https://athletes.app"),
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default async function RootLayout(props: { children: React.ReactNode }) {
