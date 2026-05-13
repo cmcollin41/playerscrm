@@ -92,26 +92,29 @@ function isOverdue(invoice: Invoice): boolean {
 const getStatusBadge = (status: string, overdue: boolean) => {
   if (overdue) {
     return (
-      <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100">
-        <AlertTriangle className="h-3 w-3 mr-1" />
+      <Badge
+        variant="outline"
+        className="border-0 bg-rose-50 text-rose-700 hover:bg-rose-50"
+      >
+        <AlertTriangle className="mr-1 h-3 w-3" />
         OVERDUE
       </Badge>
     )
   }
 
   const config: Record<string, { className: string; icon: React.ElementType }> = {
-    draft: { className: "bg-gray-100 text-gray-800 hover:bg-gray-100", icon: FileText },
-    sent: { className: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100", icon: Clock },
-    paid: { className: "bg-green-100 text-green-800 hover:bg-green-100", icon: CheckCircle2 },
-    void: { className: "bg-slate-100 text-slate-500 hover:bg-slate-100", icon: Ban },
+    draft: { className: "bg-gray-100 text-gray-600 hover:bg-gray-100", icon: FileText },
+    sent: { className: "bg-amber-50 text-amber-700 hover:bg-amber-50", icon: Clock },
+    paid: { className: "bg-emerald-50 text-emerald-700 hover:bg-emerald-50", icon: CheckCircle2 },
+    void: { className: "bg-gray-100 text-gray-500 hover:bg-gray-100", icon: Ban },
   }
 
   const statusConfig = config[status] || config.sent
   const Icon = statusConfig.icon
 
   return (
-    <Badge variant="outline" className={statusConfig.className}>
-      <Icon className="h-3 w-3 mr-1" />
+    <Badge variant="outline" className={`border-0 ${statusConfig.className}`}>
+      <Icon className="mr-1 h-3 w-3" />
       {status.toUpperCase()}
     </Badge>
   )

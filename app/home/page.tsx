@@ -200,16 +200,16 @@ function FeatureSection() {
           />
           <FeatureBlock
             reverse
-            eyebrow="Public profiles & website"
-            title="A recruiting-ready site, generated for free."
-            description="Every account gets yourname.athletes.app — or your own domain. Player and team pages auto-publish with stats, awards, and highlight links. No website builder required."
+            eyebrow="Communications & billing"
+            title="Send like a pro. Get paid like one too."
+            description="Email broadcasts and transactional emails sent from your own verified domain. Invoices that look like they came from your program — not a third party."
             bullets={[
-              "Custom subdomain or your own CNAME",
-              "Player pages with photos, stats, and awards",
-              "Public JSON API to embed feeds on existing sites",
-              "Privacy controls per player",
+              "Broadcasts sent from your verified domain",
+              "Lists segmented by team, season, or tag",
+              "Open, click, and bounce metrics in real time",
+              "Stripe invoicing with paid/unpaid tracking",
             ]}
-            mockup={<PublicProfileMockup />}
+            mockup={<CommsMockup />}
           />
           <FeatureBlock
             eyebrow="Camps, clinics, and events"
@@ -225,16 +225,16 @@ function FeatureSection() {
           />
           <FeatureBlock
             reverse
-            eyebrow="Communications & billing"
-            title="Send like a pro. Get paid like one too."
-            description="Email broadcasts and transactional emails sent from your own verified domain. Invoices that look like they came from your program — not a third party."
+            eyebrow="Public data & API"
+            title="The data layer behind your program's site."
+            description="Players, teams, events, and stats — all exposed through a public JSON API. Build your own site, embed feeds into an existing one, or have us build something custom on top. You decide what's public, down to the record."
             bullets={[
-              "Broadcasts sent from your verified domain",
-              "Lists segmented by team, season, or tag",
-              "Open, click, and bounce metrics in real time",
-              "Stripe invoicing with paid/unpaid tracking",
+              "Public JSON API for players, teams, and events",
+              "Multi-year stats per athlete and per team",
+              "Per-record privacy controls — opt in only what's shareable",
+              "Live example: provobasketball.com runs on this API",
             ]}
-            mockup={<CommsMockup />}
+            mockup={<ApiMockup />}
           />
         </div>
       </div>
@@ -322,36 +322,64 @@ function RosterMockup() {
   )
 }
 
-function PublicProfileMockup() {
+function ApiMockup() {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-gradient-to-br from-blue-50 via-white to-white p-6 shadow-xl ring-1 ring-black/5">
-      <div className="rounded-md bg-white/80 px-3 py-1.5 text-[11px] font-mono text-gray-500">
-        yourprogram.athletes.app/marcus-johnson
+    <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-950 shadow-xl ring-1 ring-black/10">
+      <div className="flex items-center gap-2 border-b border-white/10 px-4 py-2.5">
+        <span className="h-2.5 w-2.5 rounded-full bg-red-400/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
+        <span className="ml-3 truncate font-mono text-[11px] text-gray-400">
+          GET athletes.app/api/public/players?account_id=…
+        </span>
       </div>
-      <div className="mt-5 rounded-xl bg-white p-5 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="h-16 w-16 rounded-full bg-gradient-to-br from-blue-200 to-blue-400" />
-          <div>
-            <p className="font-display text-xl text-gray-900">
-              Marcus Johnson
-            </p>
-            <p className="text-xs text-gray-500">
-              Guard · Class of 2027 · 6&apos;3&quot;
-            </p>
-            <p className="mt-1 text-xs text-gray-400">
-              Provo, UT · Varsity Boys
-            </p>
-          </div>
-        </div>
-        <div className="mt-5 grid grid-cols-4 gap-2">
-          <StatTile label="PPG" value="18.4" />
-          <StatTile label="RPG" value="6.1" />
-          <StatTile label="APG" value="4.2" />
-          <StatTile label="FG%" value=".47" />
-        </div>
-        <div className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          🏆 All-Conference First Team · Team Captain
-        </div>
+      <pre className="overflow-x-auto px-4 py-4 font-mono text-[12px] leading-relaxed text-gray-200">
+        <span className="text-gray-500">{`[`}</span>
+        {"\n  "}
+        <span className="text-gray-500">{`{`}</span>
+        {"\n    "}
+        <span className="text-emerald-300">{`"name"`}</span>
+        <span className="text-gray-500">{`: `}</span>
+        <span className="text-orange-300">{`"Marcus Johnson"`}</span>
+        <span className="text-gray-500">{`,`}</span>
+        {"\n    "}
+        <span className="text-emerald-300">{`"slug"`}</span>
+        <span className="text-gray-500">{`: `}</span>
+        <span className="text-orange-300">{`"marcus-johnson"`}</span>
+        <span className="text-gray-500">{`,`}</span>
+        {"\n    "}
+        <span className="text-emerald-300">{`"grad_year"`}</span>
+        <span className="text-gray-500">{`: `}</span>
+        <span className="text-blue-300">{`2027`}</span>
+        <span className="text-gray-500">{`,`}</span>
+        {"\n    "}
+        <span className="text-emerald-300">{`"position"`}</span>
+        <span className="text-gray-500">{`: `}</span>
+        <span className="text-orange-300">{`"Guard"`}</span>
+        <span className="text-gray-500">{`,`}</span>
+        {"\n    "}
+        <span className="text-emerald-300">{`"stats"`}</span>
+        <span className="text-gray-500">{`: { `}</span>
+        <span className="text-emerald-300">{`"ppg"`}</span>
+        <span className="text-gray-500">{`: `}</span>
+        <span className="text-blue-300">{`18.4`}</span>
+        <span className="text-gray-500">{`, `}</span>
+        <span className="text-emerald-300">{`"rpg"`}</span>
+        <span className="text-gray-500">{`: `}</span>
+        <span className="text-blue-300">{`6.1`}</span>
+        <span className="text-gray-500">{` },`}</span>
+        {"\n    "}
+        <span className="text-emerald-300">{`"awards"`}</span>
+        <span className="text-gray-500">{`: [`}</span>
+        <span className="text-orange-300">{`"All-Conference 1st Team"`}</span>
+        <span className="text-gray-500">{`]`}</span>
+        {"\n  "}
+        <span className="text-gray-500">{`}`}</span>
+        {"\n"}
+        <span className="text-gray-500">{`]`}</span>
+      </pre>
+      <div className="border-t border-white/10 bg-white/5 px-4 py-2.5 text-[11px] text-gray-400">
+        Drop into any framework, or have us build the site for you.
       </div>
     </div>
   )
@@ -476,11 +504,11 @@ function AudienceSection() {
           <AudienceTile
             icon={<GraduationCap className="h-6 w-6" />}
             title="For athletes"
-            description="A real public profile with stats, awards, and highlight links — recruitable, shareable, and always up to date."
+            description="Your stats, awards, and history live in one place — and your program can publish them wherever they want, via API. Always current, always yours."
             points={[
-              "Auto-generated player page",
               "Multi-year stats and awards",
-              "Privacy controls",
+              "Highlight links & social",
+              "Per-record privacy controls",
             ]}
           />
           <AudienceTile
@@ -585,8 +613,12 @@ function FaqSection() {
             a="Basketball is what we built it for first, but the data model is sport-agnostic. Stats fields, roster structures, and award types can be configured per account."
           />
           <FaqItem
-            q="Can we use our own domain?"
-            a="Yes. Every account gets a free subdomain (yourname.athletes.app), and you can point a custom CNAME at it whenever you're ready. Email also sends from your own verified domain once DNS is set up."
+            q="Do you host our team website?"
+            a="No — we're the data layer, not the website builder. Your program's data lives here and is exposed via a public JSON API. You can build the public site yourself, embed feeds into an existing one, or hire us to build a custom site on top of the API. provobasketball.com is a working example built this way."
+          />
+          <FaqItem
+            q="What about our own email domain?"
+            a="Email broadcasts and transactional emails (invoices, registration confirmations) send from your own domain once you verify it through Resend. No DNS, no email."
           />
           <FaqItem
             q="Who handles payments?"
@@ -631,8 +663,9 @@ function FinalCta() {
           Stop running your program out of a spreadsheet.
         </h2>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-gray-400">
-          Bring your roster — we&apos;ll show you what your website,
-          registration page, and parent portal look like in under 30 minutes.
+          Bring your roster — we&apos;ll show you the CRM, registration pages,
+          parent portal, and API feed your site can run on in under 30
+          minutes.
         </p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Link href="/demo">

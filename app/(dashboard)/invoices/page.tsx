@@ -63,9 +63,14 @@ export default async function InvoicesPage() {
     <div className="flex flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-bold tracking-tight">Invoices</h1>
-          <p className="text-muted-foreground">
-            View and manage all invoices sent to your athletes and families
+          <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
+            Billing
+          </p>
+          <h1 className="mt-2 font-display text-4xl leading-tight tracking-tight text-gray-900 sm:text-5xl">
+            Invoices
+          </h1>
+          <p className="mt-1 text-base text-gray-600">
+            View and manage all invoices sent to your athletes and families.
           </p>
         </div>
         <Button>

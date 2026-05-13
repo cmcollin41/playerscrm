@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { StatTile } from "@/components/ui/sports-ui"
 import { Plus } from "lucide-react"
 import { EventTable, type EventRow } from "./table"
 
@@ -51,9 +52,14 @@ export default async function EventsPage() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Events</h1>
-            <p className="text-muted-foreground">
-              Create camps, clinics, and events with public registration
+            <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
+              Schedule
+            </p>
+            <h1 className="mt-2 font-display text-4xl leading-tight tracking-tight text-gray-900 sm:text-5xl">
+              Events
+            </h1>
+            <p className="mt-1 text-base text-gray-600">
+              Create camps, clinics, and events with public registration.
             </p>
           </div>
           <Link href="/events/new">
@@ -65,49 +71,26 @@ export default async function EventsPage() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Events</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalEvents}</div>
-            <p className="text-xs text-muted-foreground">In your organization</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Published</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{published}</div>
-            <p className="text-xs text-muted-foreground">{drafts} drafts</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Camps</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{camps}</div>
-            <p className="text-xs text-muted-foreground">
-              {totalEvents > 0 ? Math.round((camps / totalEvents) * 100) : 0}% of events
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Registrations</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalRegistrations}</div>
-            <p className="text-xs text-muted-foreground">
-              Across all events (pending + confirmed)
-            </p>
-          </CardContent>
-        </Card>
+        <StatTile
+          label="Total events"
+          value={totalEvents}
+          hint="In your organization"
+        />
+        <StatTile
+          label="Published"
+          value={published}
+          hint={`${drafts} drafts`}
+        />
+        <StatTile
+          label="Camps"
+          value={camps}
+          hint={`${totalEvents > 0 ? Math.round((camps / totalEvents) * 100) : 0}% of events`}
+        />
+        <StatTile
+          label="Registrations"
+          value={totalRegistrations}
+          hint="Pending + confirmed"
+        />
       </div>
 
       <Card>
