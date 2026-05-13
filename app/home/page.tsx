@@ -50,12 +50,12 @@ function Hero() {
             sports programs actually run.
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
-            <Link href="/demo">
+            <Link href="/signup">
               <Button
                 size="lg"
                 className="bg-gray-900 px-6 text-base font-semibold hover:bg-gray-800"
               >
-                Schedule a demo
+                Start your program
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
@@ -695,7 +695,7 @@ function PricingTeaser() {
                   or <span className="font-semibold text-white">$10/mo</span>{" "}
                   month-to-month
                 </p>
-                <Link href="/demo" className="mt-8 block">
+                <Link href="/signup" className="mt-8 block">
                   <Button
                     size="lg"
                     className="w-full bg-orange-500 text-base font-semibold hover:bg-orange-400"
@@ -852,12 +852,12 @@ function FinalCta() {
           minutes.
         </p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
-          <Link href="/demo">
+          <Link href="/signup">
             <Button
               size="lg"
               className="bg-orange-500 px-6 text-base font-semibold text-white hover:bg-orange-400"
             >
-              Schedule a demo
+              Start your program
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>
