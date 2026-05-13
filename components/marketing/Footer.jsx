@@ -37,11 +37,11 @@ export function Footer() {
           </div>
           <div className="group relative -mx-4 flex items-center self-stretch p-4 transition-colors hover:bg-gray-100 sm:self-auto sm:rounded-2xl lg:mx-0 lg:self-auto lg:p-6">
             <Link
-              href="/portal"
+              href="/portal-login"
               className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-6 py-3 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               <img src="/athletes-logo.png" className="w-6 mr-2" />
-              Billing Portal
+              Parent Portal
             </Link>
           </div>
         </div>
