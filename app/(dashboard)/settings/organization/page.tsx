@@ -220,11 +220,30 @@ export default function OrganizationSettingsPage() {
       }
 
       const { account } = await res.json()
-      setAccounts((prev) => [...prev, account].sort((a, b) => a.name.localeCompare(b.name)))
+      setAccounts((prev) =>
+        [...prev, account].sort((a, b) => a.name.localeCompare(b.name)),
+      )
       setNewName("")
       setNewSport("")
       setShowNewForm(false)
-      toast.success(`${account.name} created`)
+
+      // Switch active account to the new one, then send the org owner
+      // through Checkout to start its $99/yr subscription. The paywall on
+      // the dashboard layout would catch this on the next request anyway,
+      // but routing directly to /billing makes the intent explicit.
+      const { error: switchError } = await supabase.rpc("switch_account", {
+        p_account_id: account.id,
+      })
+      if (switchError) {
+        console.error("switch_account after create:", switchError.message)
+        toast.error(
+          `${account.name} created, but couldn't switch to it. Try selecting it from the account switcher.`,
+        )
+        return
+      }
+
+      toast.success(`${account.name} created — let's set up billing.`)
+      router.push("/billing")
     } catch {
       toast.error("Failed to create account")
     } finally {
