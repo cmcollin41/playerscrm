@@ -50,12 +50,12 @@ function Hero() {
             sports programs actually run.
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
-            <Link href="/demo">
+            <Link href="/signup">
               <Button
                 size="lg"
                 className="bg-gray-900 px-6 text-base font-semibold hover:bg-gray-800"
               >
-                Schedule a demo
+                Start your program
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
@@ -662,31 +662,119 @@ function PricingTeaser() {
       id="pricing"
       className="border-b border-gray-100 bg-white py-24 sm:py-32"
     >
-      <div className="mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
-        <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
-          Pricing
-        </p>
-        <h2 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight text-gray-900 sm:text-5xl">
-          Pay only when your program runs.
-        </h2>
-        <p className="mx-auto mt-5 max-w-2xl text-lg text-gray-600">
-          No seat fees. No setup fees. A small platform fee on Stripe-processed
-          payments — that&apos;s it. The CRM, website, broadcasts, and parent
-          portal are included.
-        </p>
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-          <Link href="/demo">
-            <Button
-              size="lg"
-              className="bg-gray-900 px-6 text-base font-semibold hover:bg-gray-800"
-            >
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+        <div className="text-center">
+          <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
+            Pricing
+          </p>
+          <h2 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight text-gray-900 sm:text-5xl">
+            One price.{" "}
+            <span className="text-gray-400">Every feature.</span>
+          </h2>
+          <p className="mx-auto mt-5 max-w-2xl text-lg text-gray-600">
+            No seat fees, no setup fees, no per-athlete fees. Every program
+            gets the full platform for one flat rate — payments are billed
+            separately as a small fee per transaction.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-12 max-w-2xl">
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl ring-1 ring-black/5">
+            <div className="grid grid-cols-1 gap-0 md:grid-cols-5">
+              <div className="bg-gray-950 p-8 text-white md:col-span-2">
+                <p className="text-xs font-semibold uppercase tracking-wider text-orange-400">
+                  Athletes App
+                </p>
+                <div className="mt-4 flex items-baseline gap-2">
+                  <span className="font-display text-6xl leading-none">
+                    $99
+                  </span>
+                  <span className="text-sm text-gray-400">/ year</span>
+                </div>
+                <p className="mt-2 text-sm text-gray-400">
+                  or <span className="font-semibold text-white">$10/mo</span>{" "}
+                  month-to-month
+                </p>
+                <Link href="/signup" className="mt-8 block">
+                  <Button
+                    size="lg"
+                    className="w-full bg-orange-500 text-base font-semibold hover:bg-orange-400"
+                  >
+                    Get started
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+                <p className="mt-4 text-xs text-gray-500">
+                  Cancel anytime. No long-term contract.
+                </p>
+              </div>
+
+              <div className="p-8 md:col-span-3">
+                <p className="text-sm font-semibold text-gray-900">
+                  Everything included
+                </p>
+                <ul className="mt-4 space-y-2.5">
+                  <PriceFeature>Unlimited rosters, teams, and seasons</PriceFeature>
+                  <PriceFeature>Custom subdomain + your own CNAME</PriceFeature>
+                  <PriceFeature>
+                    Verified email sending from your domain
+                  </PriceFeature>
+                  <PriceFeature>
+                    Up to <strong>10,000 broadcast emails / month</strong>
+                  </PriceFeature>
+                  <PriceFeature>Public JSON API + per-record privacy</PriceFeature>
+                  <PriceFeature>Parent magic-link portal</PriceFeature>
+                  <PriceFeature>Multi-year stats and awards</PriceFeature>
+                  <PriceFeature>Events &amp; hosted registration pages</PriceFeature>
+                </ul>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-100 bg-gray-50 px-8 py-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">
+                    Payments
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-600">
+                    Charged only when money moves through your account.
+                  </p>
+                </div>
+                <p className="font-display text-2xl text-gray-900">
+                  $1 + 3%
+                  <span className="ml-1 text-sm font-normal text-gray-500">
+                    per transaction
+                  </span>
+                </p>
+              </div>
+              <p className="mt-3 border-t border-gray-200 pt-3 text-xs text-gray-500">
+                Stripe&apos;s standard processing fees (currently 2.9% + $0.30
+                in the US) apply on top and go directly to Stripe — they
+                aren&apos;t part of the Athletes App fee.
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-6 text-center text-sm text-gray-500">
+            Need higher email volume, a custom website, or multi-program
+            billing?{" "}
+            <Link href="/demo" className="text-orange-600 hover:underline">
               Talk to us
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
+            </Link>
+            .
+          </p>
         </div>
       </div>
     </section>
+  )
+}
+
+function PriceFeature({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="flex gap-2.5 text-sm text-gray-700">
+      <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-600" />
+      <span>{children}</span>
+    </li>
   )
 }
 
@@ -718,7 +806,7 @@ function FaqSection() {
           />
           <FaqItem
             q="Who handles payments?"
-            a="Stripe. You connect a Stripe account and money goes directly to it — we don't hold funds. Refunds, payouts, and tax forms come from Stripe directly."
+            a="Stripe. You connect a Stripe account and money goes directly to it — we don't hold funds. Refunds, payouts, and tax forms come from Stripe. The Athletes App fee ($1 + 3%) is on top of Stripe's normal processing fees (typically 2.9% + $0.30 in the US), which stay with Stripe."
           />
           <FaqItem
             q="Can parents log in?"
@@ -764,12 +852,12 @@ function FinalCta() {
           minutes.
         </p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
-          <Link href="/demo">
+          <Link href="/signup">
             <Button
               size="lg"
               className="bg-orange-500 px-6 text-base font-semibold text-white hover:bg-orange-400"
             >
-              Schedule a demo
+              Start your program
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>

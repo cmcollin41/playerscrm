@@ -155,6 +155,7 @@ export async function proxy(request: NextRequest) {
 
     const publicPaths = [
       "/login",
+      "/signup",
       "/portal-login",
       "/portal/auth",
       "/forgot-password",
@@ -211,6 +212,7 @@ export async function proxy(request: NextRequest) {
   const tenantPublicPaths = [
     "/register",
     "/login",
+    "/signup",
     "/portal-login",
     "/portal/auth",
     "/forgot-password",

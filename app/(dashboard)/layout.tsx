@@ -9,6 +9,7 @@ import type { UserRole } from "@/types/schema.types";
 import { getOrganizationLogoPublicUrl } from "@/lib/storage/organization-logo";
 import { DashboardFooterOrgLogo, DashboardHeaderLogo } from "@/components/navigation/dashboard-org-logo";
 import { DashboardAccessDenied } from "./access-denied";
+import { accountHasActiveSubscription } from "@/lib/billing";
 
 
 export default async function DashboardLayout({
@@ -73,9 +74,16 @@ export default async function DashboardLayout({
     if (currentAccountId) {
       const { data: account } = await supabase
         .from("accounts")
-        .select("name, organization_id")
+        .select("name, organization_id, subscription_status")
         .eq("id", currentAccountId)
         .single()
+
+      // Paywall: active account must have a subscription (or be grandfathered).
+      // /billing handles the prompt + Checkout relaunch; it lives outside the
+      // (dashboard) route group, so this redirect doesn't loop.
+      if (!accountHasActiveSubscription(account)) {
+        redirect("/billing")
+      }
 
       currentAccountName = account?.name || undefined
 

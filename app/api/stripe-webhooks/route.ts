@@ -83,6 +83,20 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
+      // Platform subscription lifecycle (the $99/yr Athletes App plan).
+      // These events arrive on the platform webhook with event.account = null
+      // and carry an account_id in subscription.metadata, set by
+      // createSubscriptionCheckoutSession in lib/billing.ts.
+      case "customer.subscription.created":
+      case "customer.subscription.updated":
+      case "customer.subscription.deleted":
+        await handlePlatformSubscription(event, supabase);
+        break;
+      case "checkout.session.completed":
+        await handlePlatformCheckoutCompleted(event, supabase);
+        break;
+
+      // Connect-side tenant payments / invoices (existing flow).
       case "payment_intent.created":
       case "payment_intent.canceled":
       case "payment_intent.processing":
@@ -437,6 +451,129 @@ const updateSupabase = async (event: any, supabase: any) => {
     console.log("Multi RSVP Updated successfully", JSON.stringify(metadata));
   }
 };
+
+// =============================================================================
+// Platform subscription handlers
+// =============================================================================
+
+// Map Stripe subscription.status to our public.accounts.subscription_status
+// check constraint values.
+function mapSubscriptionStatus(stripeStatus: string | undefined): string {
+  switch (stripeStatus) {
+    case "active":
+    case "trialing":
+      return "active";
+    case "past_due":
+    case "unpaid":
+      return "past_due";
+    case "canceled":
+      return "cancelled";
+    case "incomplete":
+    case "incomplete_expired":
+      return "incomplete";
+    default:
+      return "incomplete";
+  }
+}
+
+async function applySubscriptionToAccount(
+  supabase: any,
+  accountId: string,
+  subscription: any,
+): Promise<void> {
+  const mapped = mapSubscriptionStatus(subscription?.status);
+  const periodEnd = subscription?.current_period_end
+    ? new Date(subscription.current_period_end * 1000).toISOString()
+    : null;
+
+  const patch: Record<string, unknown> = {
+    subscription_id: subscription?.id ?? null,
+    subscription_status: mapped,
+    subscription_current_period_end: periodEnd,
+  };
+
+  const { error } = await supabase
+    .from("accounts")
+    .update(patch)
+    .eq("id", accountId);
+
+  if (error) {
+    console.error(
+      "[stripe-webhook] account subscription update failed",
+      error.message,
+    );
+    throw new Error(
+      `accounts subscription update failed: ${error.message}`,
+    );
+  }
+
+  console.log(
+    `[stripe-webhook] account ${accountId} -> ${mapped} (sub ${subscription?.id})`,
+  );
+}
+
+async function handlePlatformSubscription(
+  event: any,
+  supabase: any,
+): Promise<void> {
+  // Only platform-side events should hit this path. Connect-account
+  // subscription events (none of our tenants currently have any) would
+  // arrive with event.account set; skip those defensively.
+  if (event.account) {
+    console.log(
+      `[stripe-webhook] ignoring Connect subscription event for account ${event.account}`,
+    );
+    return;
+  }
+
+  const subscription = event.data.object;
+  const accountId = subscription?.metadata?.account_id as string | undefined;
+
+  if (!accountId) {
+    console.warn(
+      "[stripe-webhook] subscription event missing metadata.account_id",
+      { id: subscription?.id, type: event.type },
+    );
+    return;
+  }
+
+  await applySubscriptionToAccount(supabase, accountId, subscription);
+}
+
+// Safety net for the synchronous update done by /billing/success — if a
+// user closes the tab before being redirected back, this still runs.
+async function handlePlatformCheckoutCompleted(
+  event: any,
+  supabase: any,
+): Promise<void> {
+  if (event.account) return; // Connect Checkout sessions are tenant payment flows.
+
+  const session = event.data.object;
+  if (session?.mode !== "subscription") return;
+
+  const accountId =
+    (session.metadata?.account_id as string | undefined) ??
+    (session.client_reference_id as string | undefined);
+  const subscriptionId =
+    typeof session.subscription === "string"
+      ? session.subscription
+      : session.subscription?.id;
+
+  if (!accountId || !subscriptionId) {
+    console.warn(
+      "[stripe-webhook] checkout.session.completed missing account_id or subscription",
+      { session: session?.id },
+    );
+    return;
+  }
+
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  await applySubscriptionToAccount(supabase, accountId, subscription);
+}
+
+// =============================================================================
+// Tenant / Connect-side helpers (existing)
+// =============================================================================
 
 // Valid statuses: draft, sent, paid, void, overdue
 function getStatusFromInvoiceEvent(eventType: string): string {
