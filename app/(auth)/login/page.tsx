@@ -334,8 +334,8 @@ function LoginContent() {
           </TabsContent>
         </Tabs>
       </div>
-      <div className="mt-5 flex justify-center p-2 text-[10px]">
-        Provo Basketball Club
+      <div className="mt-5 flex justify-center p-2 text-[10px] text-gray-500">
+        Athletes App
       </div>
     </div>
   );
