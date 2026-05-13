@@ -24,23 +24,19 @@ export default function BillingPortalButton() {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ 
-          email: email.toLowerCase(),
-          sendEmail: true
-        })
+        body: JSON.stringify({ email: email.toLowerCase() })
       });
-      
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error('Failed to send billing portal link');
+        throw new Error('Request failed');
       }
-      
-      toast.success('Billing portal link has been sent to your email');
+
+      toast.success('If your email matches an account, a link is on the way');
       setIsEmailSent(true);
       setEmail('');
     } catch (error) {
       console.error('Error details:', error);
-      toast.error('Failed to send billing portal link');
+      toast.error('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -50,8 +46,8 @@ export default function BillingPortalButton() {
     <div className="flex flex-col gap-4 w-full">
       {isEmailSent && (
         <div className="w-full bg-green-50 border border-green-200 rounded-lg p-4 text-sm text-green-800">
-          <p className="mb-1 text-base text-left font-bold font-mono">Your link has been sent!</p>
-          <p className="text-xs text-left">The email will come from <span className="font-medium">portal@email.athletes.app and will expire in 30 minutes for security purposes</span></p>
+          <p className="mb-1 text-base text-left font-bold font-mono">Check your inbox</p>
+          <p className="text-xs text-left">If we found an Athletes App account matching that email, a billing portal link is on its way from <span className="font-medium">noreply@e.athletes.app</span>. The link expires shortly for security.</p>
         </div>
       )}
       
@@ -79,7 +75,7 @@ export default function BillingPortalButton() {
           )}
         </Button>
       </div>
-      <span className="text-xs text-gray-500">Use the email associated with your Athlets App account to access the billing portal.</span>
+      <span className="text-xs text-gray-500">Use the email associated with your Athletes App account to access the billing portal.</span>
     </div>
   );
 }

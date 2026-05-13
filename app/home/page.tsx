@@ -219,13 +219,13 @@ export default function Home() {
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/portal">
+              <Link href="/portal-login">
                 <Button
                   size="lg"
                   variant="outline"
                   className="border-white bg-transparent text-white hover:bg-blue-700"
                 >
-                  Billing Portal
+                  Parent Portal
                 </Button>
               </Link>
             </div>

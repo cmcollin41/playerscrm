@@ -121,8 +121,8 @@ export function Header() {
                 </>
               )}
             </Popover>
-          <Button href="/portal" variant="outline" className="hidden lg:block">
-            Billing Portal
+          <Button href="/portal-login" variant="outline" className="hidden lg:block">
+            Parent Portal
           </Button>
           </div>
         </Container>
