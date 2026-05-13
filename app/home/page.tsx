@@ -1,5 +1,7 @@
 import Link from "next/link"
+import Image from "next/image"
 import { Button } from "@/components/ui/button"
+import { MobileActivityTicker } from "./mobile-activity-ticker"
 import {
   ArrowRight,
   Check,
@@ -7,6 +9,10 @@ import {
   ClipboardList,
   Baby,
   GraduationCap,
+  UserPlus,
+  Mail,
+  DollarSign,
+  CalendarCheck,
 } from "lucide-react"
 
 export default function Home() {
@@ -76,49 +82,139 @@ function Hero() {
   )
 }
 
+interface HeroActivity {
+  icon: React.ReactNode
+  accent: string
+  delta: string
+  label: string
+  position: string
+}
+
+const HERO_ACTIVITIES: HeroActivity[] = [
+  {
+    icon: <UserPlus className="h-3.5 w-3.5" />,
+    accent: "bg-orange-500",
+    delta: "+12",
+    label: "registrations today",
+    position: "-right-12 -top-8 rotate-[3deg]",
+  },
+  {
+    icon: <CalendarCheck className="h-3.5 w-3.5" />,
+    accent: "bg-gray-900",
+    delta: "+2",
+    label: "events this month",
+    position: "-left-16 top-1/4 rotate-[-3deg]",
+  },
+  {
+    icon: <Mail className="h-3.5 w-3.5" />,
+    accent: "bg-blue-500",
+    delta: "+141",
+    label: "emails sent",
+    position: "-right-16 top-1/2 -translate-y-1/2 rotate-[2deg]",
+  },
+  {
+    icon: <DollarSign className="h-3.5 w-3.5" />,
+    accent: "bg-emerald-500",
+    delta: "+38",
+    label: "fees paid this week",
+    position: "-bottom-10 -left-14 rotate-[-4deg]",
+  },
+]
+
 function HeroMockup() {
   return (
     <div className="relative">
       <div className="absolute -inset-6 -z-10 rounded-3xl bg-gradient-to-br from-orange-100/60 via-blue-100/40 to-transparent blur-2xl" />
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xl ring-1 ring-black/5">
         <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
-          <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-200 to-blue-400" />
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-gray-50 p-1.5">
+            <Image
+              src="https://zkoxnmdrhgbjovfvparc.supabase.co/storage/v1/object/public/logos/provo-bulldog.svg"
+              width={48}
+              height={48}
+              alt="Provo Basketball Club"
+              className="h-full w-full object-contain"
+              unoptimized
+            />
+          </div>
           <div className="min-w-0 flex-1">
             <p className="truncate font-display text-lg text-gray-900">
-              Marcus Johnson
+              Provo Basketball
             </p>
-            <p className="text-xs text-gray-500">
-              Class of 2027 · 6&apos;3&quot; · Guard
+            <p className="truncate font-mono text-xs text-gray-500">
+              provobasketball.athletes.app
             </p>
           </div>
           <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
-            Active
+            Live
           </span>
         </div>
         <div className="mt-5 grid grid-cols-3 gap-3 text-center">
-          <StatTile label="PPG" value="18.4" />
-          <StatTile label="RPG" value="6.1" />
-          <StatTile label="APG" value="4.2" />
+          <StatTile label="Teams" value="6" />
+          <StatTile label="Players" value="87" />
+          <StatTile label="Seasons" value="3" />
         </div>
         <div className="mt-5 space-y-2">
-          <RowChip label="Varsity · 2026–27" value="#11" tone="blue" />
           <RowChip
-            label="Camp registration"
-            value="Paid"
+            label="Varsity Boys · 2026–27"
+            value="14 on roster"
+            tone="blue"
+          />
+          <RowChip
+            label="Summer Camp 2026"
+            value="Registration open"
             tone="emerald"
           />
-          <RowChip label="Team dues" value="Due Jun 1" tone="amber" />
+          <RowChip
+            label="Spring League"
+            value="$3.2k outstanding"
+            tone="amber"
+          />
         </div>
       </div>
-      <div className="absolute -bottom-6 -left-6 hidden rotate-[-3deg] rounded-xl border border-gray-200 bg-white p-3 shadow-xl ring-1 ring-black/5 sm:block">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">
-            +12
-          </div>
-          <p className="text-xs font-medium text-gray-700">
-            new registrations today
-          </p>
+
+      {/* Desktop: scattered floating badges around the card */}
+      {HERO_ACTIVITIES.map((a) => (
+        <div
+          key={a.delta + a.label}
+          className={`absolute hidden sm:block ${a.position}`}
+        >
+          <ActivityBadge
+            icon={a.icon}
+            accent={a.accent}
+            delta={a.delta}
+            label={a.label}
+          />
         </div>
+      ))}
+
+      {/* Mobile: single notification below the card that cycles through */}
+      <MobileActivityTicker activities={HERO_ACTIVITIES} />
+    </div>
+  )
+}
+
+function ActivityBadge({
+  icon,
+  accent,
+  delta,
+  label,
+}: {
+  icon: React.ReactNode
+  accent: string
+  delta: string
+  label: string
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-xl ring-1 ring-black/5">
+      <span
+        className={`flex h-7 w-7 items-center justify-center rounded-full text-white ${accent}`}
+      >
+        {icon}
+      </span>
+      <div className="leading-tight">
+        <p className="font-display text-sm text-gray-900">{delta}</p>
+        <p className="text-[10px] text-gray-500">{label}</p>
       </div>
     </div>
   )
