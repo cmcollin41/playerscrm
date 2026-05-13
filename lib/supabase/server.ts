@@ -1,10 +1,26 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+
+/**
+ * supabase-js throws AuthApiError (e.g. "Invalid Refresh Token: Refresh
+ * Token Not Found") when it can't refresh a stale session cookie. That
+ * crashes any server component / route that calls auth.getUser() without
+ * a try/catch — which is most of them. Wrap the auth methods so a refresh
+ * failure becomes a clean "no user" instead of a 500.
+ */
+function isAuthRefreshError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const e = err as { code?: string; status?: number; message?: string; __isAuthError?: boolean }
+  if (e.__isAuthError !== true) return false
+  if (e.code === 'refresh_token_not_found') return true
+  if (typeof e.message === 'string' && /refresh token/i.test(e.message)) return true
+  return false
+}
 
 export async function createClient() {
   const cookieStore = await cookies()
 
-  return createServerClient(
+  const client = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -26,4 +42,34 @@ export async function createClient() {
       },
     }
   )
+
+  const originalGetUser = client.auth.getUser.bind(client.auth)
+  client.auth.getUser = (async (...args: Parameters<typeof originalGetUser>) => {
+    try {
+      return await originalGetUser(...args)
+    } catch (err) {
+      if (isAuthRefreshError(err)) {
+        return { data: { user: null }, error: null } as unknown as Awaited<
+          ReturnType<typeof originalGetUser>
+        >
+      }
+      throw err
+    }
+  }) as typeof client.auth.getUser
+
+  const originalGetSession = client.auth.getSession.bind(client.auth)
+  client.auth.getSession = (async () => {
+    try {
+      return await originalGetSession()
+    } catch (err) {
+      if (isAuthRefreshError(err)) {
+        return { data: { session: null }, error: null } as unknown as Awaited<
+          ReturnType<typeof originalGetSession>
+        >
+      }
+      throw err
+    }
+  }) as typeof client.auth.getSession
+
+  return client
 }

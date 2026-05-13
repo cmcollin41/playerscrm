@@ -1,8 +1,32 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 export const config = {
   matcher: ["/((?!api/|_next/|_static/|_vercel|[\\w-]+\\.\\w+).*)"],
+}
+
+// Refresh-token errors (commonly "Invalid Refresh Token: Refresh Token Not
+// Found" after a cookie goes stale) get thrown asynchronously from inside
+// supabase-js and crash the request. Treat any auth failure as "no session"
+// so the proxy can route the user to the login page instead of a 500. The
+// supabase-js cookie handler will have already cleared the bad refresh
+// token on the response by the time we get here.
+async function safeGetSession(
+  supabase: SupabaseClient,
+): Promise<{ user: { id: string; email?: string } } | null> {
+  try {
+    const { data, error } = await supabase.auth.getSession()
+    if (error) return null
+    return data.session
+      ? { user: { id: data.session.user.id, email: data.session.user.email } }
+      : null
+  } catch (err) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[proxy] getSession threw, treating as anon:", err)
+    }
+    return null
+  }
 }
 
 export async function proxy(request: NextRequest) {
@@ -127,9 +151,7 @@ export async function proxy(request: NextRequest) {
     }
 
     // Login, dashboard, etc. still accessible from root domain
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    const session = await safeGetSession(supabase)
 
     const publicPaths = [
       "/login",
@@ -199,9 +221,7 @@ export async function proxy(request: NextRequest) {
   const isPortalPath = path === "/portal" || path.startsWith("/portal/")
 
   // Check auth for protected tenant routes
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  const session = await safeGetSession(supabase)
 
   if (!session && !isPublicTenantPath && path !== "/") {
     const loginPath = isPortalPath ? "/portal-login" : "/login"
