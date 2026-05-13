@@ -58,8 +58,8 @@ export default function EmailSettingsPage() {
 
   // Sender form
   const [showSenderForm, setShowSenderForm] = useState(false)
-  const [newSenderName, setNewSenderName] = useState("")
-  const [newSenderEmail, setNewSenderEmail] = useState("")
+  const [newSenderLocalPart, setNewSenderLocalPart] = useState("")
+  const [newSenderDomain, setNewSenderDomain] = useState("")
   const [addingSender, setAddingSender] = useState(false)
 
   const [verifyingId, setVerifyingId] = useState<string | null>(null)
@@ -216,7 +216,16 @@ export default function EmailSettingsPage() {
   }
 
   async function handleAddSender() {
-    if (!newSenderName.trim() || !newSenderEmail.trim()) return
+    const localPart = newSenderLocalPart.trim().toLowerCase()
+    const domain = newSenderDomain
+    if (!localPart || !domain) return
+    if (!/^[a-z0-9._+-]+$/.test(localPart)) {
+      toast.error("Invalid characters in the email username")
+      return
+    }
+
+    const email = `${localPart}@${domain}`
+    const displayName = localPart.charAt(0).toUpperCase() + localPart.slice(1)
 
     setAddingSender(true)
     try {
@@ -225,8 +234,8 @@ export default function EmailSettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: "add_sender",
-          name: newSenderName.trim(),
-          email: newSenderEmail.trim().toLowerCase(),
+          name: displayName,
+          email,
         }),
       })
       const data = await res.json()
@@ -237,8 +246,8 @@ export default function EmailSettingsPage() {
       }
 
       toast.success("Sender added")
-      setNewSenderName("")
-      setNewSenderEmail("")
+      setNewSenderLocalPart("")
+      setNewSenderDomain("")
       setShowSenderForm(false)
       await refreshData()
     } catch {
@@ -486,52 +495,52 @@ export default function EmailSettingsPage() {
               <button
                 onClick={() => {
                   setShowSenderForm(false)
-                  setNewSenderName("")
-                  setNewSenderEmail("")
+                  setNewSenderLocalPart("")
+                  setNewSenderDomain("")
                 }}
               >
                 <X className="h-4 w-4 text-gray-400 hover:text-gray-600" />
               </button>
             </div>
-            <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <input
                 type="text"
-                placeholder="Display name (e.g. Provo Basketball)"
-                value={newSenderName}
-                onChange={(e) => setNewSenderName(e.target.value)}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
+                placeholder="invoices"
+                value={newSenderLocalPart}
+                onChange={(e) => setNewSenderLocalPart(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddSender()}
+                disabled={verifiedDomains.length === 0}
+                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 disabled:bg-gray-50"
               />
-              <div className="flex flex-1 gap-2">
-                <input
-                  type="email"
-                  placeholder="info@yourdomain.com"
-                  value={newSenderEmail}
-                  onChange={(e) => setNewSenderEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddSender()}
-                  className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500"
-                />
-                <button
-                  onClick={handleAddSender}
-                  disabled={
-                    addingSender ||
-                    !newSenderName.trim() ||
-                    !newSenderEmail.trim()
-                  }
-                  className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:opacity-50"
-                >
-                  {addingSender ? <LoadingDots color="#fff" /> : "Add"}
-                </button>
-              </div>
+              <span className="text-sm text-gray-400 sm:px-1">@</span>
+              <select
+                value={newSenderDomain}
+                onChange={(e) => setNewSenderDomain(e.target.value)}
+                disabled={verifiedDomains.length === 0}
+                className="flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">Select a verified domain</option>
+                {verifiedDomains.map((d) => (
+                  <option key={d.id} value={d.domain}>
+                    {d.domain}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleAddSender}
+                disabled={
+                  addingSender ||
+                  !newSenderLocalPart.trim() ||
+                  !newSenderDomain
+                }
+                className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-gray-800 disabled:opacity-50"
+              >
+                {addingSender ? <LoadingDots color="#fff" /> : "Add"}
+              </button>
             </div>
-            {verifiedDomains.length > 0 && (
-              <p className="text-muted-foreground mt-2 text-xs">
-                The email must use a verified domain (
-                {verifiedDomains.map((d) => d.domain).join(", ")}).
-              </p>
-            )}
             {verifiedDomains.length === 0 && (
               <p className="mt-2 text-xs text-amber-600">
-                Note: verify a sending domain first for new senders to work.
+                Verify a sending domain first to add sender addresses.
               </p>
             )}
           </div>
