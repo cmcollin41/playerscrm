@@ -91,58 +91,63 @@ export default function SettingsHubPage() {
         </p>
       </div>
 
-      <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          You
-        </h2>
-        <Link
-          href="/settings/profile"
-          className="group flex max-w-xl items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
-        >
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 group-hover:bg-slate-200">
-            <UserCircle className="h-5 w-5 text-slate-700" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-900">Your profile</p>
-            <p className="text-muted-foreground text-xs">
-              Email, name, and password for your login
-            </p>
-          </div>
-          <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 group-hover:text-gray-600" />
-        </Link>
-      </section>
-
-      {workspaceAdmin ? (
+      <div className="grid gap-6 sm:grid-cols-2 sm:gap-8">
         <section>
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Workspace
+            You
           </h2>
           <Link
-            href="/settings/account"
-            className="group flex max-w-xl items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
+            href="/settings/profile"
+            className="group flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
           >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 group-hover:bg-gray-200">
-              <Building2 className="h-5 w-5 text-gray-700" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 group-hover:bg-slate-200">
+              <UserCircle className="h-5 w-5 text-slate-700" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-gray-900">Workspace settings</p>
+              <p className="text-sm font-medium text-gray-900">Your profile</p>
               <p className="text-muted-foreground text-xs">
-                {activeAccountName
-                  ? `Organization, fees, users, awards, Stripe, and tools for ${activeAccountName}`
-                  : "Organization, fees, users, awards, payments, and admin tools"}
+                Email, name, and password for your login
               </p>
             </div>
             <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 group-hover:text-gray-600" />
           </Link>
         </section>
-      ) : (
-        <section>
-          <p className="text-muted-foreground max-w-xl text-sm">
-            You don’t have admin access on the current workspace. Ask an owner or admin to
-            change workspace settings, or switch accounts if you manage another team.
-          </p>
-        </section>
-      )}
+
+        {workspaceAdmin ? (
+          <section>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Workspace
+            </h2>
+            <Link
+              href="/settings/account"
+              className="group flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 transition-colors hover:border-gray-300 hover:bg-gray-50"
+            >
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 group-hover:bg-gray-200">
+                <Building2 className="h-5 w-5 text-gray-700" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gray-900">Workspace settings</p>
+                <p className="text-muted-foreground text-xs">
+                  {activeAccountName
+                    ? `Organization, fees, users, awards, Stripe, and tools for ${activeAccountName}`
+                    : "Organization, fees, users, awards, payments, and admin tools"}
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 group-hover:text-gray-600" />
+            </Link>
+          </section>
+        ) : (
+          <section>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Workspace
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              You don’t have admin access on the current workspace. Ask an owner or admin to
+              change workspace settings, or switch accounts if you manage another team.
+            </p>
+          </section>
+        )}
+      </div>
     </div>
   )
 }
