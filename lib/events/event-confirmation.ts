@@ -1,5 +1,6 @@
 import { sendTransactionalEmail } from "@/lib/email-service"
 import { resolveSender } from "@/lib/sender"
+import { buildEventIcs, icsFilename } from "@/lib/events/ics"
 
 interface Recipient {
   email: string
@@ -28,6 +29,17 @@ export async function sendEventConfirmations(opts: {
     .in("id", registrationIds)
 
   if (!registrations?.length) return
+
+  const { data: sessions } = await supabase
+    .from("event_sessions")
+    .select("id, title, description, location, starts_at, ends_at")
+    .eq("event_id", eventId)
+    .order("ordering", { ascending: true })
+    .order("starts_at", { ascending: true })
+
+  const icsString = event.starts_at || (sessions && sessions.length > 0)
+    ? buildEventIcs({ event, sessions: sessions || [] })
+    : null
 
   const sender = resolveSender(event.account, "default")
 
@@ -169,6 +181,17 @@ If you have any questions, just reply to this email.
         event_id: event.id,
         registration_ids: registrationIds,
       },
+      ...(icsString
+        ? {
+            attachments: [
+              {
+                filename: icsFilename(event.name),
+                content: Buffer.from(icsString).toString("base64"),
+                contentType: "text/calendar; charset=utf-8",
+              },
+            ],
+          }
+        : {}),
     })
 
     if (!result.success) {

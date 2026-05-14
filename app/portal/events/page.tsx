@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { requirePortalContext } from "@/lib/portal-auth"
+import { AddToCalendarButton } from "@/components/events/add-to-calendar-button"
 
 export const dynamic = "force-dynamic"
 
@@ -120,10 +121,23 @@ function Section({
                     .join(" · ")}
                 </p>
               </div>
-              <StatusBadge
-                status={row.status}
-                paymentStatus={row.payment_status}
-              />
+              <div className="flex items-center gap-2">
+                {row.events?.id && row.events.starts_at && (
+                  <AddToCalendarButton
+                    event={{
+                      name: row.events.name,
+                      location: row.events.location,
+                      starts_at: row.events.starts_at,
+                      ends_at: row.events.ends_at,
+                    }}
+                    icsUrl={`/api/events/${row.events.id}/calendar.ics`}
+                  />
+                )}
+                <StatusBadge
+                  status={row.status}
+                  paymentStatus={row.payment_status}
+                />
+              </div>
             </div>
           </li>
         ))}

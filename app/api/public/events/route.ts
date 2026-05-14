@@ -44,6 +44,10 @@ interface PublicEvent {
   fee_description: string | null
   registration_open: boolean | null
   register_url: string | null
+  calendar_url: string
+  series_id: string | null
+  series_index: number | null
+  series_total: number | null
   sessions: PublicSession[]
 }
 
@@ -65,6 +69,11 @@ function buildRegisterUrl(
     account.custom_domain ||
     `${account.subdomain}.${process.env.NEXT_PUBLIC_ROOT_DOMAIN}`
   return `https://${host}/register/${slug}`
+}
+
+function buildCalendarUrl(accountId: string, slug: string, requestUrl: string) {
+  const origin = new URL(requestUrl).origin
+  return `${origin}/api/public/events/${slug}/calendar.ics?account_id=${encodeURIComponent(accountId)}`
 }
 
 function parseEventTypes(raw: string | null): EventType[] | null {
@@ -104,6 +113,8 @@ export async function GET(request: NextRequest) {
     const eventTypes = parseEventTypes(searchParams.get("event_type"))
     const startsAfter = searchParams.get("starts_after")
     const startsBefore = searchParams.get("starts_before")
+    const seriesIdParam = searchParams.get("series_id")
+    const collapseSeries = searchParams.get("collapse_series") === "true"
     const limit = parseLimit(searchParams.get("limit"))
 
     if (!accountId) {
@@ -149,13 +160,17 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("events")
       .select(
-        "id, slug, name, event_type, description, location, starts_at, ends_at, arrival_time, is_registerable, is_paid, registration_opens_at, registration_closes_at, capacity, fee_amount, fee_description, image_url, team_id, opponent_name, is_home, teams(id, slug, name, is_public), event_sessions(id, title, description, location, starts_at, ends_at, ordering)",
+        "id, slug, name, event_type, description, location, starts_at, ends_at, arrival_time, is_registerable, is_paid, registration_opens_at, registration_closes_at, capacity, fee_amount, fee_description, image_url, team_id, opponent_name, is_home, series_id, series_index, teams(id, slug, name, is_public), event_sessions(id, title, description, location, starts_at, ends_at, ordering)",
       )
       .eq("account_id", accountId)
       .eq("is_published", true)
 
     if (slug) {
       query = query.eq("slug", slug)
+    }
+
+    if (seriesIdParam) {
+      query = query.eq("series_id", seriesIdParam)
     }
 
     if (resolvedTeamId) {
@@ -191,7 +206,44 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date()
-    const publicEvents: PublicEvent[] = (events ?? [])
+
+    // Count occurrences per series so we can return series_total without an extra query per event.
+    const seriesTotals = new Map<string, number>()
+    const seriesIds = Array.from(
+      new Set(
+        (events ?? [])
+          .map((e: any) => e.series_id)
+          .filter((v: string | null): v is string => !!v),
+      ),
+    )
+    if (seriesIds.length > 0) {
+      const { data: seriesCounts } = await supabase
+        .from("events")
+        .select("series_id")
+        .eq("account_id", accountId)
+        .eq("is_published", true)
+        .in("series_id", seriesIds)
+      for (const row of seriesCounts || []) {
+        seriesTotals.set(
+          row.series_id,
+          (seriesTotals.get(row.series_id) || 0) + 1,
+        )
+      }
+    }
+
+    let filteredEvents = (events ?? []) as any[]
+    if (collapseSeries && !slug && !seriesIdParam) {
+      // Keep only the earliest (already ordered by starts_at asc) occurrence per series.
+      const seenSeries = new Set<string>()
+      filteredEvents = filteredEvents.filter((e: any) => {
+        if (!e.series_id) return true
+        if (seenSeries.has(e.series_id)) return false
+        seenSeries.add(e.series_id)
+        return true
+      })
+    }
+
+    const publicEvents: PublicEvent[] = filteredEvents
       .filter((e: any) => {
         // Hide events tied to non-public teams even for authenticated callers
         if (!e.team_id) return true
@@ -256,6 +308,10 @@ export async function GET(request: NextRequest) {
           fee_description: isRegisterable && isPaid ? e.fee_description : null,
           registration_open: registrationOpen,
           register_url: isRegisterable ? buildRegisterUrl(account, e.slug) : null,
+          calendar_url: buildCalendarUrl(account.id, e.slug, request.url),
+          series_id: e.series_id ?? null,
+          series_index: e.series_index ?? null,
+          series_total: e.series_id ? seriesTotals.get(e.series_id) ?? null : null,
           sessions,
         }
       })

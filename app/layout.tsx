@@ -11,7 +11,7 @@ import { inter, cal } from "@/styles/fonts";
 const defaultTitle =
   "Athletes App — the operating system for your sports program";
 const description =
-  "The all-in-one platform for sports programs: rosters, events, payments, public profiles, and parent communications. Built for clubs, high schools, and youth programs.";
+  "The all-in-one platform for sports programs: rosters, events, payments, public profiles, and parent communications. Built for clubs and schools.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://athletes.app"),
