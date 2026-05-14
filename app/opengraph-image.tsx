@@ -26,7 +26,7 @@ export default async function OpengraphImage() {
           height: "100%",
           display: "flex",
           flexDirection: "row",
-          padding: "70px 80px",
+          padding: "60px 64px",
           background:
             "linear-gradient(135deg, #FFF7ED 0%, #FFFFFF 55%, #EFF6FF 100%)",
           fontFamily: "Cal, system-ui, sans-serif",
@@ -36,13 +36,20 @@ export default async function OpengraphImage() {
         {/* Left: copy */}
         <div
           style={{
-            flex: "1 1 60%",
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
+            width: 620,
+            paddingRight: 24,
           }}
         >
-          <div style={{ display: "flex", flexDirection: "column" }}>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              maxWidth: 580,
+            }}
+          >
             <span
               style={{
                 fontSize: 22,
@@ -59,21 +66,21 @@ export default async function OpengraphImage() {
               style={{
                 margin: 0,
                 marginTop: 24,
-                fontSize: 84,
+                fontSize: 80,
                 lineHeight: 1.02,
                 letterSpacing: -2,
                 color: "#0F172A",
               }}
             >
-              Run your program from{" "}
-              <span style={{ color: "#EA580C" }}>one place.</span>
+              Run your{" "}
+              <span style={{ color: "#EA580C" }}>program.</span>
             </h1>
             <p
               style={{
                 margin: 0,
-                marginTop: 28,
-                maxWidth: 560,
-                fontSize: 26,
+                marginTop: 24,
+                maxWidth: 540,
+                fontSize: 24,
                 lineHeight: 1.35,
                 fontFamily: "system-ui, sans-serif",
                 color: "#475569",
@@ -122,11 +129,11 @@ export default async function OpengraphImage() {
         {/* Right: team card */}
         <div
           style={{
-            flex: "0 0 360px",
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            marginLeft: 32,
+            width: 340,
+            marginLeft: "auto",
           }}
         >
           <div
