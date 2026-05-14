@@ -169,7 +169,8 @@ export interface Events {
   updated_at?: string;
   name: string;
   slug: string;
-  event_type: 'camp' | 'practice' | 'game' | 'other';
+  /** Soft pointer to an entry in the code-defined event-apps registry (lib/event-apps). Built-ins: camp, practice, game, other, tournament. Free text so partners/integrations can add their own apps without a schema change. */
+  event_type: string;
   description?: string | null;
   location?: string | null;
   starts_at?: string | null;
@@ -189,6 +190,7 @@ export interface Events {
   is_home?: boolean | null;
   series_id?: string | null /* groups occurrences of a recurring event; null for one-off events */;
   series_index?: number | null /* 1-based position within the series */;
+  parent_event_id?: string | null /* foreign key to events.id; lets events nest under a parent (tournament -> games) */;
   metadata?: any;
   accounts?: Accounts;
   teams?: Teams;

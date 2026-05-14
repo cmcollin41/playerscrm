@@ -19,6 +19,8 @@ import {
 } from "@/components/ui/tooltip"
 import { EventDetailClient, DeleteEventButton, ShareLinkBanner } from "./event-detail-client"
 import { AddToCalendarButton } from "@/components/events/add-to-calendar-button"
+import { getEventApp } from "@/lib/event-apps"
+import { Plus } from "lucide-react"
 
 export default async function EventDetailPage({
   params,
@@ -82,6 +84,17 @@ export default async function EventDetailPage({
         .order("series_index", { ascending: true })
     : { data: null }
 
+  const app = getEventApp(event.event_type)
+
+  const { data: children } = app.capabilities.supportsChildren
+    ? await supabase
+        .from("events")
+        .select("id, name, slug, starts_at, location, event_type, is_published")
+        .eq("account_id", event.account_id)
+        .eq("parent_event_id", event.id)
+        .order("starts_at", { ascending: true, nullsFirst: false })
+    : { data: null }
+
   // Resolve guardian emails for dependents without an email of their own.
   const dependentsNeedingGuardian = (rawRegistrations || [])
     .map((r) => r.people)
@@ -128,6 +141,9 @@ export default async function EventDetailPage({
             <Badge variant={event.is_published ? "default" : "secondary"}>
               {event.is_published ? "Published" : "Draft"}
             </Badge>
+            {app.slug !== "unknown" && (
+              <Badge variant="outline">{app.name}</Badge>
+            )}
             {siblings && siblings.length > 1 && (
               <Badge variant="outline">
                 Series · {event.series_index} of {siblings.length}
@@ -274,6 +290,59 @@ export default async function EventDetailPage({
               </AccordionContent>
             </AccordionItem>
           </Accordion>
+        </Card>
+      )}
+
+      {app.capabilities.supportsChildren && (
+        <Card>
+          <CardHeader className="flex flex-row items-start justify-between gap-2">
+            <div>
+              <CardTitle className="text-lg">
+                Sub-events {children && children.length > 0 && `(${children.length})`}
+              </CardTitle>
+              <CardDescription>
+                Events nested under this {app.name.toLowerCase()}.
+              </CardDescription>
+            </div>
+            <Link
+              href={`/events/new?parent=${event.id}${app.capabilities.childAppSlug ? `&app=${app.capabilities.childAppSlug}` : ""}${event.team_id ? `&team=${event.team_id}` : ""}`}
+            >
+              <Button size="sm">
+                <Plus className="mr-1.5 h-4 w-4" />
+                Add sub-event
+              </Button>
+            </Link>
+          </CardHeader>
+          {children && children.length > 0 && (
+            <CardContent>
+              <ul className="divide-y divide-gray-100">
+                {children.map((c) => {
+                  const childApp = getEventApp(c.event_type)
+                  return (
+                    <li key={c.id} className="py-2">
+                      <Link
+                        href={`/events/${c.id}`}
+                        className="flex items-baseline justify-between gap-2 text-sm text-gray-700 hover:text-gray-900"
+                      >
+                        <span>
+                          {c.name}
+                          <span className="ml-2 text-xs text-gray-500">
+                            {childApp.name}
+                            {!c.is_published && " · draft"}
+                          </span>
+                        </span>
+                        {c.starts_at && (
+                          <span className="text-xs text-gray-500">
+                            {new Date(c.starts_at).toLocaleString()}
+                          </span>
+                        )}
+                      </Link>
+                    </li>
+                  )
+                })}
+              </ul>
+            </CardContent>
+          )}
         </Card>
       )}
 

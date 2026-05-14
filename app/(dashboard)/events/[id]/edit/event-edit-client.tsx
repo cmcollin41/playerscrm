@@ -13,6 +13,7 @@ import { ImageDropzone } from "@/components/ui/image-dropzone"
 import { Trash2, Plus } from "lucide-react"
 import { toast } from "sonner"
 import LoadingDots from "@/components/icons/loading-dots"
+import { getEventApp } from "@/lib/event-apps"
 
 function toLocalInput(value: string | null): string {
   if (!value) return ""
@@ -60,6 +61,14 @@ export function EventEditClient({
   const router = useRouter()
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
+
+  const app = getEventApp(event.event_type)
+  const [appData, setAppData] = useState<Record<string, any>>(
+    () => app.columnsToAppData?.(event) ?? {},
+  )
+  const setAppField = (key: string, value: any) =>
+    setAppData((prev) => ({ ...prev, [key]: value }))
+  const AppFormFields = app.FormFields
 
   const [name, setName] = useState(event.name || "")
   const [description, setDescription] = useState(event.description || "")
@@ -133,29 +142,37 @@ export function EventEditClient({
       const feeInCents =
         isRegisterable && isPaid && feeAmount ? Math.round(parseFloat(feeAmount) * 100) : 0
 
+      const updatePayload: any = {
+        name: name.trim(),
+        description: description.trim() || null,
+        location: location.trim() || null,
+        starts_at: localInputToIso(startsAt),
+        ends_at: localInputToIso(endsAt),
+        is_registerable: isRegisterable,
+        is_paid: isRegisterable && isPaid,
+        registration_opens_at: isRegisterable
+          ? localInputToIso(registrationOpensAt)
+          : null,
+        registration_closes_at: isRegisterable
+          ? localInputToIso(registrationClosesAt)
+          : null,
+        capacity: isRegisterable && capacity ? parseInt(capacity) : null,
+        fee_amount: feeInCents,
+        fee_description:
+          isRegisterable && isPaid ? feeDescription.trim() || null : null,
+        is_published: isPublished,
+      }
+
+      if (!app.capabilities.hideCoverImage) {
+        updatePayload.image_url = imageUrl
+      }
+      if (app.appDataToColumns) {
+        Object.assign(updatePayload, app.appDataToColumns(appData))
+      }
+
       const { error } = await supabase
         .from("events")
-        .update({
-          name: name.trim(),
-          description: description.trim() || null,
-          location: location.trim() || null,
-          starts_at: localInputToIso(startsAt),
-          ends_at: localInputToIso(endsAt),
-          is_registerable: isRegisterable,
-          is_paid: isRegisterable && isPaid,
-          registration_opens_at: isRegisterable
-            ? localInputToIso(registrationOpensAt)
-            : null,
-          registration_closes_at: isRegisterable
-            ? localInputToIso(registrationClosesAt)
-            : null,
-          capacity: isRegisterable && capacity ? parseInt(capacity) : null,
-          fee_amount: feeInCents,
-          fee_description:
-            isRegisterable && isPaid ? feeDescription.trim() || null : null,
-          is_published: isPublished,
-          image_url: imageUrl,
-        })
+        .update(updatePayload)
         .eq("id", event.id)
 
       if (error) throw error
@@ -230,6 +247,9 @@ export function EventEditClient({
                 onChange={(e) => setName(e.target.value)}
               />
             </div>
+            {AppFormFields && (
+              <AppFormFields appData={appData} setAppField={setAppField} />
+            )}
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>
               <Textarea
@@ -247,30 +267,32 @@ export function EventEditClient({
                 onChange={(e) => setLocation(e.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Cover Image</Label>
-              <ImageDropzone
-                value={imageUrl}
-                onChange={setImageUrl}
-                onFileSelect={async (file) => {
-                  const ext = file.name.split(".").pop()
-                  const fileName = `${event.account_id}/${crypto.randomUUID()}.${ext}`
-                  const { data, error } = await supabase.storage
-                    .from("event-images")
-                    .upload(fileName, file, { upsert: false })
-                  if (error) throw error
-                  const { data: urlData } = supabase.storage
-                    .from("event-images")
-                    .getPublicUrl(data.path)
-                  toast.success("Image uploaded")
-                  return urlData.publicUrl
-                }}
-                onError={(msg) => toast.error(msg)}
-                placeholder="Drop a cover image (JPG, PNG, WebP — max 1GB)"
-                className="min-h-32"
-                maxSize={1024 * 1024 * 1024}
-              />
-            </div>
+            {!app.capabilities.hideCoverImage && (
+              <div className="space-y-2">
+                <Label>Cover Image</Label>
+                <ImageDropzone
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  onFileSelect={async (file) => {
+                    const ext = file.name.split(".").pop()
+                    const fileName = `${event.account_id}/${crypto.randomUUID()}.${ext}`
+                    const { data, error } = await supabase.storage
+                      .from("event-images")
+                      .upload(fileName, file, { upsert: false })
+                    if (error) throw error
+                    const { data: urlData } = supabase.storage
+                      .from("event-images")
+                      .getPublicUrl(data.path)
+                    toast.success("Image uploaded")
+                    return urlData.publicUrl
+                  }}
+                  onError={(msg) => toast.error(msg)}
+                  placeholder="Drop a cover image (JPG, PNG, WebP — max 1GB)"
+                  className="min-h-32"
+                  maxSize={1024 * 1024 * 1024}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
