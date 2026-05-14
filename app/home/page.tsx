@@ -741,7 +741,7 @@ function PricingTeaser() {
                   </p>
                 </div>
                 <p className="font-display text-2xl text-gray-900">
-                  $1 + 3%
+                  $1 + 7%
                   <span className="ml-1 text-sm font-normal text-gray-500">
                     per transaction
                   </span>
@@ -806,7 +806,7 @@ function FaqSection() {
           />
           <FaqItem
             q="Who handles payments?"
-            a="Stripe. You connect a Stripe account and money goes directly to it — we don't hold funds. Refunds, payouts, and tax forms come from Stripe. The Athletes App fee ($1 + 3%) is on top of Stripe's normal processing fees (typically 2.9% + $0.30 in the US), which stay with Stripe."
+            a="Stripe. You connect a Stripe account and money goes directly to it — we don't hold funds. Refunds, payouts, and tax forms come from Stripe. The Athletes App fee ($1 + 7%) is on top of Stripe's normal processing fees (typically 2.9% + $0.30 in the US), which stay with Stripe."
           />
           <FaqItem
             q="Can parents log in?"

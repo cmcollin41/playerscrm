@@ -132,7 +132,7 @@ export default async function BillingPage({
             {account.subscription_status}
           </span>
           . Stripe processing fees (2.9% + $0.30) and the per-transaction
-          Athletes App fee ($1 + 3%) apply separately to parent payments —
+          Athletes App fee ($1 + 7%) apply separately to parent payments —
           this is just the platform subscription.
         </p>
 
