@@ -3,7 +3,13 @@ import { createServerClient } from "@supabase/ssr"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
 export const config = {
-  matcher: ["/((?!api/|_next/|_static/|_vercel|[\\w-]+\\.\\w+).*)"],
+  // Skip the proxy on auto-generated metadata routes (OG/Twitter images,
+  // favicon, sitemap, robots) and any path with a file extension. Without
+  // this, unauthenticated social-card bots get redirected to /login when
+  // trying to fetch /opengraph-image, and the og:image meta tag breaks.
+  matcher: [
+    "/((?!api/|_next/|_static/|_vercel|opengraph-image|twitter-image|icon|apple-icon|favicon|sitemap|robots|[\\w-]+\\.\\w+).*)",
+  ],
 }
 
 // Refresh-token errors (commonly "Invalid Refresh Token: Refresh Token Not

@@ -54,7 +54,7 @@ export async function POST(req: Request) {
 
     const { data: account } = await supabase
       .from("accounts")
-      .select("id, name, default_invoice_sender_id, default_sender_id, senders(id, name, email)")
+      .select("id, name, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email)")
       .eq("id", activeAccountId)
       .single()
 
