@@ -71,13 +71,11 @@ export async function signup(formData: FormData): Promise<{ error?: string } | v
   }
   if (people_id) payload.people_id = people_id
 
-  const { error: signUpError } = await supabase.auth.signUp({
+  const { error: signUpError } = await admin.auth.admin.createUser({
     email,
     password,
-    options: {
-      emailRedirectTo: authCallbackRedirectUrl("/"),
-      data: payload,
-    },
+    email_confirm: true,
+    user_metadata: payload,
   })
 
   if (signUpError) {
