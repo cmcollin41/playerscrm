@@ -82,7 +82,8 @@ export async function signup(formData: FormData): Promise<{ error?: string } | v
 
   if (signUpError) {
     console.log("SIGN UP ERROR", signUpError)
-    return redirect(`/login?error=Could not create user account`)
+    const msg = signUpError.message || "Could not create user account"
+    return redirect(`/login?error=${encodeURIComponent(msg)}`)
   }
 
   const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
