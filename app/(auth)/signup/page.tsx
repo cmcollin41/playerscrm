@@ -26,7 +26,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-12">
-      <div className="flex items-center gap-2">
+      <Link href="/" className="flex items-center gap-2">
         <Image
           src="/athletes-logo.png"
           width={48}
@@ -34,7 +34,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           alt="Athletes App"
         />
         <span className="font-display text-xl text-gray-900">Athletes App</span>
-      </div>
+      </Link>
 
       <div className="mt-8 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-xl ring-1 ring-black/5">
         <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
