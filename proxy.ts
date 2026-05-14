@@ -2,6 +2,14 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
+function authCookieDomain(): string | undefined {
+  const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN
+  if (!root) return undefined
+  const host = root.split(":")[0]
+  if (host === "localhost" || host === "127.0.0.1") return undefined
+  return `.${host}`
+}
+
 export const config = {
   // Skip the proxy on auto-generated metadata routes (OG/Twitter images,
   // favicon, sitemap, robots) and any path with a file extension. Without
@@ -53,8 +61,12 @@ export async function proxy(request: NextRequest) {
             request.cookies.set(name, value),
           )
           response = NextResponse.next({ request })
+          const domain = authCookieDomain()
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
+            response.cookies.set(name, value, {
+              ...options,
+              domain: options?.domain ?? domain,
+            }),
           )
         },
       },

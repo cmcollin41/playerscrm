@@ -1,6 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
+function authCookieDomain(): string | undefined {
+  const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN
+  if (!root) return undefined
+  const host = root.split(":")[0]
+  if (host === "localhost" || host === "127.0.0.1") return undefined
+  return `.${host}`
+}
+
 /**
  * supabase-js throws AuthApiError (e.g. "Invalid Refresh Token: Refresh
  * Token Not Found") when it can't refresh a stale session cookie. That
@@ -30,8 +38,12 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
+            const domain = authCookieDomain()
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options)
+              cookieStore.set(name, value, {
+                ...options,
+                domain: options?.domain ?? domain,
+              })
             )
           } catch {
             // The `setAll` method was called from a Server Component.
