@@ -16,7 +16,7 @@ export async function sendEventConfirmations(opts: {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, name, description, location, starts_at, ends_at, fee_amount, account_id, account:accounts(id, name, default_invoice_sender_id, default_sender_id, senders(id, name, email))")
+    .select("id, name, description, location, starts_at, ends_at, fee_amount, account_id, account:accounts(id, name, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email))")
     .eq("id", eventId)
     .single()
 
