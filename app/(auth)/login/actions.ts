@@ -107,13 +107,24 @@ export async function signup(formData: FormData): Promise<{ error?: string } | v
     email,
   )
 
-  let redirectUrl =
+  const { data: acctRow } = await admin
+    .from("accounts")
+    .select("subdomain")
+    .eq("id", account_id)
+    .maybeSingle()
+
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "athletes.app"
+  const proto = rootDomain.startsWith("localhost") ? "http" : "https"
+  const host = acctRow?.subdomain
+    ? `${acctRow.subdomain}.${rootDomain}`
+    : rootDomain
+  const path =
     from_events === "true"
-      ? `/dashboard?from_events=true&account_id=${account_id}`
-      : `/dashboard`
+      ? `/?from_events=true&account_id=${account_id}`
+      : `/`
 
   revalidatePath('/', 'layout')
-  return redirect(redirectUrl)
+  return redirect(`${proto}://${host}${path}`)
 }
 
 export async function logout() {
