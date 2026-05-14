@@ -88,13 +88,34 @@ export default async function OpengraphImage() {
             style={{
               display: "flex",
               alignItems: "center",
-              fontFamily: "system-ui, sans-serif",
-              fontSize: 22,
-              color: "#0F172A",
-              fontWeight: 600,
+              gap: 16,
             }}
           >
-            athletes.app
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                padding: "12px 22px",
+                borderRadius: 999,
+                background: "#0F172A",
+                color: "white",
+                fontFamily: "system-ui, sans-serif",
+                fontSize: 20,
+                fontWeight: 700,
+              }}
+            >
+              Start your program →
+            </div>
+            <span
+              style={{
+                fontFamily: "system-ui, sans-serif",
+                fontSize: 20,
+                color: "#64748B",
+                fontWeight: 500,
+              }}
+            >
+              athletes.app
+            </span>
           </div>
         </div>
 
