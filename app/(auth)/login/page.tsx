@@ -1,342 +1,327 @@
 'use client'
 
-import { useState, useEffect, Suspense } from "react";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import Messages from "./messages";
-import { useSearchParams, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import LoadingDots from "@/components/icons/loading-dots";
-import { toast } from "sonner";
-import { Eye, EyeOff } from "lucide-react";
-import { decryptId } from "@/app/utils/ecryption";
-import { signup, login } from './actions';
-import Image from 'next/image';
+import { useState, useEffect, Suspense } from "react"
+import Link from "next/link"
+import Image from "next/image"
+import { useSearchParams, useRouter } from "next/navigation"
+import { toast } from "sonner"
+import { Eye, EyeOff } from "lucide-react"
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import LoadingDots from "@/components/icons/loading-dots"
+import Messages from "./messages"
+
+import { createClient } from "@/lib/supabase/client"
+import { decryptId } from "@/app/utils/ecryption"
+import { signup, login } from "./actions"
 
 export default function Login() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={null}>
       <LoginContent />
     </Suspense>
-  );
+  )
 }
 
 function LoginContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const supabase = createClient();
-  const [emailIsSending, setEmailIsSending] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const supabase = createClient()
+  const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
-  const from_events = searchParams.get("from_events");
-  const account_id = searchParams.get("account_id");
-  const people_id = searchParams.get("people_id");
-  const invite_role = searchParams.get("invite_role") || "member";
-  const email = from_events === "true"
-    ? (searchParams.get("email") as string) || ""
-    : decryptId(searchParams.get("email") as string);
-  const sign_up = searchParams.get("sign_up");
+  const from_events = searchParams.get("from_events")
+  const account_id = searchParams.get("account_id")
+  const people_id = searchParams.get("people_id")
+  const invite_role = searchParams.get("invite_role") || "member"
+  const email =
+    from_events === "true"
+      ? (searchParams.get("email") as string) || ""
+      : decryptId(searchParams.get("email") as string)
+  const sign_up = searchParams.get("sign_up")
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [account, setAccount] = useState<any>(null);
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
+  const [account, setAccount] = useState<{ name?: string } | null>(null)
 
-  const isDisabled = email !== "";
-  const signUp = sign_up === "true";
-
-  useEffect(() => {
-    const fetchPersonData = async () => {
-      if (people_id) {
-        const { data, error } = await supabase
-          .from("people")
-          .select("first_name, last_name")
-          .eq("id", people_id)
-          .single();
-
-        if (error) {
-          console.error("Error: ", error);
-        } else {
-          setFirstName(data.first_name);
-          setLastName(data.last_name);
-        }
-      }
-    };
-    fetchPersonData();
-  }, [people_id, supabase]);
+  const emailLocked = email !== ""
+  const signUp = sign_up === "true"
 
   useEffect(() => {
-    const fetchAccountData = async () => {
-      if (account_id) {
-        const { data, error } = await supabase
-          .from("accounts")
-          .select("*")
-          .eq("id", account_id)
-          .single();
-
-        if (error) {
-          console.error("Error: ", error);
-        } else {
-          setAccount(data);
-        }
+    if (!people_id) return
+    const fetchPerson = async () => {
+      const { data, error } = await supabase
+        .from("people")
+        .select("first_name, last_name")
+        .eq("id", people_id)
+        .single()
+      if (!error && data) {
+        setFirstName(data.first_name || "")
+        setLastName(data.last_name || "")
       }
-    };
-    fetchAccountData();
-  }, [account_id, people_id, supabase]);
+    }
+    fetchPerson()
+  }, [people_id, supabase])
+
+  useEffect(() => {
+    if (!account_id) return
+    const fetchAccount = async () => {
+      const { data, error } = await supabase
+        .from("accounts")
+        .select("name")
+        .eq("id", account_id)
+        .single()
+      if (!error && data) setAccount(data)
+    }
+    fetchAccount()
+  }, [account_id, supabase])
+
+  const isRedirect = (err: unknown) =>
+    !!err &&
+    typeof err === "object" &&
+    "digest" in err &&
+    typeof (err as { digest?: unknown }).digest === "string" &&
+    (err as { digest: string }).digest.startsWith("NEXT_REDIRECT")
 
   const handleSignIn = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setEmailIsSending(true);
-
-    const formData = new FormData(event.currentTarget);
-
+    event.preventDefault()
+    setSubmitting(true)
+    const formData = new FormData(event.currentTarget)
     try {
-      const result = await login(formData);
-      
+      const result = await login(formData)
       if (result && result.error) {
-        setEmailIsSending(false);
-        toast.error(result.error);
+        setSubmitting(false)
+        toast.error(result.error)
       }
-      // Success case: redirect will happen automatically
     } catch (error) {
-      // Check if it's a Next.js redirect (expected on successful login)
-      if (error && typeof error === 'object' && 'digest' in error && 
-          typeof (error as any).digest === 'string' && 
-          (error as any).digest.startsWith('NEXT_REDIRECT')) {
-        // This is a successful redirect, re-throw to allow navigation
-        throw error;
-      }
-      // Only show error toast for actual errors
-      setEmailIsSending(false);
-      toast.error("Login failed");
+      if (isRedirect(error)) throw error
+      setSubmitting(false)
+      toast.error("Login failed")
     }
-  };
+  }
 
   const handleSignUp = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setEmailIsSending(true);
-
-    const formData = new FormData(event.currentTarget);
-    formData.append("from_events", from_events || "");
-    formData.append("account_id", account_id || "");
-    formData.append("invite_role", invite_role || "member");
-
+    event.preventDefault()
+    setSubmitting(true)
+    const formData = new FormData(event.currentTarget)
+    formData.append("from_events", from_events || "")
+    formData.append("account_id", account_id || "")
+    formData.append("invite_role", invite_role || "member")
     try {
-      const result = await signup(formData);
-      
+      const result = await signup(formData)
       if (result?.error) {
-        setEmailIsSending(false);
-        toast.error(result.error);
+        setSubmitting(false)
+        toast.error(result.error)
       }
-      // Success case: redirect will happen automatically
     } catch (error) {
-      // Check if it's a Next.js redirect (expected on successful signup)
-      if (error && typeof error === 'object' && 'digest' in error && 
-          typeof (error as any).digest === 'string' && 
-          (error as any).digest.startsWith('NEXT_REDIRECT')) {
-        // This is a successful redirect, re-throw to allow navigation
-        throw error;
-      }
-      // Only show error toast for actual errors
-      setEmailIsSending(false);
-      toast.error("Sign up failed");
+      if (isRedirect(error)) throw error
+      setSubmitting(false)
+      toast.error("Sign up failed")
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-      <div className="flex items-center justify-center">
-        <Image src="/athletes-logo.png" width={75} height={75} alt="Athletes App" />
-      </div>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-12">
+      <Link href="/" className="flex items-center gap-2">
+        <Image
+          src="/athletes-logo.png"
+          width={48}
+          height={48}
+          alt="Athletes App"
+        />
+        <span className="font-display text-xl text-gray-900">Athletes App</span>
+      </Link>
 
-      <div className="mt-5 w-[300px] rounded border border-gray-100 bg-gray-50 p-3 shadow md:w-[400px]">
-        {account?.name && (
-          <div className="rounded border border-gray-300 bg-gray-100 p-5">
-            <p className="text-center text-sm">
-              Sign up to manage your <span className="font-bold">{account?.name}</span> athletes.
+      <div className="mt-8 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-xl ring-1 ring-black/5">
+        {account?.name ? (
+          <>
+            <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
+              You&apos;re invited
             </p>
-          </div>
+            <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight text-gray-900">
+              Join <span className="text-orange-600">{account.name}</span>
+            </h1>
+            <p className="mt-2 text-sm text-gray-600">
+              {signUp
+                ? "Create your account to get started."
+                : "Sign in below, or create your account."}
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
+              {signUp ? "Get started" : "Welcome back"}
+            </p>
+            <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight text-gray-900">
+              {signUp ? "Create your account." : "Sign in to Athletes App."}
+            </h1>
+          </>
         )}
 
-        <Tabs defaultValue={signUp ? "signUp" : "signIn"} className="mt-5 w-full">
-          <TabsList className="mb-5 grid w-full grid-cols-2 gap-2 rounded border border-gray-300 bg-gray-200 p-1">
-            <TabsTrigger
-              value="signIn"
-              className="rounded bg-gray-200 text-zinc-900 data-[state=active]:bg-zinc-900 data-[state=active]:text-zinc-100"
-            >
-              Sign In
-            </TabsTrigger>
-            <TabsTrigger
-              value="signUp"
-              className="rounded bg-gray-200 text-zinc-900 data-[state=active]:bg-zinc-900 data-[state=active]:text-zinc-100"
-            >
-              Sign Up
-            </TabsTrigger>
+        <div className="mt-4">
+          <Messages />
+        </div>
+
+        <Tabs
+          defaultValue={signUp ? "signUp" : "signIn"}
+          className="mt-6 w-full"
+        >
+          <TabsList className="mb-6 grid w-full grid-cols-2">
+            <TabsTrigger value="signIn">Sign In</TabsTrigger>
+            <TabsTrigger value="signUp">Sign Up</TabsTrigger>
           </TabsList>
 
           <TabsContent value="signIn">
-            <Messages />
-            <form
-              className="flex w-full flex-1 flex-col justify-center gap-2 text-foreground"
-              onSubmit={handleSignIn}
-            >
-              <label className="text-md" htmlFor="email">
-                Email
-              </label>
-              <input
-                className="mb-6 rounded-md border bg-inherit px-4 py-2"
-                name="email"
-                placeholder="you@example.com"
-                required
-              />
-              <label className="text-md" htmlFor="password">
-                Password
-              </label>
-              <div className="relative flex w-full items-center justify-center overflow-hidden">
-                <input
-                  className="w-full rounded-md border bg-inherit px-4 py-2 pr-10"
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  placeholder="••••••••"
+            <form className="space-y-5" onSubmit={handleSignIn}>
+              <div>
+                <Label htmlFor="signin-email">Email</Label>
+                <Input
+                  id="signin-email"
+                  name="email"
+                  type="email"
                   required
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  className="mt-1"
                 />
-                <div
-                  className="absolute inset-y-0 right-3 z-30 flex items-center cursor-pointer"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+              </div>
+              <div>
+                <Label htmlFor="signin-password">Password</Label>
+                <div className="relative mt-1">
+                  <Input
+                    id="signin-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
                 </div>
               </div>
-              <button
-                disabled={emailIsSending}
-                className="mb-2 mt-6 w-full rounded bg-[#77dd77] px-4 py-2 text-black shadow"
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="w-full bg-gray-900 font-semibold hover:bg-gray-800"
               >
-                {emailIsSending ? (
-                  <LoadingDots color="#808080" />
-                ) : (
-                  <span>Sign In</span>
-                )}
-              </button>
+                {submitting ? <LoadingDots color="#fff" /> : "Sign In"}
+              </Button>
+              <div className="text-center">
+                <button
+                  type="button"
+                  onClick={() => router.push("/forgot-password")}
+                  className="text-sm text-gray-600 hover:text-gray-900"
+                >
+                  Forgot password?
+                </button>
+              </div>
             </form>
-            <div
-              className="mt-5 flex cursor-pointer justify-center p-2 text-lg text-black hover:text-gray-400"
-              onClick={() => {
-                router.push("/forgot-password");
-              }}
-            >
-              Forgot password?
-            </div>
           </TabsContent>
 
           <TabsContent value="signUp">
-            <Messages />
-            <form
-              className="flex w-full flex-1 flex-col justify-center gap-2 text-foreground"
-              onSubmit={handleSignUp}
-            >
-              <label className="text-md" htmlFor="first_name">
-                First Name
-              </label>
-              <input
-                className="mb-6 rounded-md border bg-inherit px-4 py-2"
-                name="first_name"
-                placeholder="First Name"
-                defaultValue={firstName || ""}
-                required
-              />
-              <label className="text-md" htmlFor="last_name">
-                Last Name
-              </label>
-              <input
-                className="mb-6 rounded-md border bg-inherit px-4 py-2"
-                name="last_name"
-                placeholder="Last Name"
-                defaultValue={lastName || ""}
-                required
-              />
-              <input
-                className="mb-6 hidden rounded-md border bg-inherit px-4 py-2"
-                name="account_id"
-                defaultValue={account_id || ""}
-                required
-                aria-label="Account ID"
-              />
-              <input
-                className="mb-6 hidden rounded-md border bg-inherit px-4 py-2"
-                name="people_id"
-                defaultValue={people_id || ""}
-                aria-label="People ID"
-              />
-              <input
-                className="mb-6 hidden"
-                name="invite_role"
-                defaultValue={invite_role || "member"}
-                aria-label="Invite role"
-              />
-              <label className="text-md" htmlFor="email">
-                Email
-              </label>
-              <input
-                className="mb-6 cursor-not-allowed rounded-md border bg-inherit px-4 py-2 disabled:opacity-75"
-                name="email"
-                placeholder="you@example.com"
-                defaultValue={email}
-                required
-                readOnly={isDisabled}
-              />
-              <label className="text-md" htmlFor="password">
-                Password
-              </label>
-              <div className="relative flex w-full items-center justify-center overflow-hidden">
-                <input
-                  className="w-full rounded-md border bg-inherit px-4 py-2 pr-10"
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  placeholder="••••••••"
-                  required
-                />
-                <div
-                  className="absolute inset-y-0 right-3 z-30 flex items-center cursor-pointer"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="h-5 w-5" />
-                  ) : (
-                    <Eye className="h-5 w-5" />
-                  )}
+            <form className="space-y-5" onSubmit={handleSignUp}>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="signup-first-name">First name</Label>
+                  <Input
+                    id="signup-first-name"
+                    name="first_name"
+                    required
+                    autoComplete="given-name"
+                    defaultValue={firstName}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="signup-last-name">Last name</Label>
+                  <Input
+                    id="signup-last-name"
+                    name="last_name"
+                    required
+                    autoComplete="family-name"
+                    defaultValue={lastName}
+                    className="mt-1"
+                  />
                 </div>
               </div>
-              <button
-                disabled={emailIsSending}
-                className="mb-2 mt-6 w-full rounded bg-[#77dd77] px-4 py-2 text-black shadow"
+              <div>
+                <Label htmlFor="signup-email">Email</Label>
+                <Input
+                  id="signup-email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  defaultValue={email}
+                  readOnly={emailLocked}
+                  className="mt-1 read-only:cursor-not-allowed read-only:opacity-75"
+                />
+              </div>
+              <div>
+                <Label htmlFor="signup-password">Password</Label>
+                <div className="relative mt-1">
+                  <Input
+                    id="signup-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    minLength={8}
+                    autoComplete="new-password"
+                    placeholder="At least 8 characters"
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute inset-y-0 right-3 flex items-center text-gray-500 hover:text-gray-700"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <input type="hidden" name="people_id" value={people_id || ""} />
+              <Button
+                type="submit"
+                disabled={submitting}
+                className="w-full bg-gray-900 font-semibold hover:bg-gray-800"
               >
-                {emailIsSending ? (
-                  <LoadingDots color="#808080" />
-                ) : (
-                  <span>Create Account</span>
-                )}
-              </button>
-              <input
-                type="hidden"
-                name="from_events"
-                value={from_events || ""}
-                aria-label="From Events"
-              />
-              <input
-                type="hidden"
-                name="account_id"
-                value={account_id || ""}
-                aria-label="Account ID"
-              />
+                {submitting ? <LoadingDots color="#fff" /> : "Create Account"}
+              </Button>
             </form>
           </TabsContent>
         </Tabs>
       </div>
-      <div className="mt-5 flex justify-center p-2 text-[10px] text-gray-500">
-        Athletes App
-      </div>
+
+      <p className="mt-6 text-center text-xs text-gray-500">
+        Parent or family member?{" "}
+        <Link
+          href="/portal-login"
+          className="text-gray-700 underline hover:text-gray-900"
+        >
+          Use the parent portal
+        </Link>
+      </p>
     </div>
-  );
+  )
 }

@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { sendParentMagicLink } from "./actions"
 
 export default function PortalLoginPage() {
@@ -32,21 +33,25 @@ export default function PortalLoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
-      <div className="flex items-center justify-center">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-12">
+      <Link href="/" className="flex items-center gap-2">
         <Image
           src="/athletes-logo.png"
-          width={64}
-          height={64}
+          width={48}
+          height={48}
           alt="Athletes App"
         />
-      </div>
+        <span className="font-display text-xl text-gray-900">Athletes App</span>
+      </Link>
 
-      <div className="mt-6 w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-        <h1 className="text-center text-xl font-semibold text-gray-900">
-          Sign in to your portal
+      <div className="mt-8 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-xl ring-1 ring-black/5">
+        <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
+          Parent portal
+        </p>
+        <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight text-gray-900">
+          Sign in to your portal.
         </h1>
-        <p className="mt-2 text-center text-sm text-gray-600">
+        <p className="mt-2 text-sm text-gray-600">
           We&apos;ll email you a one-time sign-in link. No password required.
         </p>
 
@@ -59,21 +64,26 @@ export default function PortalLoginPage() {
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-3">
-            <label className="text-sm text-gray-700" htmlFor="email">
-              Email
-            </label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              placeholder="you@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-            <Button type="submit" disabled={sending} className="mt-2 w-full">
+          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
+            <div>
+              <Label htmlFor="portal-email">Email</Label>
+              <Input
+                id="portal-email"
+                name="email"
+                type="email"
+                required
+                autoComplete="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={sending}
+              className="w-full bg-gray-900 font-semibold hover:bg-gray-800"
+            >
               {sending ? (
                 "Sending..."
               ) : (
@@ -89,7 +99,10 @@ export default function PortalLoginPage() {
 
       <p className="mt-6 text-center text-xs text-gray-500">
         Staff or admin?{" "}
-        <Link href="/login" className="text-blue-600 hover:underline">
+        <Link
+          href="/login"
+          className="text-gray-700 underline hover:text-gray-900"
+        >
           Sign in with password
         </Link>
       </p>
