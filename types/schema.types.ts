@@ -187,6 +187,8 @@ export interface Events {
   image_url?: string | null;
   opponent_name?: string | null;
   is_home?: boolean | null;
+  series_id?: string | null /* groups occurrences of a recurring event; null for one-off events */;
+  series_index?: number | null /* 1-based position within the series */;
   metadata?: any;
   accounts?: Accounts;
   teams?: Teams;

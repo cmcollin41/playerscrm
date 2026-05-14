@@ -27,13 +27,57 @@ import { ImageDropzone } from "@/components/ui/image-dropzone"
 import { toast } from "sonner"
 import { slugify } from "@/lib/slug"
 import LoadingDots from "@/components/icons/loading-dots"
+import { RRule, Frequency, Weekday } from "rrule"
 
 type EventType = "camp" | "game" | "other"
+type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly"
+
+const MAX_OCCURRENCES = 52
+
+const WEEKDAY_OPTIONS: { value: number; label: string; rrule: Weekday }[] = [
+  { value: 0, label: "M", rrule: RRule.MO },
+  { value: 1, label: "T", rrule: RRule.TU },
+  { value: 2, label: "W", rrule: RRule.WE },
+  { value: 3, label: "T", rrule: RRule.TH },
+  { value: 4, label: "F", rrule: RRule.FR },
+  { value: 5, label: "S", rrule: RRule.SA },
+  { value: 6, label: "S", rrule: RRule.SU },
+]
 
 function localInputToIso(value: string): string | null {
   if (!value) return null
   const d = new Date(value)
   return isNaN(d.getTime()) ? null : d.toISOString()
+}
+
+function expandRecurrence(opts: {
+  freq: RecurrenceFreq
+  startsAtIso: string
+  count: number
+  weekdays: number[]
+}): Date[] {
+  const start = new Date(opts.startsAtIso)
+  if (opts.freq === "none") return [start]
+
+  const baseRRule: { dtstart: Date; count: number; freq?: number; byweekday?: Weekday[] } = {
+    dtstart: start,
+    count: Math.min(Math.max(opts.count, 1), MAX_OCCURRENCES),
+  }
+
+  if (opts.freq === "daily") {
+    baseRRule.freq = Frequency.DAILY
+  } else if (opts.freq === "weekly") {
+    baseRRule.freq = Frequency.WEEKLY
+    if (opts.weekdays.length > 0) {
+      baseRRule.byweekday = opts.weekdays.map(
+        (i) => WEEKDAY_OPTIONS[i].rrule,
+      )
+    }
+  } else if (opts.freq === "monthly") {
+    baseRRule.freq = Frequency.MONTHLY
+  }
+
+  return new RRule(baseRRule).all()
 }
 
 const TYPE_OPTIONS: { value: EventType; label: string; description: string }[] = [
@@ -89,6 +133,11 @@ export default function NewEventPage() {
   const [opponent, setOpponent] = useState("")
   const [isHome, setIsHome] = useState(true)
 
+  // Recurrence
+  const [recurrenceFreq, setRecurrenceFreq] = useState<RecurrenceFreq>("none")
+  const [recurrenceCount, setRecurrenceCount] = useState("8")
+  const [recurrenceWeekdays, setRecurrenceWeekdays] = useState<number[]>([])
+
   // Registration
   const [isRegisterable, setIsRegisterable] = useState(true)
   const [isPaid, setIsPaid] = useState(false)
@@ -126,6 +175,23 @@ export default function NewEventPage() {
 
   const isGame = eventType === "game"
   const team = teams.find((t) => t.id === teamId) || null
+
+  // When user picks Weekly recurrence, seed weekdays from the chosen start date.
+  useEffect(() => {
+    if (recurrenceFreq !== "weekly" || !startsAt || recurrenceWeekdays.length > 0)
+      return
+    const d = new Date(startsAt)
+    if (isNaN(d.getTime())) return
+    // JS getDay: 0=Sun..6=Sat. Convert to our Mon-first index (0=Mon..6=Sun).
+    const idx = (d.getDay() + 6) % 7
+    setRecurrenceWeekdays([idx])
+  }, [recurrenceFreq, startsAt, recurrenceWeekdays.length])
+
+  function toggleWeekday(idx: number) {
+    setRecurrenceWeekdays((prev) =>
+      prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx].sort(),
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -203,10 +269,63 @@ export default function NewEventPage() {
         insertRow.fee_description = feeDescription.trim() || null
       }
 
-      const { error } = await supabase.from("events").insert(insertRow)
-      if (error) throw error
+      const recurring = !isGame && recurrenceFreq !== "none" && !!insertRow.starts_at
+      if (recurring) {
+        if (recurrenceFreq === "weekly" && recurrenceWeekdays.length === 0) {
+          toast.error("Pick at least one day of the week")
+          setSaving(false)
+          return
+        }
+        const n = Math.min(
+          Math.max(parseInt(recurrenceCount) || 1, 1),
+          MAX_OCCURRENCES,
+        )
+        const dates = expandRecurrence({
+          freq: recurrenceFreq,
+          startsAtIso: insertRow.starts_at,
+          count: n,
+          weekdays: recurrenceWeekdays,
+        })
 
-      toast.success(`${isGame ? "Game" : "Event"} created`)
+        if (dates.length === 0) {
+          toast.error("Recurrence produced no dates")
+          setSaving(false)
+          return
+        }
+
+        const seriesId = crypto.randomUUID()
+        const durationMs = insertRow.ends_at
+          ? new Date(insertRow.ends_at).getTime() -
+            new Date(insertRow.starts_at).getTime()
+          : null
+
+        const rows = dates.map((startDate, i) => {
+          const startIso = startDate.toISOString()
+          const endIso =
+            durationMs !== null
+              ? new Date(startDate.getTime() + durationMs).toISOString()
+              : null
+          return {
+            ...insertRow,
+            slug: i === 0 ? slug : `${slug}-${i + 1}`,
+            starts_at: startIso,
+            ends_at: endIso,
+            series_id: seriesId,
+            series_index: i + 1,
+          }
+        })
+
+        const { error } = await supabase.from("events").insert(rows)
+        if (error) throw error
+
+        toast.success(`Series created — ${rows.length} events`)
+      } else {
+        const { error } = await supabase.from("events").insert(insertRow)
+        if (error) throw error
+
+        toast.success(`${isGame ? "Game" : "Event"} created`)
+      }
+
       router.push(teamId ? `/teams/${teamId}/schedule` : "/events")
     } catch (err: any) {
       toast.error(err.message || "Failed to create event")
@@ -409,6 +528,75 @@ export default function NewEventPage() {
             )}
           </CardContent>
         </Card>
+
+        {!isGame && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Recurrence</CardTitle>
+              <CardDescription>
+                Repeating events create one independent event per occurrence,
+                so each can be edited later without affecting the others.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="recurrence_freq">Repeats</Label>
+                <Select
+                  value={recurrenceFreq}
+                  onValueChange={(v) => setRecurrenceFreq(v as RecurrenceFreq)}
+                >
+                  <SelectTrigger id="recurrence_freq">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Does not repeat</SelectItem>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {recurrenceFreq === "weekly" && (
+                <div className="space-y-2">
+                  <Label>Days of the week</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {WEEKDAY_OPTIONS.map((d, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => toggleWeekday(i)}
+                        className={`h-9 w-9 rounded-full border text-sm font-medium transition-colors ${
+                          recurrenceWeekdays.includes(i)
+                            ? "border-gray-900 bg-gray-900 text-white"
+                            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                        }`}
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {recurrenceFreq !== "none" && (
+                <div className="space-y-2">
+                  <Label htmlFor="recurrence_count">
+                    Number of occurrences (max {MAX_OCCURRENCES})
+                  </Label>
+                  <Input
+                    id="recurrence_count"
+                    type="number"
+                    min="1"
+                    max={MAX_OCCURRENCES}
+                    value={recurrenceCount}
+                    onChange={(e) => setRecurrenceCount(e.target.value)}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

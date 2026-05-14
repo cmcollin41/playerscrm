@@ -18,6 +18,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { EventDetailClient, DeleteEventButton, ShareLinkBanner } from "./event-detail-client"
+import { AddToCalendarButton } from "@/components/events/add-to-calendar-button"
 
 export default async function EventDetailPage({
   params,
@@ -72,6 +73,15 @@ export default async function EventDetailPage({
     .order("ordering", { ascending: true })
     .order("starts_at", { ascending: true })
 
+  const { data: siblings } = event.series_id
+    ? await supabase
+        .from("events")
+        .select("id, name, slug, starts_at, series_index")
+        .eq("account_id", event.account_id)
+        .eq("series_id", event.series_id)
+        .order("series_index", { ascending: true })
+    : { data: null }
+
   // Resolve guardian emails for dependents without an email of their own.
   const dependentsNeedingGuardian = (rawRegistrations || [])
     .map((r) => r.people)
@@ -118,12 +128,35 @@ export default async function EventDetailPage({
             <Badge variant={event.is_published ? "default" : "secondary"}>
               {event.is_published ? "Published" : "Draft"}
             </Badge>
+            {siblings && siblings.length > 1 && (
+              <Badge variant="outline">
+                Series · {event.series_index} of {siblings.length}
+              </Badge>
+            )}
           </div>
           {event.description && (
             <p className="text-muted-foreground mt-1">{event.description}</p>
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          {event.starts_at && (
+            <AddToCalendarButton
+              event={{
+                name: event.name,
+                description: event.description,
+                location: event.location,
+                starts_at: event.starts_at,
+                ends_at: event.ends_at,
+              }}
+              icsUrl={`/api/events/${event.id}/calendar.ics`}
+              seriesCount={siblings?.length}
+              seriesIcsUrl={
+                event.series_id
+                  ? `/api/events/${event.id}/calendar.ics?series=1`
+                  : undefined
+              }
+            />
+          )}
           <Link href={`/events/${event.id}/edit`}>
             <Button variant="outline" size="sm">
               <Pencil className="mr-2 h-4 w-4" />
@@ -202,6 +235,47 @@ export default async function EventDetailPage({
           </Card>
         )}
       </div>
+
+      {siblings && siblings.length > 1 && (
+        <Card>
+          <Accordion type="single" collapsible>
+            <AccordionItem value="series" className="border-b-0">
+              <AccordionTrigger className="px-6 py-4 hover:no-underline">
+                <span className="text-lg font-semibold leading-none tracking-tight">
+                  Series ({siblings.length})
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <ul className="divide-y divide-gray-100 px-6 pb-2">
+                  {siblings.map((s) => {
+                    const isCurrent = s.id === event.id
+                    return (
+                      <li key={s.id} className="py-2">
+                        <Link
+                          href={`/events/${s.id}`}
+                          className={`flex items-baseline justify-between gap-2 text-sm ${
+                            isCurrent ? "font-semibold text-gray-900" : "text-gray-700 hover:text-gray-900"
+                          }`}
+                        >
+                          <span>
+                            {s.series_index}. {s.name}
+                            {isCurrent && <span className="ml-2 text-xs text-gray-500">(this one)</span>}
+                          </span>
+                          {s.starts_at && (
+                            <span className="text-xs text-gray-500">
+                              {new Date(s.starts_at).toLocaleString()}
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </Card>
+      )}
 
       {sessions && sessions.length > 0 && (
         <Card>

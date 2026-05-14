@@ -248,6 +248,12 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
 /**
  * Send a single transactional email (invoice, invite, etc.)
  */
+export interface TransactionalAttachment {
+  filename: string
+  content: string
+  contentType?: string
+}
+
 export async function sendTransactionalEmail(options: {
   sender: string
   to: string
@@ -257,8 +263,9 @@ export async function sendTransactionalEmail(options: {
   account_id: string
   person_id?: string
   metadata?: any
+  attachments?: TransactionalAttachment[]
 }): Promise<EmailResult> {
-  const { sender, to, subject, html, text, account_id, person_id, metadata = {} } = options
+  const { sender, to, subject, html, text, account_id, person_id, metadata = {}, attachments } = options
 
   try {
     const supabase = await createClient()
@@ -269,6 +276,9 @@ export async function sendTransactionalEmail(options: {
       subject,
       html,
       text,
+      ...(attachments && attachments.length > 0
+        ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType })) }
+        : {}),
     })
 
     if (error) {
