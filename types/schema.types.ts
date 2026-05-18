@@ -340,3 +340,70 @@ export interface Profiles {
   accounts?: Accounts;
   people?: People;
 }
+
+export type ProductCategory = 'uniform' | 'apparel' | 'accessory'
+
+export interface FulfillmentPartners {
+  id: string /* primary key */;
+  slug: string;
+  name: string;
+  adapter_key: string;
+  contact_email?: string;
+  config: Record<string, any>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProductTemplates {
+  id: string /* primary key */;
+  partner_id: string /* foreign key to fulfillment_partners.id */;
+  slug: string;
+  name: string;
+  description?: string;
+  category: ProductCategory;
+  base_cost_cents: number;
+  min_markup_cents: number;
+  shipping_flat_cents: number;
+  lead_time_days?: number;
+  image_url?: string;
+  metadata: Record<string, any>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  fulfillment_partners?: FulfillmentPartners;
+  product_template_variants?: ProductTemplateVariants[];
+}
+
+export interface ProductTemplateVariants {
+  id: string /* primary key */;
+  template_id: string /* foreign key to product_templates.id */;
+  sku: string;
+  size?: string;
+  color?: string;
+  delta_cost_cents: number;
+  ordering: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OrgProductStatus = 'draft' | 'active' | 'archived'
+
+export interface OrgProducts {
+  id: string /* primary key */;
+  account_id: string /* foreign key to accounts.id */;
+  template_id: string /* foreign key to product_templates.id */;
+  slug: string;
+  name: string;
+  description?: string;
+  price_cents: number;
+  customization: Record<string, any>;
+  image_url?: string;
+  status: OrgProductStatus;
+  published_at?: string;
+  created_at: string;
+  updated_at: string;
+  product_templates?: ProductTemplates;
+  accounts?: Accounts;
+}
