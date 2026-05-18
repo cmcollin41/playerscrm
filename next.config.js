@@ -15,6 +15,7 @@ module.exports = {
       { hostname: "zkoxnmdrhgbjovfvparc.supabase.co" },
       { hostname: "framerusercontent.com" },
       { hostname: "bloximages.chicago2.vip.townnews.com" },
+      { hostname: "cdn.shopify.com" },
     ],
   },
   reactStrictMode: false
