@@ -52,7 +52,7 @@ export default async function OrgProductsListPage() {
           {(products?.length ?? 0) === 1 ? "" : "s"}
         </p>
         <Button asChild>
-          <Link href="/store/manage/products/new">
+          <Link href="/products/new">
             <Plus className="mr-1 h-4 w-4" />
             Add from catalog
           </Link>
@@ -67,7 +67,7 @@ export default async function OrgProductsListPage() {
             Start by picking a template from the platform catalog.
           </p>
           <Button asChild className="mt-4">
-            <Link href="/store/manage/products/new">
+            <Link href="/products/new">
               <Plus className="mr-1 h-4 w-4" />
               Browse catalog
             </Link>
@@ -126,7 +126,7 @@ export default async function OrgProductsListPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button asChild variant="ghost" size="sm">
-                        <Link href={`/store/manage/products/${p.id}`}>Edit</Link>
+                        <Link href={`/products/${p.id}`}>Edit</Link>
                       </Button>
                     </TableCell>
                   </TableRow>

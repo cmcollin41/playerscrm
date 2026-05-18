@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getUserProfile } from "@/lib/auth"
+import { createArtworkSignedUrl } from "@/lib/storage/store-artwork"
 import { OrgProductForm } from "../org-product-form"
 
 export const dynamic = "force-dynamic"
@@ -42,6 +43,11 @@ export default async function EditOrgProductPage({ params }: PageProps) {
       .order("ordering"),
   ])
 
+  const artworkPath = (product as any).artwork_path as string | null
+  const initialArtworkUrl = artworkPath
+    ? (await createArtworkSignedUrl(supabase, artworkPath)) ?? null
+    : null
+
   return (
     <OrgProductForm
       accountId={profile.account_id}
@@ -49,6 +55,7 @@ export default async function EditOrgProductPage({ params }: PageProps) {
       templateVariants={(templateVariants ?? []) as any[]}
       product={product as any}
       productVariants={(productVariants ?? []) as any[]}
+      initialArtworkUrl={initialArtworkUrl}
     />
   )
 }

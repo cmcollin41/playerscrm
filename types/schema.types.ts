@@ -409,6 +409,7 @@ export interface OrgProducts {
   description?: string;
   customization: Record<string, any>;
   image_path?: string;
+  artwork_path?: string;
   options: ProductOption[];
   status: OrgProductStatus;
   published_at?: string;

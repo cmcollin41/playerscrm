@@ -15,6 +15,12 @@ import {
   orgVariantImagePath,
   uploadStoreImage,
 } from "@/lib/storage/store-images"
+import {
+  createArtworkSignedUrl,
+  makeArtworkFilename,
+  orgProductArtworkPath,
+  uploadArtwork,
+} from "@/lib/storage/store-artwork"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -62,6 +68,8 @@ interface OrgProductFormProps {
   templateVariants: ProductTemplateVariants[]
   product?: OrgProducts
   productVariants?: OrgProductVariants[]
+  /** Pre-resolved signed URL for the existing artwork preview (private bucket). */
+  initialArtworkUrl?: string | null
 }
 
 interface VariantState {
@@ -86,7 +94,7 @@ interface FormState {
   description: string
   status: OrgProductStatus
   image_path: string | null
-  customization: Record<string, string>
+  artwork_path: string | null
   variants: VariantState[]
 }
 
@@ -98,19 +106,6 @@ function toCents(dollars: string): number {
   const n = parseFloat(dollars)
   if (!Number.isFinite(n) || n < 0) return 0
   return Math.round(n * 100)
-}
-
-function fieldKind(name: string): "color" | "url" | "text" {
-  if (name.endsWith("_color")) return "color"
-  if (name.endsWith("_url")) return "url"
-  return "text"
-}
-
-function humanize(name: string): string {
-  return name
-    .replace(/_/g, " ")
-    .replace(/\burl\b/i, "URL")
-    .replace(/^\w/, (c) => c.toUpperCase())
 }
 
 /** Seed variants for a brand-new product: one row per active template variant. */
@@ -211,6 +206,7 @@ export function OrgProductForm({
   templateVariants,
   product,
   productVariants,
+  initialArtworkUrl,
 }: OrgProductFormProps) {
   const router = useRouter()
   const supabase = createClient()
@@ -218,11 +214,6 @@ export function OrgProductForm({
 
   // Pre-generate a product ID so image upload paths are stable before first save.
   const productId = useRef(product?.id ?? crypto.randomUUID()).current
-
-  const customizableFields: string[] = useMemo(() => {
-    const raw = (template.metadata as any)?.customizable
-    return Array.isArray(raw) ? raw.filter((x: any) => typeof x === "string") : []
-  }, [template])
 
   const initialVariants = useMemo(() => {
     if (isEdit && productVariants) {
@@ -237,24 +228,19 @@ export function OrgProductForm({
     description: product?.description ?? template.description ?? "",
     status: product?.status ?? "draft",
     image_path: product?.image_path ?? template.image_path ?? null,
-    customization: customizableFields.reduce<Record<string, string>>((acc, f) => {
-      const existing = (product?.customization as any)?.[f]
-      acc[f] = existing != null ? String(existing) : ""
-      return acc
-    }, {}),
+    artwork_path: product?.artwork_path ?? null,
     variants: initialVariants,
   })
+  // Artwork is in a private bucket; its preview is a signed URL we refresh
+  // after upload. Server pre-resolves the initial URL via createArtworkSignedUrl().
+  const [artworkPreviewUrl, setArtworkPreviewUrl] = useState<string | null>(
+    initialArtworkUrl ?? null,
+  )
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setState((s) => ({ ...s, [key]: value }))
-  }
-  function updateCustom(field: string, value: string) {
-    setState((s) => ({
-      ...s,
-      customization: { ...s.customization, [field]: value },
-    }))
   }
   function updateVariant(key: string, patch: Partial<VariantState>) {
     setState((s) => ({
@@ -280,6 +266,22 @@ export function OrgProductForm({
     const filename = makeImageFilename(file.name)
     const path = orgVariantImagePath(accountId, productId, variant.id, filename)
     return uploadStoreImage(supabase, path, file)
+  }
+
+  // ---- artwork upload (private bucket; signed URL preview) ----
+
+  async function handleArtworkSelect(file: File) {
+    const filename = makeArtworkFilename(file.name)
+    const path = orgProductArtworkPath(accountId, productId, filename)
+    const stored = await uploadArtwork(supabase, path, file)
+    update("artwork_path", stored)
+    const signed = await createArtworkSignedUrl(supabase, stored)
+    setArtworkPreviewUrl(signed)
+  }
+
+  function handleArtworkClear() {
+    update("artwork_path", null)
+    setArtworkPreviewUrl(null)
   }
 
   // ---- save / delete ----
@@ -311,8 +313,8 @@ export function OrgProductForm({
       slug,
       name: state.name.trim(),
       description: state.description.trim() || null,
-      customization: state.customization,
       image_path: state.image_path,
+      artwork_path: state.artwork_path,
       options: template.options ?? [],
       status: state.status,
       published_at:
@@ -379,7 +381,7 @@ export function OrgProductForm({
     if (isEdit) {
       router.refresh()
     } else {
-      router.push(`/store/manage/products/${productId}`)
+      router.push(`/products/${productId}`)
     }
   }
 
@@ -397,7 +399,7 @@ export function OrgProductForm({
       return
     }
     toast.success("Product deleted")
-    router.push("/store/manage/products")
+    router.push("/products")
   }
 
   const partnerName = template.fulfillment_partners?.name ?? "—"
@@ -405,7 +407,7 @@ export function OrgProductForm({
   return (
     <div className="flex flex-col gap-6">
       <Link
-        href={isEdit ? "/store/manage/products" : "/store/manage/products/new"}
+        href={isEdit ? "/products" : "/products/new"}
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -474,41 +476,39 @@ export function OrgProductForm({
             </Select>
           </Field>
 
-          <Field
-            label="Product image"
-            hint="Falls back to the template image when left blank."
-          >
-            <ImageDropzone
-              value={getStoreImagePublicUrl(supabase, state.image_path) ?? null}
-              onChange={(url) => {
-                if (url == null) update("image_path", null)
-              }}
-              onFileSelect={async (file) => {
-                const path = await uploadProductImage(file)
-                update("image_path", path)
-                return getStoreImagePublicUrl(supabase, path) ?? path
-              }}
-              onError={(msg) => toast.error(msg)}
-              placeholder="Upload a hero image for this product"
-              className="aspect-square w-48"
-            />
-          </Field>
+          <div className="grid gap-6 md:grid-cols-2">
+            <Field
+              label="Mockup image"
+              hint="Shown to shoppers on your storefront. Falls back to the template image."
+            >
+              <ImageDropzone
+                value={getStoreImagePublicUrl(supabase, state.image_path) ?? null}
+                onChange={(url) => {
+                  if (url == null) update("image_path", null)
+                }}
+                onFileSelect={async (file) => {
+                  const path = await uploadProductImage(file)
+                  update("image_path", path)
+                  return getStoreImagePublicUrl(supabase, path) ?? path
+                }}
+                onError={(msg) => toast.error(msg)}
+                placeholder="Upload a mockup for shoppers"
+                className="aspect-square w-48"
+              />
+            </Field>
 
-          {customizableFields.length > 0 && (
-            <div className="rounded-md border bg-muted/30 p-4">
-              <p className="mb-3 text-sm font-medium">Customization</p>
-              <div className="grid gap-4 md:grid-cols-2">
-                {customizableFields.map((field) => (
-                  <CustomField
-                    key={field}
-                    name={field}
-                    value={state.customization[field] ?? ""}
-                    onChange={(v) => updateCustom(field, v)}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
+            <Field
+              label="Your design (artwork)"
+              hint="PNG, SVG, or PDF. Private to you — sent to the partner when an order ships."
+            >
+              <ArtworkDropzone
+                previewUrl={artworkPreviewUrl}
+                onSelect={handleArtworkSelect}
+                onClear={handleArtworkClear}
+                onError={(msg) => toast.error(msg)}
+              />
+            </Field>
+          </div>
         </CardContent>
       </Card>
 
@@ -644,7 +644,7 @@ export function OrgProductForm({
         )}
         <div className="flex gap-2">
           <Button variant="outline" asChild>
-            <Link href="/store/manage/products">Cancel</Link>
+            <Link href="/products">Cancel</Link>
           </Button>
           <Button onClick={handleSave} disabled={saving}>
             <Save className="mr-1 h-4 w-4" />
@@ -656,57 +656,95 @@ export function OrgProductForm({
   )
 }
 
-function CustomField({
-  name,
-  value,
-  onChange,
+function ArtworkDropzone({
+  previewUrl,
+  onSelect,
+  onClear,
+  onError,
 }: {
-  name: string
-  value: string
-  onChange: (v: string) => void
+  previewUrl: string | null
+  onSelect: (file: File) => Promise<void>
+  onClear: () => void
+  onError: (message: string) => void
 }) {
-  const kind = fieldKind(name)
-  const label = humanize(name)
+  const [busy, setBusy] = useState(false)
 
-  if (kind === "color") {
-    return (
-      <Field label={label}>
-        <div className="flex gap-2">
-          <Input
-            type="color"
-            value={value || "#000000"}
-            onChange={(e) => onChange(e.target.value)}
-            className="h-10 w-16 cursor-pointer p-1"
-          />
-          <Input
-            type="text"
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            placeholder="#000000"
-            className="flex-1 font-mono"
-          />
-        </div>
-      </Field>
-    )
+  function openPicker() {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept =
+      "image/jpeg,image/png,image/webp,image/svg+xml,application/pdf"
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      if (file.size > 20 * 1024 * 1024) {
+        onError("Artwork must be under 20MB")
+        return
+      }
+      setBusy(true)
+      try {
+        await onSelect(file)
+      } catch (err) {
+        onError(err instanceof Error ? err.message : "Upload failed")
+      } finally {
+        setBusy(false)
+      }
+    }
+    input.click()
   }
 
-  if (kind === "url") {
-    return (
-      <Field label={label}>
-        <Input
-          type="url"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="https://..."
-        />
-      </Field>
-    )
-  }
+  // PDFs and SVGs can't always render inline in <img>; show a generic preview
+  // tile for non-raster types.
+  const isImage =
+    previewUrl != null &&
+    /\.(jpe?g|png|webp|gif)(\?|$)/i.test(previewUrl)
 
   return (
-    <Field label={label}>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} />
-    </Field>
+    <div className="flex flex-col items-start gap-2 rounded-lg border-2 border-dashed p-4">
+      {previewUrl ? (
+        <div className="flex items-center gap-3">
+          {isImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={previewUrl}
+              alt="Artwork"
+              className="h-24 w-24 rounded border object-contain"
+            />
+          ) : (
+            <div className="flex h-24 w-24 items-center justify-center rounded border bg-muted text-xs text-muted-foreground">
+              File
+            </div>
+          )}
+          <div className="flex flex-col gap-1">
+            <Button variant="outline" size="sm" onClick={openPicker} disabled={busy}>
+              {busy ? "Uploading…" : "Replace"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClear}
+              disabled={busy}
+              className="text-muted-foreground hover:text-red-600"
+            >
+              Remove
+            </Button>
+            <a
+              href={previewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              Open
+            </a>
+          </div>
+        </div>
+      ) : (
+        <Button variant="outline" onClick={openPicker} disabled={busy}>
+          <ImagePlus className="mr-1 h-4 w-4" />
+          {busy ? "Uploading…" : "Upload artwork"}
+        </Button>
+      )}
+    </div>
   )
 }
 
