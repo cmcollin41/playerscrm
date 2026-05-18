@@ -54,18 +54,10 @@ export function MainNav({ className, userRole = "general", ...props }: MainNavPr
       )}
       {isAdmin && (
         <Link
-          href="/store/manage/products"
+          href="/products"
           className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
         >
-          Store
-        </Link>
-      )}
-      {isAdmin && (
-        <Link
-          href="/admin/store/templates"
-          className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
-        >
-          Catalog
+          Products
         </Link>
       )}
     </nav>

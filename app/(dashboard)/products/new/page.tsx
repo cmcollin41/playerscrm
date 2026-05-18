@@ -24,7 +24,7 @@ export default async function CatalogPickerPage() {
   return (
     <div className="flex flex-col gap-4">
       <Link
-        href="/store/manage/products"
+        href="/products"
         className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
@@ -48,7 +48,7 @@ export default async function CatalogPickerPage() {
           {templates.map((t: any) => (
             <Link
               key={t.id}
-              href={`/store/manage/products/new/${t.id}`}
+              href={`/products/new/${t.id}`}
               className="group"
             >
               <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">

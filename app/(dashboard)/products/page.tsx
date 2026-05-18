@@ -17,6 +17,14 @@ function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
 }
 
+function priceRangeLabel(prices: number[]): string {
+  if (prices.length === 0) return "—"
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  if (min === max) return formatPrice(min)
+  return `${formatPrice(min)} – ${formatPrice(max)}`
+}
+
 function statusVariant(status: string): "default" | "secondary" | "outline" {
   if (status === "active") return "default"
   if (status === "draft") return "outline"
@@ -31,7 +39,7 @@ export default async function OrgProductsListPage() {
   const { data: products } = await supabase
     .from("org_products")
     .select(
-      "id, slug, name, price_cents, status, image_url, updated_at, product_templates(name, category, fulfillment_partners(name))"
+      "id, slug, name, status, updated_at, product_templates(name, category, fulfillment_partners(name)), org_product_variants(price_cents, is_active)"
     )
     .eq("account_id", profile.account_id)
     .order("updated_at", { ascending: false })
@@ -44,7 +52,7 @@ export default async function OrgProductsListPage() {
           {(products?.length ?? 0) === 1 ? "" : "s"}
         </p>
         <Button asChild>
-          <Link href="/store/manage/products/new">
+          <Link href="/products/new">
             <Plus className="mr-1 h-4 w-4" />
             Add from catalog
           </Link>
@@ -59,7 +67,7 @@ export default async function OrgProductsListPage() {
             Start by picking a template from the platform catalog.
           </p>
           <Button asChild className="mt-4">
-            <Link href="/store/manage/products/new">
+            <Link href="/products/new">
               <Plus className="mr-1 h-4 w-4" />
               Browse catalog
             </Link>
@@ -74,46 +82,56 @@ export default async function OrgProductsListPage() {
                 <TableHead>Template</TableHead>
                 <TableHead>Partner</TableHead>
                 <TableHead className="text-right">Price</TableHead>
+                <TableHead>Variants</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((p: any) => (
-                <TableRow key={p.id}>
-                  <TableCell>
-                    <div className="font-medium">{p.name}</div>
-                    <div className="text-xs text-muted-foreground">{p.slug}</div>
-                  </TableCell>
-                  <TableCell>
-                    {p.product_templates?.name ?? "—"}
-                    {p.product_templates?.category && (
-                      <span className="ml-1 text-xs text-muted-foreground capitalize">
-                        ({p.product_templates.category})
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {p.product_templates?.fulfillment_partners?.name ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {formatPrice(p.price_cents)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={statusVariant(p.status)}
-                      className="capitalize"
-                    >
-                      {p.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button asChild variant="ghost" size="sm">
-                      <Link href={`/store/manage/products/${p.id}`}>Edit</Link>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {products.map((p: any) => {
+                const activePrices = (p.org_product_variants ?? [])
+                  .filter((v: any) => v.is_active)
+                  .map((v: any) => v.price_cents)
+                const variantCount = (p.org_product_variants ?? []).length
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell>
+                      <div className="font-medium">{p.name}</div>
+                      <div className="text-xs text-muted-foreground">{p.slug}</div>
+                    </TableCell>
+                    <TableCell>
+                      {p.product_templates?.name ?? "—"}
+                      {p.product_templates?.category && (
+                        <span className="ml-1 text-xs text-muted-foreground capitalize">
+                          ({p.product_templates.category})
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {p.product_templates?.fulfillment_partners?.name ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {priceRangeLabel(activePrices)}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {activePrices.length}/{variantCount} active
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={statusVariant(p.status)}
+                        className="capitalize"
+                      >
+                        {p.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/products/${p.id}`}>Edit</Link>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </div>

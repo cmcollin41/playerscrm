@@ -4,6 +4,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getTenantAccount } from "@/lib/tenant"
+import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ShoppingBag } from "lucide-react"
@@ -12,6 +13,14 @@ export const dynamic = "force-dynamic"
 
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
+}
+
+function priceLabel(prices: number[]): string | null {
+  if (prices.length === 0) return null
+  const min = Math.min(...prices)
+  const max = Math.max(...prices)
+  if (min === max) return formatPrice(min)
+  return `From ${formatPrice(min)}`
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -32,13 +41,18 @@ export default async function PublicStorePage() {
   const { data: products } = await supabase
     .from("org_products")
     .select(
-      "id, slug, name, description, price_cents, image_url, product_templates(category, image_url, lead_time_days)"
+      "id, slug, name, description, image_path, product_templates(category, image_path, lead_time_days), org_product_variants(price_cents, is_active)"
     )
     .eq("account_id", account.id)
     .eq("status", "active")
     .order("published_at", { ascending: false, nullsFirst: false })
 
-  if (!products || products.length === 0) {
+  // Only show products that have at least one active variant.
+  const visibleProducts = (products ?? []).filter(
+    (p: any) => (p.org_product_variants ?? []).some((v: any) => v.is_active),
+  )
+
+  if (visibleProducts.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-md border border-dashed py-20 text-center">
         <ShoppingBag className="mb-3 h-10 w-10 text-muted-foreground/50" />
@@ -55,19 +69,25 @@ export default async function PublicStorePage() {
       <div>
         <h1 className="font-cal text-3xl font-bold">Shop</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {products.length} product{products.length === 1 ? "" : "s"} available
+          {visibleProducts.length} product
+          {visibleProducts.length === 1 ? "" : "s"} available
         </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {products.map((p: any) => {
-          const image = p.image_url || p.product_templates?.image_url
+        {visibleProducts.map((p: any) => {
+          const imagePath = p.image_path || p.product_templates?.image_path
+          const imageUrl = getStoreImagePublicUrl(supabase, imagePath)
+          const activePrices = p.org_product_variants
+            .filter((v: any) => v.is_active)
+            .map((v: any) => v.price_cents)
+          const price = priceLabel(activePrices)
           return (
             <Link key={p.id} href={`/store/${p.slug}`} className="group">
               <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
                 <div className="relative aspect-square bg-muted">
-                  {image ? (
+                  {imageUrl ? (
                     <Image
-                      src={image}
+                      src={imageUrl}
                       alt={p.name}
                       fill
                       className="object-cover"
@@ -94,7 +114,7 @@ export default async function PublicStorePage() {
                   )}
                   <div className="mt-1 flex items-center justify-between">
                     <span className="text-sm font-semibold tabular-nums">
-                      {formatPrice(p.price_cents)}
+                      {price ?? "—"}
                     </span>
                     {p.product_templates?.lead_time_days != null && (
                       <span className="text-xs text-muted-foreground">

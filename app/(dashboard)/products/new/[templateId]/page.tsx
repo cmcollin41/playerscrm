@@ -15,12 +15,20 @@ export default async function NewOrgProductPage({ params }: PageProps) {
   if (!profile) return null
 
   const supabase = await createClient()
-  const { data: template } = await supabase
-    .from("product_templates")
-    .select("*, fulfillment_partners(slug, name)")
-    .eq("id", templateId)
-    .eq("is_active", true)
-    .maybeSingle()
+  const [{ data: template }, { data: templateVariants }] = await Promise.all([
+    supabase
+      .from("product_templates")
+      .select("*, fulfillment_partners(slug, name)")
+      .eq("id", templateId)
+      .eq("is_active", true)
+      .maybeSingle(),
+    supabase
+      .from("product_template_variants")
+      .select("*")
+      .eq("template_id", templateId)
+      .eq("is_active", true)
+      .order("ordering"),
+  ])
 
   if (!template) notFound()
 
@@ -28,6 +36,7 @@ export default async function NewOrgProductPage({ params }: PageProps) {
     <OrgProductForm
       accountId={profile.account_id}
       template={template as any}
+      templateVariants={(templateVariants ?? []) as any[]}
     />
   )
 }

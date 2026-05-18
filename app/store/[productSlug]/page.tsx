@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { ArrowLeft } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { getTenantAccount } from "@/lib/tenant"
+import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
 import { Badge } from "@/components/ui/badge"
 import { ProductBuyPanel } from "./product-buy-panel"
 
@@ -23,7 +24,7 @@ async function loadProduct(productSlug: string, accountId: string) {
   const { data } = await supabase
     .from("org_products")
     .select(
-      "id, slug, name, description, price_cents, customization, image_url, product_templates(id, name, category, image_url, lead_time_days, shipping_flat_cents, metadata, fulfillment_partners(slug, name))"
+      "id, slug, name, description, customization, image_path, options, product_templates(id, name, category, image_path, lead_time_days, shipping_flat_cents, fulfillment_partners(slug, name)), org_product_variants(id, sku, options, price_cents, image_path, inventory_qty, is_active, ordering)"
     )
     .eq("account_id", accountId)
     .eq("slug", productSlug)
@@ -42,7 +43,9 @@ export async function generateMetadata({
   if (!product) return {}
 
   const accountName = account.name ?? "Team store"
-  const image = product.image_url || product.product_templates?.image_url
+  const supabase = await createClient()
+  const imagePath = product.image_path || product.product_templates?.image_path
+  const image = getStoreImagePublicUrl(supabase, imagePath)
   return {
     title: `${product.name} · ${accountName}`,
     description: product.description ?? `${product.name} from ${accountName}.`,
@@ -65,11 +68,38 @@ export default async function PublicProductPage({ params }: PageProps) {
   if (!product) notFound()
 
   const template = product.product_templates
-  const image = product.image_url || template?.image_url
-  const sizes: string[] = Array.isArray(template?.metadata?.sizes)
-    ? template.metadata.sizes.filter((s: any) => typeof s === "string")
-    : []
+  const supabase = await createClient()
+  const productImageUrl = getStoreImagePublicUrl(
+    supabase,
+    product.image_path || template?.image_path,
+  )
+
+  const activeVariants = (product.org_product_variants ?? [])
+    .filter((v: any) => v.is_active)
+    .sort((a: any, b: any) => (a.ordering ?? 0) - (b.ordering ?? 0))
+
+  if (activeVariants.length === 0) {
+    notFound()
+  }
+
+  // Enrich variants with resolved image URLs (variant override or product image).
+  const variantsForClient = activeVariants.map((v: any) => ({
+    id: v.id,
+    sku: v.sku,
+    options: v.options as Record<string, string>,
+    price_cents: v.price_cents,
+    image_url: getStoreImagePublicUrl(supabase, v.image_path) ?? productImageUrl ?? null,
+    inventory_qty: v.inventory_qty,
+  }))
+
   const customization = (product.customization ?? {}) as Record<string, string>
+  const productOptions = (product.options ?? []) as {
+    name: string
+    values: string[]
+  }[]
+  const prices = activeVariants.map((v: any) => v.price_cents as number)
+  const minPrice = Math.min(...prices)
+  const maxPrice = Math.max(...prices)
 
   return (
     <div className="flex flex-col gap-6">
@@ -83,9 +113,9 @@ export default async function PublicProductPage({ params }: PageProps) {
 
       <div className="grid gap-8 md:grid-cols-2">
         <div className="relative aspect-square overflow-hidden rounded-md bg-muted">
-          {image ? (
+          {productImageUrl ? (
             <Image
-              src={image}
+              src={productImageUrl}
               alt={product.name}
               fill
               className="object-cover"
@@ -110,7 +140,9 @@ export default async function PublicProductPage({ params }: PageProps) {
             </div>
             <h1 className="mt-2 font-cal text-3xl font-bold">{product.name}</h1>
             <p className="mt-2 text-2xl font-semibold tabular-nums">
-              {formatPrice(product.price_cents)}
+              {minPrice === maxPrice
+                ? formatPrice(minPrice)
+                : `${formatPrice(minPrice)} – ${formatPrice(maxPrice)}`}
             </p>
             {template?.shipping_flat_cents > 0 && (
               <p className="text-xs text-muted-foreground">
@@ -130,9 +162,10 @@ export default async function PublicProductPage({ params }: PageProps) {
           )}
 
           <ProductBuyPanel
-            productId={product.id}
             productName={product.name}
-            sizes={sizes}
+            options={productOptions}
+            variants={variantsForClient}
+            fallbackImageUrl={productImageUrl ?? null}
           />
         </div>
       </div>
