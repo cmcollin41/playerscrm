@@ -429,6 +429,7 @@ export interface OrgProductVariants {
   options: VariantOptionMap;
   price_cents: number;
   image_path?: string;
+  artwork_path?: string;
   inventory_qty?: number;
   design_color_hex?: string;
   is_active: boolean;

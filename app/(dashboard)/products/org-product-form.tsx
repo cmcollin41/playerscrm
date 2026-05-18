@@ -6,6 +6,7 @@ import Link from "next/link"
 import { toast } from "sonner"
 import {
   ArrowLeft,
+  Check,
   ImagePlus,
   Loader2,
   Save,
@@ -19,26 +20,12 @@ import { slugify } from "@/lib/slug"
 import { describeVariant, variantOptionsKey } from "@/lib/store/options"
 import {
   DEFAULT_DESIGN,
-  DEFAULT_MOCKUP_OPTIONS,
-  EMBELLISHMENT_LABELS,
   PLACEMENT_DEFAULTS,
   PLACEMENT_LABELS,
   parseDesign,
-  type ColorMode,
   type DesignConfig,
   type DesignPlacement,
-  type Embellishment,
-  type MockupGenerationOptions,
 } from "@/lib/store/design"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
   getStoreImagePublicUrl,
   makeImageFilename,
@@ -71,6 +58,15 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { ImageDropzone } from "@/components/ui/image-dropzone"
 import {
   Table,
@@ -115,7 +111,8 @@ interface VariantState {
   price: string                       // dollars
   image_path: string | null
   inventory_qty: string               // empty string = unlimited
-  design_color_hex: string | null     // explicit ink color; null = auto
+  /** Per-variant artwork override path. NULL = use product-level artwork. */
+  artwork_path: string | null
   is_active: boolean
   ordering: number
 }
@@ -157,7 +154,7 @@ function seedVariantsFromTemplate(
     price: toDollars(floor + tv.delta_cost_cents),
     image_path: tv.image_path ?? null,
     inventory_qty: "",
-    design_color_hex: null,
+    artwork_path: null,
     is_active: true,
     ordering: tv.ordering || (i + 1) * 10,
   }))
@@ -195,7 +192,7 @@ function mergeVariants(
         image_path: v.image_path ?? null,
         inventory_qty:
           v.inventory_qty == null ? "" : String(v.inventory_qty),
-        design_color_hex: v.design_color_hex ?? null,
+        artwork_path: v.artwork_path ?? null,
         is_active: v.is_active,
         ordering: v.ordering || (i + 1) * 10,
       })
@@ -209,7 +206,7 @@ function mergeVariants(
         price: toDollars(floor + tv.delta_cost_cents),
         image_path: tv.image_path ?? null,
         inventory_qty: "",
-        design_color_hex: null,
+        artwork_path: null,
         is_active: true,
         ordering: tv.ordering || (i + 1) * 10,
       })
@@ -229,7 +226,7 @@ function mergeVariants(
       price: toDollars(v.price_cents),
       image_path: v.image_path ?? null,
       inventory_qty: v.inventory_qty == null ? "" : String(v.inventory_qty),
-      design_color_hex: v.design_color_hex ?? null,
+      artwork_path: v.artwork_path ?? null,
       is_active: v.is_active,
       ordering: v.ordering,
     })
@@ -282,10 +279,9 @@ export function OrgProductForm({
   const [previewKey, setPreviewKey] = useState<string>(
     initialVariants[0]?.key ?? "",
   )
-  // Which variant (if any) currently has an AI mockup generation in flight.
-  const [generatingKey, setGeneratingKey] = useState<string | null>(null)
-  // Variant key of the AI-mockup dialog, or null when closed.
-  const [mockupVariantKey, setMockupVariantKey] = useState<string | null>(null)
+  // "Apply to variants…" dialog state.
+  const [applyOpen, setApplyOpen] = useState(false)
+  const [applying, setApplying] = useState(false)
 
   // Group active variants by Color and remember the first one per color —
   // used both for the color swatch row and the preview.
@@ -304,11 +300,12 @@ export function OrgProductForm({
   const previewVariant: VariantState | undefined =
     state.variants.find((v) => v.key === previewKey) ?? state.variants[0]
 
-  // Resolve a base image for a variant: prefer the variant's own image_path
-  // (which is what the AI mockup overwrites), then the linked template
-  // variant's image, then the template's hero.
+  // Resolve the *pristine* base image for a variant — always the partner's
+  // blank, never the org's customized output. The editor preview and the AI
+  // mockup pipeline both depend on this being clean so the org can keep
+  // iterating on a new design after a generation has happened (otherwise
+  // the new artwork would composite onto the previous AI mockup).
   function variantBaseImagePath(v: VariantState): string | null {
-    if (v.image_path) return v.image_path
     const tv = templateVariants.find((t) => t.id === v.template_variant_id)
     return tv?.image_path ?? template.image_path ?? null
   }
@@ -373,53 +370,71 @@ export function OrgProductForm({
     setArtworkPreviewUrl(null)
   }
 
-  // ---- AI mockup generation ----
+  // ---- mockup generation (sharp composite, no AI) ----
+  // One artwork → many variants. The Design card is the workspace; the
+  // "Apply to variants…" dialog picks which variants get the composite baked
+  // in as their image_path. Per-variant artwork_path is recorded so partner
+  // handoff later knows which file produced each variant's mockup.
 
-  async function generateMockup(
-    v: VariantState,
-    options: MockupGenerationOptions,
-  ) {
+  async function applyMockupToVariants(variantIds: string[]) {
     if (!isEdit) {
       toast.error("Save the product once before generating mockups.")
       return
     }
     if (!state.artwork_path) {
-      toast.error("Upload your design (artwork) first.")
+      toast.error("Upload artwork before applying.")
       return
     }
-    const basePath = variantBaseImagePath(v)
-    if (!basePath) {
-      toast.error("No base image available for this variant.")
+    if (variantIds.length === 0) {
+      toast.error("Pick at least one variant.")
       return
     }
-    setGeneratingKey(v.key)
+    setApplying(true)
     try {
       const res = await fetch("/api/store/generate-mockup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           product_id: productId,
-          variant_id: v.id,
+          variant_ids: variantIds,
           artwork_path: state.artwork_path,
-          base_image_path: basePath,
-          embellishment: options.embellishment,
-          color_mode: options.colorMode,
-          ink_color_hex:
-            options.colorMode === "single_ink"
-              ? options.inkColorHex
-              : undefined,
         }),
       })
       const json = await res.json()
       if (!res.ok) {
         throw new Error(json.error || "Generation failed")
       }
-      updateVariant(v.key, { image_path: json.image_path })
-      toast.success(`Mockup ready: ${describeVariant(v.options)}`)
+      const results: { variant_id: string; image_path: string }[] =
+        json.results ?? []
+      const errors: { variant_id: string; error: string }[] = json.errors ?? []
+      // Patch the form state in-place so the new mockups show without a reload.
+      setState((s) => ({
+        ...s,
+        variants: s.variants.map((v) => {
+          const hit = results.find((r) => r.variant_id === v.id)
+          if (!hit) return v
+          return {
+            ...v,
+            image_path: hit.image_path,
+            artwork_path: state.artwork_path,
+          }
+        }),
+      }))
+      if (results.length > 0) {
+        toast.success(
+          results.length === 1
+            ? "Mockup applied to 1 variant"
+            : `Mockup applied to ${results.length} variants`,
+        )
+      }
+      for (const e of errors) {
+        toast.error(`Variant ${e.variant_id.slice(0, 8)}…: ${e.error}`)
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Generation failed")
     } finally {
-      setGeneratingKey(null)
+      setApplying(false)
+      setApplyOpen(false)
     }
   }
 
@@ -490,7 +505,7 @@ export function OrgProductForm({
       inventory_qty: v.inventory_qty.trim() === ""
         ? null
         : Math.max(0, parseInt(v.inventory_qty, 10) || 0),
-      design_color_hex: v.design_color_hex,
+      artwork_path: v.artwork_path,
       is_active: v.is_active,
       ordering: v.ordering || (i + 1) * 10,
     }))
@@ -561,9 +576,9 @@ export function OrgProductForm({
           <CardHeader>
             <CardTitle>Design</CardTitle>
             <CardDescription>
-              Drag the artwork on the preview, resize it, set placement /
-              embellishment, and choose ink color per variant. Click
-              &quot;AI mockup&quot; on a variant below for the photoreal version.
+              Pick a color on the right, upload your artwork, drag it where you
+              want it, and click &quot;Apply to variants…&quot; to bake the
+              mockup into the variants you choose.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid gap-6 lg:grid-cols-[480px_1fr]">
@@ -682,32 +697,59 @@ export function OrgProductForm({
                 />
               </Field>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const d = PLACEMENT_DEFAULTS[state.design.placement]
-                  updateDesign({
-                    x: d.x,
-                    y: d.y,
-                    scale: d.scale,
-                    rotation: 0,
-                  })
-                }}
-              >
-                Reset to default position
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const d = PLACEMENT_DEFAULTS[state.design.placement]
+                    updateDesign({
+                      x: d.x,
+                      y: d.y,
+                      scale: d.scale,
+                      rotation: 0,
+                    })
+                  }}
+                >
+                  Reset to default position
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => setApplyOpen(true)}
+                  disabled={!isEdit || !state.artwork_path}
+                  title={
+                    !isEdit
+                      ? "Save the product first"
+                      : !state.artwork_path
+                        ? "Upload artwork first"
+                        : "Bake the current design into selected variants"
+                  }
+                >
+                  <Sparkles className="mr-1 h-3 w-3" />
+                  Apply to variants…
+                </Button>
+              </div>
 
               <p className="text-xs text-muted-foreground">
-                You&apos;ll choose embellishment (screenprint, embroidery, etc.)
-                and any color treatment when you generate the AI mockup on a
-                specific variant.
+                Each variant keeps its own mockup image. Apply once per color
+                if you need different artwork (e.g., a white logo on dark
+                shirts, a black logo on light shirts).
               </p>
             </div>
           </CardContent>
         </Card>
       )}
+
+      <ApplyToVariantsDialog
+        open={applyOpen}
+        onOpenChange={setApplyOpen}
+        variants={state.variants}
+        defaultSelectedKey={previewVariant?.key}
+        applying={applying}
+        onApply={(ids) => applyMockupToVariants(ids)}
+      />
 
       {/* basics */}
       <Card>
@@ -878,45 +920,17 @@ export function OrgProductForm({
                           />
                         </TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-2">
-                            <VariantImageButton
-                              currentUrl={imageUrl}
-                              onSelect={async (file) => {
-                                const path = await uploadVariantImage(v, file)
-                                updateVariant(v.key, { image_path: path })
-                              }}
-                              onClear={() =>
-                                updateVariant(v.key, { image_path: null })
-                              }
-                              onError={(msg) => toast.error(msg)}
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              type="button"
-                              onClick={() => setMockupVariantKey(v.key)}
-                              disabled={
-                                generatingKey !== null ||
-                                !isEdit ||
-                                !state.artwork_path
-                              }
-                              title={
-                                !isEdit
-                                  ? "Save the product first"
-                                  : !state.artwork_path
-                                    ? "Upload your design first"
-                                    : "Generate a photorealistic mockup"
-                              }
-                              className="h-8 text-xs"
-                            >
-                              {generatingKey === v.key ? (
-                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-                              ) : (
-                                <Sparkles className="mr-1 h-3 w-3" />
-                              )}
-                              {generatingKey === v.key ? "Generating…" : "AI mockup"}
-                            </Button>
-                          </div>
+                          <VariantImageButton
+                            currentUrl={imageUrl}
+                            onSelect={async (file) => {
+                              const path = await uploadVariantImage(v, file)
+                              updateVariant(v.key, { image_path: path })
+                            }}
+                            onClear={() =>
+                              updateVariant(v.key, { image_path: null })
+                            }
+                            onError={(msg) => toast.error(msg)}
+                          />
                         </TableCell>
                         <TableCell>
                           <Switch
@@ -962,22 +976,6 @@ export function OrgProductForm({
         </div>
       </div>
 
-      {(() => {
-        const v = state.variants.find((x) => x.key === mockupVariantKey)
-        if (!v) return null
-        return (
-          <MockupDialog
-            open={!!mockupVariantKey}
-            onOpenChange={(o) => !o && setMockupVariantKey(null)}
-            variantLabel={describeVariant(v.options)}
-            busy={generatingKey === v.key}
-            onGenerate={async (opts) => {
-              await generateMockup(v, opts)
-              if (generatingKey === null) setMockupVariantKey(null)
-            }}
-          />
-        )
-      })()}
     </div>
   )
 }
@@ -1088,138 +1086,6 @@ function DesignPreview({
   )
 }
 
-interface MockupDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  variantLabel: string
-  busy: boolean
-  onGenerate: (options: MockupGenerationOptions) => Promise<void> | void
-}
-
-function MockupDialog({
-  open,
-  onOpenChange,
-  variantLabel,
-  busy,
-  onGenerate,
-}: MockupDialogProps) {
-  const [embellishment, setEmbellishment] = useState<Embellishment>(
-    DEFAULT_MOCKUP_OPTIONS.embellishment,
-  )
-  const [colorMode, setColorMode] = useState<ColorMode>(
-    DEFAULT_MOCKUP_OPTIONS.colorMode,
-  )
-  const [inkColorHex, setInkColorHex] = useState<string>("#000000")
-
-  async function submit() {
-    await onGenerate({
-      embellishment,
-      colorMode,
-      inkColorHex: colorMode === "single_ink" ? inkColorHex : undefined,
-    })
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Generate AI mockup</DialogTitle>
-          <DialogDescription>
-            Renders a photorealistic mockup of{" "}
-            <span className="font-medium">{variantLabel}</span> with your
-            artwork applied. ~10–20s, costs ~$0.04 per generation.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-col gap-4 py-2">
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-sm font-medium">Embellishment</Label>
-            <Select
-              value={embellishment}
-              onValueChange={(v) => setEmbellishment(v as Embellishment)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(EMBELLISHMENT_LABELS).map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label className="text-sm font-medium">Color treatment</Label>
-            <RadioGroup
-              value={colorMode}
-              onValueChange={(v) => setColorMode(v as ColorMode)}
-              className="gap-2"
-            >
-              <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2">
-                <RadioGroupItem value="preserve" id="mockup-color-preserve" />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">
-                    Preserve original colors
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Render the artwork as-is. Best for full-color logos.
-                  </div>
-                </div>
-              </label>
-              <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2">
-                <RadioGroupItem value="single_ink" id="mockup-color-single" />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">Single ink color</div>
-                  <div className="text-xs text-muted-foreground">
-                    Replace every color in the artwork with one ink. Best for
-                    screenprint on dark shirts.
-                  </div>
-                  {colorMode === "single_ink" && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <input
-                        type="color"
-                        value={inkColorHex}
-                        onChange={(e) => setInkColorHex(e.target.value)}
-                        className="h-8 w-12 cursor-pointer rounded border p-0"
-                      />
-                      <Input
-                        value={inkColorHex}
-                        onChange={(e) => setInkColorHex(e.target.value)}
-                        className="h-8 max-w-[100px] font-mono text-xs"
-                      />
-                    </div>
-                  )}
-                </div>
-              </label>
-            </RadioGroup>
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button
-            variant="outline"
-            type="button"
-            onClick={() => onOpenChange(false)}
-            disabled={busy}
-          >
-            Cancel
-          </Button>
-          <Button onClick={submit} disabled={busy} type="button">
-            {busy ? (
-              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="mr-1 h-4 w-4" />
-            )}
-            {busy ? "Generating…" : "Generate"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 function ArtworkDropzone({
   previewUrl,
@@ -1376,6 +1242,198 @@ function VariantImageButton({
       <ImagePlus className="mr-1 h-3 w-3" />
       {busy ? "…" : "Add"}
     </Button>
+  )
+}
+
+function ApplyToVariantsDialog({
+  open,
+  onOpenChange,
+  variants,
+  defaultSelectedKey,
+  applying,
+  onApply,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  variants: VariantState[]
+  defaultSelectedKey: string | undefined
+  applying: boolean
+  onApply: (variantIds: string[]) => void
+}) {
+  // Group active variants by color so the user can apply per color row.
+  const grouped = useMemo(() => {
+    const m = new Map<string, VariantState[]>()
+    for (const v of variants) {
+      if (!v.is_active) continue
+      const c = v.options?.Color ?? "—"
+      const list = m.get(c) ?? []
+      list.push(v)
+      m.set(c, list)
+    }
+    return Array.from(m.entries())
+  }, [variants])
+
+  const allIds = useMemo(
+    () => variants.filter((v) => v.is_active).map((v) => v.id),
+    [variants],
+  )
+  const defaultColor = useMemo(() => {
+    if (!defaultSelectedKey) return null
+    return (
+      variants.find((v) => v.key === defaultSelectedKey)?.options?.Color ?? null
+    )
+  }, [variants, defaultSelectedKey])
+
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  // Reset the selection every time the dialog opens — defaults to the
+  // currently previewed color (the variants the user was just looking at).
+  useMemo(() => {
+    if (!open) return
+    const next = new Set<string>()
+    if (defaultColor) {
+      for (const v of variants) {
+        if (v.is_active && v.options?.Color === defaultColor) next.add(v.id)
+      }
+    }
+    setSelected(next)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
+
+  function toggleId(id: string) {
+    setSelected((s) => {
+      const next = new Set(s)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  function toggleColor(color: string, vs: VariantState[]) {
+    setSelected((s) => {
+      const next = new Set(s)
+      const allOn = vs.every((v) => next.has(v.id))
+      for (const v of vs) {
+        if (allOn) next.delete(v.id)
+        else next.add(v.id)
+      }
+      return next
+    })
+  }
+  function selectAll() {
+    setSelected(new Set(allIds))
+  }
+  function selectNone() {
+    setSelected(new Set())
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Apply mockup to variants</DialogTitle>
+          <DialogDescription>
+            The current design will be composited onto each selected
+            variant&apos;s blank and saved as that variant&apos;s image.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            {selected.size} of {allIds.length} selected
+          </span>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={selectAll}
+              className="rounded px-2 py-0.5 underline-offset-2 hover:underline"
+            >
+              All
+            </button>
+            <button
+              type="button"
+              onClick={selectNone}
+              className="rounded px-2 py-0.5 underline-offset-2 hover:underline"
+            >
+              None
+            </button>
+          </div>
+        </div>
+
+        <div className="max-h-[50vh] overflow-y-auto rounded-md border">
+          {grouped.length === 0 ? (
+            <p className="p-4 text-sm text-muted-foreground">
+              No active variants.
+            </p>
+          ) : (
+            grouped.map(([color, vs]) => {
+              const allOn = vs.every((v) => selected.has(v.id))
+              const someOn = !allOn && vs.some((v) => selected.has(v.id))
+              return (
+                <div key={color} className="border-b last:border-b-0">
+                  <button
+                    type="button"
+                    onClick={() => toggleColor(color, vs)}
+                    className="flex w-full items-center justify-between gap-2 bg-muted/50 px-3 py-2 text-left text-sm font-medium hover:bg-muted"
+                  >
+                    <span>{color}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {someOn
+                        ? "some"
+                        : allOn
+                          ? `${vs.length} selected`
+                          : `0 of ${vs.length}`}
+                    </span>
+                  </button>
+                  <ul>
+                    {vs.map((v) => (
+                      <li
+                        key={v.id}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm"
+                      >
+                        <Checkbox
+                          id={`apply-${v.id}`}
+                          checked={selected.has(v.id)}
+                          onCheckedChange={() => toggleId(v.id)}
+                        />
+                        <label
+                          htmlFor={`apply-${v.id}`}
+                          className="flex-1 cursor-pointer"
+                        >
+                          {describeVariant(v.options)}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={applying}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => onApply(Array.from(selected))}
+            disabled={applying || selected.size === 0}
+          >
+            {applying ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="mr-1 h-4 w-4" />
+            )}
+            {applying
+              ? "Applying…"
+              : `Apply to ${selected.size} variant${selected.size === 1 ? "" : "s"}`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
