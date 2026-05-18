@@ -1,33 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import { TrashIcon, ArrowRightIcon } from "@radix-ui/react-icons";
 
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 
 import SendEmailModal from "@/components/modal/send-email-sheet";
 import SendButton from "@/components/modal-buttons/send-button";
@@ -108,16 +88,14 @@ const columns: ColumnDef<Person>[] = [
     accessorKey: "actions",
     header: "",
     cell: ({ row }) => (
-      <>
-        <Link
-          href={`/people/${row.original.id}`}
-          className="cursor rounded hover:bg-gray-100"
-        >
-          <span className="flex items-center space-x-2 text-sm text-gray-700">
-            <ArrowRightIcon className="h-5 w-5" />
-          </span>
-        </Link>
-      </>
+      <Link
+        href={`/people/${row.original.id}`}
+        className="cursor rounded hover:bg-gray-100"
+      >
+        <span className="flex items-center space-x-2 text-sm text-gray-700">
+          <ArrowRightIcon className="h-5 w-5" />
+        </span>
+      </Link>
     ),
   },
 ];
@@ -134,171 +112,52 @@ export function StaffTable({
   const { refresh } = useRouter();
   const supabase = createClient();
 
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-
-  useEffect(() => {
-    console.log("DATA", data);
-  }, []);
-
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = useState({});
-
-  const table = useReactTable({
-    data,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-    },
-  });
-
-  useEffect(() => {
-    // Set the initial page size
-    table.setPageSize(30);
-  }, []); //
-
-  // const handleDeleteSelected = () => {
-  //   const people = selectedRows.map((row) => row.original);
-  //   // Logic to delete selected rows
-  // };
-
-  const handleRemoveSelected = async () => {
-    const people = selectedRows.map((row) => row.original);
-
-    people.forEach(async (person: any) => {
-      const { error } = await supabase
-        .from("staff")
-        .delete()
-        .eq("team_id", team.id)
-        .eq("person_id", person.id);
-
-      if (error) {
-        console.log("ERROR REMOVING PERSON", error);
-      }
-    });
-
-    // Show a toast notification
-
-    refresh();
-    table.toggleAllPageRowsSelected(false);
-    toast.success("Selected staff have been removed successfully.");
-  };
-
-  // Check if any row is selected
-  const isAnyRowSelected = table?.getSelectedRowModel()?.rows?.length > 0;
-
-  const selectedRows = table.getSelectedRowModel().rows;
-
-  const people = selectedRows.map((row) => row.original);
-
   return (
-    <div className="w-full">
-      {isAnyRowSelected && (
-        <div className="mb-2 flex justify-between space-x-4 py-2">
-          <div className="flex items-center space-x-2">
+    <DataTable
+      columns={columns}
+      data={data}
+      enableRowSelection
+      showColumnVisibility={false}
+      emptyState={<p className="text-sm text-muted-foreground">No results.</p>}
+      bulkActions={(selectedRows, clearSelection) => {
+        const people = selectedRows.map((row) => row.original);
+        const handleRemoveSelected = async () => {
+          people.forEach(async (person: any) => {
+            const { error } = await supabase
+              .from("staff")
+              .delete()
+              .eq("team_id", team.id)
+              .eq("person_id", person.id);
+
+            if (error) {
+              console.log("ERROR REMOVING PERSON", error);
+            }
+          });
+          refresh();
+          clearSelection();
+          toast.success("Selected staff have been removed successfully.");
+        };
+
+        return (
+          <>
             <SendButton channel="email" cta="Send Email">
               <SendEmailModal
                 people={people}
                 cta="Send Email"
                 account={account}
-                onClose={() => table.toggleAllPageRowsSelected(false)}
+                onClose={clearSelection}
               />
             </SendButton>
-          </div>
-          <Button
-            onClick={handleRemoveSelected}
-            variant="outline"
-            className="text-red-500"
-          >
-            <TrashIcon className="mr-2 h-4 w-4" /> Remove
-          </Button>
-        </div>
-      )}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id + Math.random()}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id + Math.random()}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id + Math.random()}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id + Math.random()}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No results.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="text-muted-foreground flex-1 text-sm">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
-        </div>
-        <div className="space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    </div>
+            <Button
+              onClick={handleRemoveSelected}
+              variant="outline"
+              className="text-red-500"
+            >
+              <TrashIcon className="mr-2 h-4 w-4" /> Remove
+            </Button>
+          </>
+        );
+      }}
+    />
   );
 }

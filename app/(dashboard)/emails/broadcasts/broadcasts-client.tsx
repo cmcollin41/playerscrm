@@ -1,19 +1,10 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
 import RichTextEditor from "@/components/emails/rich-text-editor"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import {
   Select,
   SelectContent,
@@ -22,12 +13,17 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -37,28 +33,18 @@ import { Switch } from "@/components/ui/switch"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
-import { 
-  Mail, 
-  Send, 
-  ArrowUpDown, 
-  Loader2, 
-  FileText, 
+import {
+  Mail,
+  Send,
+  ArrowUpDown,
+  Loader2,
+  FileText,
   Users,
   TrendingUp,
-  Clock
+  Clock,
 } from "lucide-react"
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
+import type { ColumnDef } from "@tanstack/react-table"
+import { DataTable } from "@/components/ui/data-table"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 
@@ -107,7 +93,13 @@ interface BroadcastsClientProps {
 }
 
 const getStatusBadge = (status: string) => {
-  const config: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; className: string }> = {
+  const config: Record<
+    string,
+    {
+      variant: "default" | "secondary" | "destructive" | "outline"
+      className: string
+    }
+  > = {
     draft: {
       variant: "secondary",
       className: "bg-gray-100 text-gray-800 hover:bg-gray-100",
@@ -139,16 +131,15 @@ const getStatusBadge = (status: string) => {
   )
 }
 
-export default function BroadcastsClient({ broadcasts, lists, senders, account, accountId }: BroadcastsClientProps) {
+export default function BroadcastsClient({
+  broadcasts,
+  lists,
+  senders,
+  accountId: _accountId,
+  account: _account,
+}: BroadcastsClientProps) {
   const router = useRouter()
-  const [globalFilter, setGlobalFilter] = useState("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
-  const [sorting, setSorting] = useState<SortingState>([{ id: "created_at", desc: true }])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = useState({})
 
-  // Create broadcast modal state
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createLoading, setCreateLoading] = useState(false)
   const [broadcastName, setBroadcastName] = useState("")
@@ -182,7 +173,9 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
         throw new Error(data.error || "Failed to create broadcast")
       }
 
-      toast.success(sendNow ? "Broadcast sent successfully!" : "Broadcast created as draft")
+      toast.success(
+        sendNow ? "Broadcast sent successfully!" : "Broadcast created as draft",
+      )
       setCreateModalOpen(false)
       setBroadcastName("")
       setBroadcastSubject("")
@@ -198,33 +191,28 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
     }
   }
 
-  // Filter data based on status
-  const filteredData = useMemo(() => {
-    if (statusFilter === "all") return broadcasts
-    return broadcasts.filter((broadcast) => broadcast.status === statusFilter)
-  }, [broadcasts, statusFilter])
-
-  // Define columns
   const columns = useMemo<ColumnDef<Broadcast>[]>(
     () => [
       {
         accessorKey: "name",
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-              className="hover:bg-transparent p-0"
-            >
-              Broadcast
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-          )
-        },
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() =>
+              column.toggleSorting(column.getIsSorted() === "asc")
+            }
+            className="hover:bg-transparent p-0"
+          >
+            Broadcast
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
         cell: ({ row }) => (
           <div>
             <div className="font-medium">{row.original.name}</div>
-            <div className="text-sm text-muted-foreground">{row.original.subject}</div>
+            <div className="text-sm text-muted-foreground">
+              {row.original.subject}
+            </div>
           </div>
         ),
       },
@@ -247,27 +235,36 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
         accessorKey: "recipients",
         header: "Recipients",
         cell: ({ row }) => (
-          <div className="font-medium">{row.original.total_recipients || 0}</div>
+          <div className="font-medium">
+            {row.original.total_recipients || 0}
+          </div>
         ),
       },
       {
         accessorKey: "status",
         header: "Status",
         cell: ({ row }) => getStatusBadge(row.original.status),
+        filterFn: (row, _id, value) => {
+          if (!value || value === "all") return true
+          return row.original.status === value
+        },
       },
       {
         accessorKey: "stats",
         header: "Performance",
         cell: ({ row }) => {
-          const { total_sent, total_delivered, total_opened } = row.original
+          const { total_sent, total_opened } = row.original
           if (row.original.status !== "sent" || !total_sent) {
             return <span className="text-muted-foreground text-sm">—</span>
           }
-          const openRate = total_sent > 0 ? Math.round((total_opened / total_sent) * 100) : 0
+          const openRate =
+            total_sent > 0 ? Math.round((total_opened / total_sent) * 100) : 0
           return (
             <div className="text-sm">
               <div>Sent: {total_sent}</div>
-              <div className="text-muted-foreground">Open rate: {openRate}%</div>
+              <div className="text-muted-foreground">
+                Open rate: {openRate}%
+              </div>
             </div>
           )
         },
@@ -283,7 +280,9 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
               year: "numeric",
             })}
             <div className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(row.original.created_at), { addSuffix: true })}
+              {formatDistanceToNow(new Date(row.original.created_at), {
+                addSuffix: true,
+              })}
             </div>
           </div>
         ),
@@ -307,67 +306,33 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
         },
       },
     ],
-    []
+    [],
   )
 
-  const table = useReactTable({
-    data: filteredData,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    onGlobalFilterChange: setGlobalFilter,
-    globalFilterFn: (row, columnId, filterValue) => {
-      const searchValue = filterValue.toLowerCase()
-      return (
-        row.original.name.toLowerCase().includes(searchValue) ||
-        row.original.subject.toLowerCase().includes(searchValue) ||
-        row.original.list?.name.toLowerCase().includes(searchValue) ||
-        false
-      )
-    },
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-      globalFilter,
-    },
-  })
-
-  useEffect(() => {
-    table.setPageSize(25)
-  }, [table])
-
-  // Calculate statistics
   const stats = useMemo(() => {
     const total = broadcasts.length
     const sent = broadcasts.filter((b) => b.status === "sent").length
     const drafts = broadcasts.filter((b) => b.status === "draft").length
-    const totalRecipients = broadcasts.reduce((acc, b) => acc + (b.total_sent || 0), 0)
-    const totalOpened = broadcasts.reduce((acc, b) => acc + (b.total_opened || 0), 0)
-    const avgOpenRate = totalRecipients > 0 ? Math.round((totalOpened / totalRecipients) * 100) : 0
+    const totalRecipients = broadcasts.reduce(
+      (acc, b) => acc + (b.total_sent || 0),
+      0,
+    )
+    const totalOpened = broadcasts.reduce(
+      (acc, b) => acc + (b.total_opened || 0),
+      0,
+    )
+    const avgOpenRate =
+      totalRecipients > 0
+        ? Math.round((totalOpened / totalRecipients) * 100)
+        : 0
 
-    return {
-      total,
-      sent,
-      drafts,
-      totalRecipients,
-      avgOpenRate,
-    }
+    return { total, sent, drafts, totalRecipients, avgOpenRate }
   }, [broadcasts])
 
-  // Get synced lists for dropdown
   const syncedLists = lists.filter((list) => list.resend_segment_id)
 
   return (
     <div className="space-y-6">
-      {/* Header with Create Button */}
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" asChild>
           <Link href="/emails/lists">
@@ -389,19 +354,27 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
                 Compose and send a newsletter to one of your lists
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleCreateBroadcast} className="flex flex-col flex-1 min-h-0">
+            <form
+              onSubmit={handleCreateBroadcast}
+              className="flex flex-col flex-1 min-h-0"
+            >
               <ScrollArea className="flex-1 min-h-0">
                 <div className="space-y-4 px-6 py-4">
                   <div className="space-y-2">
                     <Label htmlFor="list">Select List</Label>
-                    <Select value={selectedListId} onValueChange={setSelectedListId} required>
+                    <Select
+                      value={selectedListId}
+                      onValueChange={setSelectedListId}
+                      required
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Choose a list to send to" />
                       </SelectTrigger>
                       <SelectContent>
                         {syncedLists.map((list) => (
                           <SelectItem key={list.id} value={list.id}>
-                            {list.name} ({list.list_people[0]?.count || 0} members)
+                            {list.name} ({list.list_people[0]?.count || 0}{" "}
+                            members)
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -415,13 +388,20 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
 
                   <div className="space-y-2">
                     <Label htmlFor="sender">From</Label>
-                    <Select value={selectedSender} onValueChange={setSelectedSender} required>
+                    <Select
+                      value={selectedSender}
+                      onValueChange={setSelectedSender}
+                      required
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Choose a sender" />
                       </SelectTrigger>
                       <SelectContent>
                         {senders.map((s) => (
-                          <SelectItem key={s.id} value={`${s.name} <${s.email}>`}>
+                          <SelectItem
+                            key={s.id}
+                            value={`${s.name} <${s.email}>`}
+                          >
                             {s.name} &lt;{s.email}&gt;
                           </SelectItem>
                         ))}
@@ -429,7 +409,8 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
                     </Select>
                     {senders.length === 0 && (
                       <p className="text-sm text-red-600">
-                        No senders configured. Add a verified sender in Settings first.
+                        No senders configured. Add a verified sender in
+                        Settings first.
                       </p>
                     )}
                   </div>
@@ -467,7 +448,8 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
                       placeholder="Write your email here..."
                     />
                     <p className="text-xs text-muted-foreground">
-                      Use the toolbar to format text, add images, and insert links.
+                      Use the toolbar to format text, add images, and insert
+                      links.
                     </p>
                   </div>
                 </div>
@@ -479,7 +461,10 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
                     checked={sendNow}
                     onCheckedChange={setSendNow}
                   />
-                  <Label htmlFor="sendNow" className="cursor-pointer text-sm">
+                  <Label
+                    htmlFor="sendNow"
+                    className="cursor-pointer text-sm"
+                  >
                     Send now
                   </Label>
                 </div>
@@ -491,8 +476,15 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
                   >
                     Cancel
                   </Button>
-                  <Button type="submit" disabled={createLoading || !selectedListId || !selectedSender}>
-                    {createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Button
+                    type="submit"
+                    disabled={
+                      createLoading || !selectedListId || !selectedSender
+                    }
+                  >
+                    {createLoading && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
                     {sendNow ? "Send Broadcast" : "Save as Draft"}
                   </Button>
                 </div>
@@ -502,17 +494,22 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
         </Dialog>
       </div>
 
-      {/* Warning if no synced lists */}
       {syncedLists.length === 0 && (
         <Card className="border-yellow-200 bg-yellow-50">
           <CardContent className="pt-6">
             <div className="flex items-start gap-3">
               <Clock className="h-5 w-5 text-yellow-600 mt-0.5" />
               <div>
-                <h3 className="font-medium text-yellow-900">No Lists Synced to Resend</h3>
+                <h3 className="font-medium text-yellow-900">
+                  No Lists Synced to Resend
+                </h3>
                 <p className="text-sm text-yellow-700 mt-1">
-                  You need to sync at least one list to Resend before creating broadcasts.{" "}
-                  <a href="/emails/lists" className="underline font-medium">
+                  You need to sync at least one list to Resend before creating
+                  broadcasts.{" "}
+                  <a
+                    href="/emails/lists"
+                    className="underline font-medium"
+                  >
                     Go to Lists →
                   </a>
                 </p>
@@ -522,11 +519,12 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
         </Card>
       )}
 
-      {/* Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Broadcasts</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Broadcasts
+            </CardTitle>
             <Mail className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -550,160 +548,115 @@ export default function BroadcastsClient({ broadcasts, lists, senders, account, 
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Open Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Avg Open Rate
+            </CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{stats.avgOpenRate}%</div>
-            <p className="text-xs text-muted-foreground">Across all broadcasts</p>
+            <div className="text-2xl font-bold text-green-600">
+              {stats.avgOpenRate}%
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Across all broadcasts
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Campaigns Sent</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Campaigns Sent
+            </CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.sent}</div>
-            <p className="text-xs text-muted-foreground">Successfully delivered</p>
+            <p className="text-xs text-muted-foreground">
+              Successfully delivered
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Filters</CardTitle>
-          <CardDescription>Search and filter broadcasts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search by name, subject, or list..."
-                  value={globalFilter ?? ""}
-                  onChange={(e) => setGlobalFilter(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full md:w-[180px]">
-                <SelectValue placeholder="Filter by status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="draft">Draft</SelectItem>
-                <SelectItem value="sent">Sent</SelectItem>
-                <SelectItem value="scheduled">Scheduled</SelectItem>
-                <SelectItem value="failed">Failed</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Broadcasts Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Broadcasts ({table.getFilteredRowModel().rows.length})</CardTitle>
+          <CardTitle>All Broadcasts ({broadcasts.length})</CardTitle>
           <CardDescription>Manage your newsletter campaigns</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id}>
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(header.column.columnDef.header, header.getContext())}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows?.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow key={row.id} data-state={row.getIsSelected() && "selected"}>
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={columns.length} className="h-24 text-center">
-                        {broadcasts.length === 0 ? (
-                          <div className="flex flex-col items-center gap-2 py-8">
-                            <Mail className="h-12 w-12 text-muted-foreground/50" />
-                            <p className="font-medium">No broadcasts created yet</p>
-                            <p className="text-sm text-muted-foreground">
-                              Create your first broadcast to start sending newsletters
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-muted-foreground">No broadcasts match your filters</p>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Pagination Controls */}
-            {table.getPageCount() > 1 && (
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                  Showing{" "}
-                  {table.getState().pagination.pageIndex *
-                    table.getState().pagination.pageSize +
-                    1}{" "}
-                  to{" "}
-                  {Math.min(
-                    (table.getState().pagination.pageIndex + 1) *
-                      table.getState().pagination.pageSize,
-                    table.getFilteredRowModel().rows.length
-                  )}{" "}
-                  of {table.getFilteredRowModel().rows.length} broadcast(s)
+          <DataTable
+            columns={columns}
+            data={broadcasts}
+            pageSize={25}
+            noun="broadcast(s)"
+            showColumnVisibility={false}
+            initialSorting={[{ id: "created_at", desc: true }]}
+            enableGlobalFilter
+            globalFilterFn={(row, _columnId, filterValue) => {
+              const searchValue = String(filterValue).toLowerCase()
+              return (
+                row.original.name.toLowerCase().includes(searchValue) ||
+                row.original.subject.toLowerCase().includes(searchValue) ||
+                row.original.list?.name
+                  .toLowerCase()
+                  .includes(searchValue) ||
+                false
+              )
+            }}
+            emptyState={
+              broadcasts.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-8">
+                  <Mail className="h-12 w-12 text-muted-foreground/50" />
+                  <p className="font-medium">No broadcasts created yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    Create your first broadcast to start sending newsletters
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => table.previousPage()}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    Previous
-                  </Button>
-                  <div className="text-sm text-muted-foreground">
-                    Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => table.nextPage()}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    Next
-                  </Button>
+              ) : (
+                <p className="text-muted-foreground">
+                  No broadcasts match your filters
+                </p>
+              )
+            }
+            toolbar={(table) => (
+              <>
+                <div className="relative flex-1 max-w-md">
+                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    placeholder="Search by name, subject, or list..."
+                    value={(table.getState().globalFilter as string) ?? ""}
+                    onChange={(e) => table.setGlobalFilter(e.target.value)}
+                    className="pl-10"
+                  />
                 </div>
-              </div>
+                <Select
+                  value={
+                    (table.getColumn("status")?.getFilterValue() as string) ??
+                    "all"
+                  }
+                  onValueChange={(value) =>
+                    table
+                      .getColumn("status")
+                      ?.setFilterValue(value === "all" ? undefined : value)
+                  }
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Statuses</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
+                    <SelectItem value="sent">Sent</SelectItem>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                    <SelectItem value="failed">Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </>
             )}
-          </div>
+          />
         </CardContent>
       </Card>
     </div>
   )
 }
-

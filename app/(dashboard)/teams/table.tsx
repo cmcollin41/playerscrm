@@ -1,11 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
 import {
   TrashIcon,
-  MixerHorizontalIcon,
   ArrowRightIcon,
   CheckCircledIcon,
   CrossCircledIcon,
@@ -13,18 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import type { ColumnDef, Row } from "@tanstack/react-table";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -42,19 +30,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable } from "@/components/ui/data-table";
 import { getPrimaryContact } from "@/lib/fetchers/client";
-import SendEmailSheet from "@/components/modal/send-email-sheet"
+import SendEmailSheet from "@/components/modal/send-email-sheet";
 
 import { useRouter } from "next/navigation";
-import { useCallback } from "react";
 
 export type Team = {
   id: string;
@@ -84,7 +64,7 @@ const LEVEL_LABELS: Record<string, string> = {
   sophomore: "Sophomore",
   jv: "JV",
   varsity: "Varsity",
-}
+};
 
 const columns: ColumnDef<Team>[] = [
   {
@@ -114,9 +94,15 @@ const columns: ColumnDef<Team>[] = [
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
         <Avatar className="h-8 w-8">
-          {row.original.icon && <AvatarImage src={row.original.icon} alt={row.getValue("name") as string} />}
+          {row.original.icon && (
+            <AvatarImage
+              src={row.original.icon}
+              alt={row.getValue("name") as string}
+            />
+          )}
           <AvatarFallback className="text-xs font-medium">
-            {(row.getValue("name") as string)?.substring(0, 2).toUpperCase() || "T"}
+            {(row.getValue("name") as string)?.substring(0, 2).toUpperCase() ||
+              "T"}
           </AvatarFallback>
         </Avatar>
         <div className="font-medium">{row.getValue("name")}</div>
@@ -142,16 +128,16 @@ const columns: ColumnDef<Team>[] = [
     accessorKey: "level",
     header: "Level",
     cell: ({ row }) => {
-      const level = row.getValue("level") as string
+      const level = row.getValue("level") as string;
       return (
         <Badge variant="outline" className="capitalize">
           {LEVEL_LABELS[level] || level}
         </Badge>
-      )
+      );
     },
     filterFn: (row, id, value) => {
-      if (!value || value === "all") return true
-      return row.getValue(id) === value
+      if (!value || value === "all") return true;
+      return row.getValue(id) === value;
     },
   },
   {
@@ -160,7 +146,10 @@ const columns: ColumnDef<Team>[] = [
     cell: ({ row }) => {
       const isActive = row.getValue("is_active");
       return (
-        <Badge variant={isActive ? "default" : "secondary"} className="flex w-fit items-center gap-1">
+        <Badge
+          variant={isActive ? "default" : "secondary"}
+          className="flex w-fit items-center gap-1"
+        >
           {isActive ? (
             <>
               <CheckCircledIcon className="h-3 w-3" />
@@ -208,111 +197,18 @@ const columns: ColumnDef<Team>[] = [
   },
 ];
 
-export function TeamTable({ data, account }: { data: Team[]; account: any }) {
-  const router = useRouter();
+function TeamBulkActions({
+  selectedRows,
+  account,
+  clearSelection,
+}: {
+  selectedRows: Row<Team>[];
+  account: any;
+  clearSelection: () => void;
+}) {
   const { refresh } = useRouter();
   const supabase = createClient();
-  const [sorting, setSorting] = useState<SortingState>([]);
-
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([
-    { id: "level", value: "bantam" },
-  ]);
-
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = useState({});
-
-  // Navigate to team detail page
-  const navigateToTeam = useCallback((teamId: string) => {
-    router.push(`/teams/${teamId}`);
-  }, [router]);
-
-  // Define handler functions before table initialization
-  const handleToggleStatus = async (teamId: string, currentStatus: boolean) => {
-    const { error } = await supabase
-      .from("teams")
-      .update({ is_active: !currentStatus })
-      .eq("id", teamId);
-
-    if (error) {
-      toast.error("Failed to update team status");
-      return;
-    }
-
-    refresh();
-    toast.success(`Team ${!currentStatus ? "activated" : "archived"} successfully`);
-  };
-
-  const table = useReactTable({
-    data,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-    },
-  });
-
-  useEffect(() => {
-    // Set the initial page size
-    table.setPageSize(30);
-  }, []);
-
-  const handleDeleteSelected = async () => {
-    const selectedRows = table.getSelectedRowModel().rows;
-    // Logic to delete selected rows
-    await Promise.all(
-      selectedRows.map((row) => {
-        return supabase.from("teams").delete().eq("id", row.original.id);
-      }),
-    );
-
-    // Show a toast notification
-    table.toggleAllRowsSelected(false);
-    refresh();
-    toast.success("Selected teams have been deleted successfully.");
-  };
-
-  const handleArchiveSelected = async () => {
-    const selectedRows = table.getSelectedRowModel().rows;
-    await Promise.all(
-      selectedRows.map((row) => {
-        return supabase.from("teams").update({ is_active: false }).eq("id", row.original.id);
-      }),
-    );
-
-    table.toggleAllRowsSelected(false);
-    refresh();
-    toast.success("Selected teams have been archived successfully.");
-  };
-
-  const handleActivateSelected = async () => {
-    const selectedRows = table.getSelectedRowModel().rows;
-    await Promise.all(
-      selectedRows.map((row) => {
-        return supabase.from("teams").update({ is_active: true }).eq("id", row.original.id);
-      }),
-    );
-
-    table.toggleAllRowsSelected(false);
-    refresh();
-    toast.success("Selected teams have been activated successfully.");
-  };
-
-  // Check if any row is selected
-  const isAnyRowSelected = table?.getSelectedRowModel()?.rows?.length > 0;
-
-  const selectedRows = table.getSelectedRowModel().rows;
-
-  const [primaryContacts, setPrimaryContacts] = useState<any>([]);
+  const [primaryContacts, setPrimaryContacts] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchPrimaryContacts = async () => {
@@ -327,214 +223,182 @@ export function TeamTable({ data, account }: { data: Team[]; account: any }) {
           primary_contacts: primaryContact,
         };
       });
-      const primaryContacts = await Promise.all(primaryContactsPromises);
-      setPrimaryContacts(primaryContacts);
+      const result = await Promise.all(primaryContactsPromises);
+      setPrimaryContacts(result);
     };
     fetchPrimaryContacts();
   }, [selectedRows]);
 
-  // const teams = selectedRows.map((row) => row.original);
+  const handleDeleteSelected = async () => {
+    await Promise.all(
+      selectedRows.map((row) =>
+        supabase.from("teams").delete().eq("id", row.original.id),
+      ),
+    );
+    clearSelection();
+    refresh();
+    toast.success("Selected teams have been deleted successfully.");
+  };
+
+  const handleArchiveSelected = async () => {
+    await Promise.all(
+      selectedRows.map((row) =>
+        supabase
+          .from("teams")
+          .update({ is_active: false })
+          .eq("id", row.original.id),
+      ),
+    );
+    clearSelection();
+    refresh();
+    toast.success("Selected teams have been archived successfully.");
+  };
+
+  const handleActivateSelected = async () => {
+    await Promise.all(
+      selectedRows.map((row) =>
+        supabase
+          .from("teams")
+          .update({ is_active: true })
+          .eq("id", row.original.id),
+      ),
+    );
+    clearSelection();
+    refresh();
+    toast.success("Selected teams have been activated successfully.");
+  };
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center gap-4">
-        <Input
-          placeholder="Search by name..."
-          value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn("name")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
-        <Select
-          value={(table.getColumn("level")?.getFilterValue() as string) ?? "all"}
-          onValueChange={(value) =>
-            table.getColumn("level")?.setFilterValue(value === "all" ? undefined : value)
-          }
-        >
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Level" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All levels</SelectItem>
-            {Object.entries(LEVEL_LABELS).map(([value, label]) => (
-              <SelectItem key={value} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="flex items-center justify-between">
-              Filter: {(table.getColumn("is_active")?.getFilterValue() as string) || "All"}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuCheckboxItem
-              checked={!table.getColumn("is_active")?.getFilterValue()}
-              onCheckedChange={() => table.getColumn("is_active")?.setFilterValue(undefined)}
-            >
-              All Teams
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem
-              checked={table.getColumn("is_active")?.getFilterValue() === "active"}
-              onCheckedChange={() => table.getColumn("is_active")?.setFilterValue("active")}
-            >
-              Active Only
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem
-              checked={table.getColumn("is_active")?.getFilterValue() === "inactive"}
-              onCheckedChange={() => table.getColumn("is_active")?.setFilterValue("inactive")}
-            >
-              Inactive Only
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="ml-auto flex items-center justify-between"
-            >
-              <MixerHorizontalIcon className="mr-2 h-4 w-4" /> View
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => {
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) =>
-                      column.toggleVisibility(!!value)
-                    }
-                  >
-                    {column.id}
-                  </DropdownMenuCheckboxItem>
-                );
-              })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+    <>
+      <SendEmailSheet
+        people={primaryContacts}
+        account={account}
+        cta="Send Email"
+        onClose={clearSelection}
+        context={{
+          type: "team",
+          name: "Selected Teams",
+        }}
+      />
+      <Button
+        onClick={handleActivateSelected}
+        variant="outline"
+        className="text-green-600"
+      >
+        <CheckCircledIcon className="mr-2 h-4 w-4" /> Activate
+      </Button>
+      <Button
+        onClick={handleArchiveSelected}
+        variant="outline"
+        className="text-orange-600"
+      >
+        <CrossCircledIcon className="mr-2 h-4 w-4" /> Archive
+      </Button>
+      <Button
+        onClick={handleDeleteSelected}
+        variant="outline"
+        className="text-red-500"
+      >
+        <TrashIcon className="mr-2 h-4 w-4" /> Delete
+      </Button>
+    </>
+  );
+}
 
-      {isAnyRowSelected && (
-        <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
-          <div className="flex items-center gap-2">
-            <SendEmailSheet
-              people={primaryContacts}
-              account={account}
-              cta="Send Email"
-              onClose={() => table.toggleAllRowsSelected(false)}
-              context={{
-                type: 'team',
-                name: 'Selected Teams'
-              }}
-            />
-            <Button
-              onClick={handleActivateSelected}
-              variant="outline"
-              className="text-green-600"
-            >
-              <CheckCircledIcon className="mr-2 h-4 w-4" /> Activate
-            </Button>
-            <Button
-              onClick={handleArchiveSelected}
-              variant="outline"
-              className="text-orange-600"
-            >
-              <CrossCircledIcon className="mr-2 h-4 w-4" /> Archive
-            </Button>
-          </div>
-          <Button
-            onClick={handleDeleteSelected}
-            variant="outline"
-            className="text-red-500"
+export function TeamTable({ data, account }: { data: Team[]; account: any }) {
+  const router = useRouter();
+
+  return (
+    <DataTable
+      columns={columns}
+      data={data}
+      enableRowSelection
+      initialColumnFilters={[{ id: "level", value: "bantam" }]}
+      onRowClick={(team) => router.push(`/teams/${team.id}`)}
+      emptyState={<p className="text-sm text-muted-foreground">No results.</p>}
+      toolbar={(table) => (
+        <>
+          <Input
+            placeholder="Search by name..."
+            value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+            onChange={(event) =>
+              table.getColumn("name")?.setFilterValue(event.target.value)
+            }
+            className="max-w-sm"
+          />
+          <Select
+            value={
+              (table.getColumn("level")?.getFilterValue() as string) ?? "all"
+            }
+            onValueChange={(value) =>
+              table
+                .getColumn("level")
+                ?.setFilterValue(value === "all" ? undefined : value)
+            }
           >
-            <TrashIcon className="mr-2 h-4 w-4" /> Delete
-          </Button>
-        </div>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All levels</SelectItem>
+              {Object.entries(LEVEL_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="flex items-center justify-between"
+              >
+                Filter:{" "}
+                {(table.getColumn("is_active")?.getFilterValue() as string) ||
+                  "All"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuCheckboxItem
+                checked={!table.getColumn("is_active")?.getFilterValue()}
+                onCheckedChange={() =>
+                  table.getColumn("is_active")?.setFilterValue(undefined)
+                }
+              >
+                All Teams
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={
+                  table.getColumn("is_active")?.getFilterValue() === "active"
+                }
+                onCheckedChange={() =>
+                  table.getColumn("is_active")?.setFilterValue("active")
+                }
+              >
+                Active Only
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={
+                  table.getColumn("is_active")?.getFilterValue() === "inactive"
+                }
+                onCheckedChange={() =>
+                  table.getColumn("is_active")?.setFilterValue("inactive")
+                }
+              >
+                Inactive Only
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
       )}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext(),
-                          )}
-                    </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  onClick={() => navigateToTeam(row.original.id)}
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                  className="cursor-pointer hover:bg-muted/50 transition-colors"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  No results.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    </div>
+      bulkActions={(selectedRows, clearSelection) => (
+        <TeamBulkActions
+          selectedRows={selectedRows}
+          account={account}
+          clearSelection={clearSelection}
+        />
+      )}
+    />
   );
 }

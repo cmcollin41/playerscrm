@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { getAccount } from "@/lib/fetchers/client"
@@ -28,8 +28,8 @@ import { toast } from "sonner"
 import { slugify } from "@/lib/slug"
 import LoadingDots from "@/components/icons/loading-dots"
 import { RRule, Frequency, Weekday } from "rrule"
+import { getEventApp, listSelectableEventApps } from "@/lib/event-apps"
 
-type EventType = "camp" | "game" | "other"
 type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly"
 
 const MAX_OCCURRENCES = 52
@@ -80,24 +80,6 @@ function expandRecurrence(opts: {
   return new RRule(baseRRule).all()
 }
 
-const TYPE_OPTIONS: { value: EventType; label: string; description: string }[] = [
-  {
-    value: "camp",
-    label: "Camp / Clinic",
-    description: "Paid registration with capacity and registration window",
-  },
-  {
-    value: "game",
-    label: "Game",
-    description: "Team game with opponent and home/away",
-  },
-  {
-    value: "other",
-    label: "Other",
-    description: "Anything else — meetings, tournaments, fundraisers",
-  },
-]
-
 interface Team {
   id: string
   name: string
@@ -110,12 +92,18 @@ export default function NewEventPage() {
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
 
-  const initialType = (searchParams.get("type") as EventType) || "camp"
+  const selectableApps = useMemo(() => listSelectableEventApps(), [])
+  const initialAppParam = searchParams.get("app")
+  const parentEventId = searchParams.get("parent")
   const initialTeam = searchParams.get("team") || ""
 
-  const [eventType, setEventType] = useState<EventType>(
-    TYPE_OPTIONS.some((t) => t.value === initialType) ? initialType : "camp",
-  )
+  const [appSlug, setAppSlug] = useState<string>(() => {
+    if (initialAppParam && getEventApp(initialAppParam).slug !== "unknown") {
+      return initialAppParam
+    }
+    return "camp"
+  })
+  const app = getEventApp(appSlug)
   const [teamId, setTeamId] = useState<string>(initialTeam)
   const [teams, setTeams] = useState<Team[]>([])
 
@@ -129,9 +117,8 @@ export default function NewEventPage() {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [isPublished, setIsPublished] = useState(false)
 
-  // Game-specific
-  const [opponent, setOpponent] = useState("")
-  const [isHome, setIsHome] = useState(true)
+  // App-specific data (e.g. game's opponent + is_home)
+  const [appData, setAppData] = useState<Record<string, any>>({})
 
   // Recurrence
   const [recurrenceFreq, setRecurrenceFreq] = useState<RecurrenceFreq>("none")
@@ -156,33 +143,22 @@ export default function NewEventPage() {
       .then(({ data }) => setTeams(data || []))
   }, [supabase])
 
-  // Sensible defaults per type (user can override either toggle).
+  // Apply the chosen app's defaults when the app changes.
   useEffect(() => {
-    if (eventType === "game") {
-      setIsPublished(true)
-      setIsRegisterable(false)
-      setIsPaid(false)
-    } else if (eventType === "camp") {
-      setIsPublished(false)
-      setIsRegisterable(true)
-      setIsPaid(true)
-    } else {
-      setIsPublished(false)
-      setIsRegisterable(true)
-      setIsPaid(false)
-    }
-  }, [eventType])
+    if (app.defaults?.is_published !== undefined) setIsPublished(!!app.defaults.is_published)
+    if (app.defaults?.is_registerable !== undefined) setIsRegisterable(!!app.defaults.is_registerable)
+    if (app.defaults?.is_paid !== undefined) setIsPaid(!!app.defaults.is_paid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appSlug])
 
-  const isGame = eventType === "game"
   const team = teams.find((t) => t.id === teamId) || null
 
-  // When user picks Weekly recurrence, seed weekdays from the chosen start date.
+  // When Weekly is picked, seed weekdays from the chosen start date.
   useEffect(() => {
     if (recurrenceFreq !== "weekly" || !startsAt || recurrenceWeekdays.length > 0)
       return
     const d = new Date(startsAt)
     if (isNaN(d.getTime())) return
-    // JS getDay: 0=Sun..6=Sat. Convert to our Mon-first index (0=Mon..6=Sun).
     const idx = (d.getDay() + 6) % 7
     setRecurrenceWeekdays([idx])
   }, [recurrenceFreq, startsAt, recurrenceWeekdays.length])
@@ -193,18 +169,18 @@ export default function NewEventPage() {
     )
   }
 
+  function setAppField(key: string, value: any) {
+    setAppData((prev) => ({ ...prev, [key]: value }))
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (isGame) {
-      if (!teamId) {
-        toast.error("Pick a team for the game")
-        return
-      }
-      if (!opponent.trim()) {
-        toast.error("Opponent is required")
-        return
-      }
+    if (app.capabilities.requiresTeam && !teamId) {
+      toast.error("Pick a team")
+      return
+    }
+    if (app.capabilities.hideNameInput) {
       if (!startsAt) {
         toast.error("Start time is required")
         return
@@ -221,13 +197,19 @@ export default function NewEventPage() {
 
       let finalName: string
       let slug: string
-      if (isGame) {
-        const teamSlug = team?.slug || slugify(team?.name || "team")
-        const opponentSlug = slugify(opponent)
-        const date = new Date(startsAt)
-        const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`
-        slug = `game-${teamSlug}-vs-${opponentSlug}-${dateStr}`
-        finalName = isHome ? `vs ${opponent.trim()}` : `@ ${opponent.trim()}`
+
+      if (app.generateNameAndSlug) {
+        const gen = app.generateNameAndSlug(appData, {
+          startsAt: localInputToIso(startsAt),
+          team: team ? { slug: team.slug, name: team.name } : null,
+        })
+        if (!gen) {
+          toast.error("Missing required fields for this event type")
+          setSaving(false)
+          return
+        }
+        finalName = gen.name
+        slug = gen.slug
       } else {
         finalName = name.trim()
         slug = slugify(finalName)
@@ -241,27 +223,29 @@ export default function NewEventPage() {
       const insertRow: any = {
         account_id: account.id,
         team_id: teamId || null,
-        event_type: eventType,
+        parent_event_id: parentEventId || null,
+        event_type: app.slug,
         name: finalName,
         slug,
         description: description.trim() || null,
         location: location.trim() || null,
         starts_at: localInputToIso(startsAt),
         ends_at: localInputToIso(endsAt),
-        arrival_time: localInputToIso(arrivalAt),
         is_published: isPublished,
         is_registerable: isRegisterable,
         is_paid: isRegisterable && isPaid,
         fee_amount: feeInCents,
       }
 
-      if (isGame) {
-        insertRow.opponent_name = opponent.trim()
-        insertRow.is_home = isHome
-      } else {
+      if (app.capabilities.showArrivalTime) {
+        insertRow.arrival_time = localInputToIso(arrivalAt)
+      }
+      if (!app.capabilities.hideCoverImage) {
         insertRow.image_url = imageUrl
       }
-
+      if (app.appDataToColumns) {
+        Object.assign(insertRow, app.appDataToColumns(appData))
+      }
       if (isRegisterable) {
         insertRow.registration_opens_at = localInputToIso(registrationOpensAt)
         insertRow.registration_closes_at = localInputToIso(registrationClosesAt)
@@ -269,7 +253,10 @@ export default function NewEventPage() {
         insertRow.fee_description = feeDescription.trim() || null
       }
 
-      const recurring = !isGame && recurrenceFreq !== "none" && !!insertRow.starts_at
+      const recurring =
+        !app.capabilities.hideRecurrence &&
+        recurrenceFreq !== "none" &&
+        !!insertRow.starts_at
       if (recurring) {
         if (recurrenceFreq === "weekly" && recurrenceWeekdays.length === 0) {
           toast.error("Pick at least one day of the week")
@@ -323,10 +310,16 @@ export default function NewEventPage() {
         const { error } = await supabase.from("events").insert(insertRow)
         if (error) throw error
 
-        toast.success(`${isGame ? "Game" : "Event"} created`)
+        toast.success(`${app.name} created`)
       }
 
-      router.push(teamId ? `/teams/${teamId}/schedule` : "/events")
+      if (parentEventId) {
+        router.push(`/events/${parentEventId}`)
+      } else if (teamId) {
+        router.push(`/teams/${teamId}/schedule`)
+      } else {
+        router.push("/events")
+      }
     } catch (err: any) {
       toast.error(err.message || "Failed to create event")
     } finally {
@@ -334,42 +327,53 @@ export default function NewEventPage() {
     }
   }
 
+  const AppFormFields = app.FormFields
+
   return (
     <div className="mx-auto max-w-2xl p-6">
-      <h1 className="mb-6 text-3xl font-bold tracking-tight">New Event</h1>
+      <h1 className="mb-1 text-3xl font-bold tracking-tight">
+        {parentEventId ? `New sub-event` : "New Event"}
+      </h1>
+      {parentEventId && (
+        <p className="mb-6 text-sm text-gray-500">
+          This event will be created as a sub-event of its parent.
+        </p>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Type</CardTitle>
-            <CardDescription>What kind of event are you creating?</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {TYPE_OPTIONS.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setEventType(t.value)}
-                  className={`rounded-lg border p-3 text-left transition-colors ${
-                    eventType === t.value
-                      ? "border-gray-900 bg-gray-900 text-white"
-                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  <p className="text-sm font-medium">{t.label}</p>
-                  <p
-                    className={`mt-0.5 text-xs ${
-                      eventType === t.value ? "text-gray-300" : "text-gray-500"
+        {!parentEventId && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Type</CardTitle>
+              <CardDescription>What kind of event are you creating?</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {selectableApps.map((a) => (
+                  <button
+                    key={a.slug}
+                    type="button"
+                    onClick={() => setAppSlug(a.slug)}
+                    className={`rounded-lg border p-3 text-left transition-colors ${
+                      appSlug === a.slug
+                        ? "border-gray-900 bg-gray-900 text-white"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                     }`}
                   >
-                    {t.description}
-                  </p>
-                </button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+                    <p className="text-sm font-medium">{a.name}</p>
+                    <p
+                      className={`mt-0.5 text-xs ${
+                        appSlug === a.slug ? "text-gray-300" : "text-gray-500"
+                      }`}
+                    >
+                      {a.description}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -378,15 +382,25 @@ export default function NewEventPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="team">
-                Team {isGame ? <span className="text-red-500">*</span> : <span className="text-gray-400">(optional)</span>}
+                Team{" "}
+                {app.capabilities.requiresTeam ? (
+                  <span className="text-red-500">*</span>
+                ) : (
+                  <span className="text-gray-400">(optional)</span>
+                )}
               </Label>
-              <Select value={teamId || "__none__"} onValueChange={(v) => setTeamId(v === "__none__" ? "" : v)}>
+              <Select
+                value={teamId || "__none__"}
+                onValueChange={(v) => setTeamId(v === "__none__" ? "" : v)}
+              >
                 <SelectTrigger id="team">
                   <SelectValue placeholder="Account-level event (no team)" />
                 </SelectTrigger>
                 <SelectContent>
-                  {!isGame && (
-                    <SelectItem value="__none__">Account-level (no team)</SelectItem>
+                  {!app.capabilities.requiresTeam && (
+                    <SelectItem value="__none__">
+                      Account-level (no team)
+                    </SelectItem>
                   )}
                   {teams.map((t) => (
                     <SelectItem key={t.id} value={t.id}>
@@ -397,36 +411,15 @@ export default function NewEventPage() {
               </Select>
             </div>
 
-            {isGame ? (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="opponent">Opponent *</Label>
-                  <Input
-                    id="opponent"
-                    placeholder="Lone Peak"
-                    value={opponent}
-                    onChange={(e) => setOpponent(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="text-sm font-medium">Home game</p>
-                    <p className="text-xs text-gray-500">
-                      {isHome ? "Played at our location" : "Played at the opponent's location"}
-                    </p>
-                  </div>
-                  <Switch checked={isHome} onCheckedChange={setIsHome} />
-                </div>
-              </>
-            ) : (
+            {!app.capabilities.hideNameInput && (
               <div className="space-y-2">
                 <Label htmlFor="name">Event Name *</Label>
                 <Input
                   id="name"
                   placeholder={
-                    eventType === "camp"
+                    app.slug === "camp"
                       ? "Bulldog Basketball Camp 2026"
-                      : "Team meeting, tournament, etc."
+                      : "Spring Tournament, Team Meeting, etc."
                   }
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -434,15 +427,15 @@ export default function NewEventPage() {
               </div>
             )}
 
+            {AppFormFields && (
+              <AppFormFields appData={appData} setAppField={setAppField} />
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="description">{isGame ? "Notes" : "Description"}</Label>
+              <Label htmlFor="description">Description</Label>
               <Textarea
                 id="description"
-                placeholder={
-                  isGame
-                    ? "Region opener, white jerseys, etc."
-                    : "A 3-day camp for youth athletes..."
-                }
+                placeholder="A 3-day camp for youth athletes..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
@@ -453,13 +446,13 @@ export default function NewEventPage() {
               <Label htmlFor="location">Location</Label>
               <Input
                 id="location"
-                placeholder={isHome && isGame ? "Main Gym" : "Provo High School Gym"}
+                placeholder="Provo High School Gym"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
               />
             </div>
 
-            {!isGame && (
+            {!app.capabilities.hideCoverImage && (
               <div className="space-y-2">
                 <Label>Cover Image</Label>
                 <ImageDropzone
@@ -497,7 +490,9 @@ export default function NewEventPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="starts_at">Starts {isGame && "*"}</Label>
+                <Label htmlFor="starts_at">
+                  Starts {app.capabilities.hideNameInput && "*"}
+                </Label>
                 <Input
                   id="starts_at"
                   type="datetime-local"
@@ -515,7 +510,7 @@ export default function NewEventPage() {
                 />
               </div>
             </div>
-            {isGame && (
+            {app.capabilities.showArrivalTime && (
               <div className="space-y-2">
                 <Label htmlFor="arrival">Arrival</Label>
                 <Input
@@ -529,7 +524,7 @@ export default function NewEventPage() {
           </CardContent>
         </Card>
 
-        {!isGame && (
+        {!app.capabilities.hideRecurrence && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Recurrence</CardTitle>
@@ -696,9 +691,7 @@ export default function NewEventPage() {
             <div>
               <p className="text-sm font-medium">Publish</p>
               <p className="text-xs text-gray-500">
-                {isGame
-                  ? "Published games appear on the team's public schedule."
-                  : "Published events get a registration link anyone can use."}
+                Published events get a registration link anyone can use.
               </p>
             </div>
             <Switch checked={isPublished} onCheckedChange={setIsPublished} />
@@ -710,7 +703,7 @@ export default function NewEventPage() {
             Cancel
           </Button>
           <Button type="submit" disabled={saving}>
-            {saving ? <LoadingDots color="#fff" /> : `Create ${isGame ? "Game" : "Event"}`}
+            {saving ? <LoadingDots color="#fff" /> : `Create ${app.name}`}
           </Button>
         </div>
       </form>

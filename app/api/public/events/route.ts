@@ -1,8 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextRequest, NextResponse } from "next/server"
 
-type EventType = "camp" | "practice" | "game" | "other"
-const VALID_EVENT_TYPES: EventType[] = ["camp", "practice", "game", "other"]
+type EventType = string
 
 interface PublicTeamRef {
   id: string
@@ -24,7 +23,7 @@ interface PublicEvent {
   id: string
   slug: string
   name: string
-  event_type: EventType
+  event_type: string
   description: string | null
   location: string | null
   starts_at: string | null
@@ -32,6 +31,7 @@ interface PublicEvent {
   arrival_time: string | null
   image_url: string | null
   team: PublicTeamRef | null
+  parent_event_id: string | null
   opponent_name: string | null
   is_home: boolean | null
   is_registerable: boolean
@@ -82,11 +82,7 @@ function parseEventTypes(raw: string | null): EventType[] | null {
     .split(",")
     .map((p) => p.trim().toLowerCase())
     .filter(Boolean)
-  if (parts.length === 0) return null
-  const valid = parts.filter((p): p is EventType =>
-    (VALID_EVENT_TYPES as string[]).includes(p),
-  )
-  return valid.length ? valid : null
+  return parts.length ? parts : null
 }
 
 function parseLimit(raw: string | null): number {
@@ -160,7 +156,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("events")
       .select(
-        "id, slug, name, event_type, description, location, starts_at, ends_at, arrival_time, is_registerable, is_paid, registration_opens_at, registration_closes_at, capacity, fee_amount, fee_description, image_url, team_id, opponent_name, is_home, series_id, series_index, teams(id, slug, name, is_public), event_sessions(id, title, description, location, starts_at, ends_at, ordering)",
+        "id, slug, name, event_type, description, location, starts_at, ends_at, arrival_time, is_registerable, is_paid, registration_opens_at, registration_closes_at, capacity, fee_amount, fee_description, image_url, team_id, opponent_name, is_home, series_id, series_index, parent_event_id, teams(id, slug, name, is_public), event_sessions(id, title, description, location, starts_at, ends_at, ordering)",
       )
       .eq("account_id", accountId)
       .eq("is_published", true)
@@ -250,7 +246,7 @@ export async function GET(request: NextRequest) {
         return e.teams?.is_public === true
       })
       .map((e: any) => {
-        const eventType = (e.event_type as EventType) ?? "camp"
+        const eventType: EventType = e.event_type ?? "other"
         const isRegisterable = !!e.is_registerable
         const isPaid = !!e.is_paid
 
@@ -297,6 +293,7 @@ export async function GET(request: NextRequest) {
           arrival_time: e.arrival_time,
           image_url: e.image_url,
           team,
+          parent_event_id: e.parent_event_id ?? null,
           opponent_name: eventType === "game" ? e.opponent_name : null,
           is_home: eventType === "game" ? e.is_home : null,
           is_registerable: isRegisterable,

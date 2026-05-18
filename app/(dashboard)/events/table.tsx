@@ -1,30 +1,17 @@
 "use client"
-import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
 import {
   TrashIcon,
-  MixerHorizontalIcon,
   ArrowRightIcon,
   CheckCircledIcon,
   CrossCircledIcon,
 } from "@radix-ui/react-icons"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
+import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -41,14 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { DataTable } from "@/components/ui/data-table"
 import { DollarSign, Users } from "lucide-react"
 
 type EventType = "camp" | "practice" | "game" | "other"
@@ -248,159 +228,107 @@ export function EventTable({ data }: { data: EventRow[] }) {
   const router = useRouter()
   const { refresh } = useRouter()
   const supabase = createClient()
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = useState({})
-
-  const navigateToEvent = useCallback(
-    (id: string) => {
-      router.push(`/events/${id}`)
-    },
-    [router],
-  )
-
-  const table = useReactTable({
-    data,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    state: { sorting, columnFilters, columnVisibility, rowSelection },
-  })
-
-  useEffect(() => {
-    table.setPageSize(30)
-  }, [])
-
-  const handleDeleteSelected = async () => {
-    const selectedRows = table.getSelectedRowModel().rows
-    await Promise.all(
-      selectedRows.map((row) =>
-        supabase.from("events").delete().eq("id", row.original.id),
-      ),
-    )
-    table.toggleAllRowsSelected(false)
-    refresh()
-    toast.success("Selected events deleted")
-  }
-
-  const handlePublishSelected = async (publish: boolean) => {
-    const selectedRows = table.getSelectedRowModel().rows
-    await Promise.all(
-      selectedRows.map((row) =>
-        supabase
-          .from("events")
-          .update({ is_published: publish })
-          .eq("id", row.original.id),
-      ),
-    )
-    table.toggleAllRowsSelected(false)
-    refresh()
-    toast.success(`Selected events ${publish ? "published" : "unpublished"}`)
-  }
-
-  const isAnyRowSelected = table?.getSelectedRowModel()?.rows?.length > 0
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center gap-4">
-        <Input
-          placeholder="Search by name..."
-          value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn("name")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
-        <Select
-          value={(table.getColumn("event_type")?.getFilterValue() as string) ?? "all"}
-          onValueChange={(value) =>
-            table
-              .getColumn("event_type")
-              ?.setFilterValue(value === "all" ? undefined : value)
-          }
-        >
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            <SelectItem value="camp">Camps</SelectItem>
-            <SelectItem value="practice">Practices</SelectItem>
-            <SelectItem value="game">Games</SelectItem>
-            <SelectItem value="other">Other</SelectItem>
-          </SelectContent>
-        </Select>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="flex items-center justify-between">
-              Filter:{" "}
-              {(table.getColumn("is_published")?.getFilterValue() as string) || "All"}
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuCheckboxItem
-              checked={!table.getColumn("is_published")?.getFilterValue()}
-              onCheckedChange={() =>
-                table.getColumn("is_published")?.setFilterValue(undefined)
-              }
-            >
-              All Events
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem
-              checked={table.getColumn("is_published")?.getFilterValue() === "published"}
-              onCheckedChange={() =>
-                table.getColumn("is_published")?.setFilterValue("published")
-              }
-            >
-              Published Only
-            </DropdownMenuCheckboxItem>
-            <DropdownMenuCheckboxItem
-              checked={table.getColumn("is_published")?.getFilterValue() === "draft"}
-              onCheckedChange={() =>
-                table.getColumn("is_published")?.setFilterValue("draft")
-              }
-            >
-              Drafts Only
-            </DropdownMenuCheckboxItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="ml-auto flex items-center justify-between"
-            >
-              <MixerHorizontalIcon className="mr-2 h-4 w-4" /> View
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className="capitalize"
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                >
-                  {column.id}
-                </DropdownMenuCheckboxItem>
-              ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+    <DataTable
+      columns={columns}
+      data={data}
+      enableRowSelection
+      onRowClick={(event) => router.push(`/events/${event.id}`)}
+      emptyState={<p className="text-sm text-muted-foreground">No results.</p>}
+      toolbar={(table) => (
+        <>
+          <Input
+            placeholder="Search by name..."
+            value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+            onChange={(event) =>
+              table.getColumn("name")?.setFilterValue(event.target.value)
+            }
+            className="max-w-sm"
+          />
+          <Select
+            value={(table.getColumn("event_type")?.getFilterValue() as string) ?? "all"}
+            onValueChange={(value) =>
+              table
+                .getColumn("event_type")
+                ?.setFilterValue(value === "all" ? undefined : value)
+            }
+          >
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All types</SelectItem>
+              <SelectItem value="camp">Camps</SelectItem>
+              <SelectItem value="practice">Practices</SelectItem>
+              <SelectItem value="game">Games</SelectItem>
+              <SelectItem value="other">Other</SelectItem>
+            </SelectContent>
+          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="flex items-center justify-between">
+                Filter:{" "}
+                {(table.getColumn("is_published")?.getFilterValue() as string) || "All"}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuCheckboxItem
+                checked={!table.getColumn("is_published")?.getFilterValue()}
+                onCheckedChange={() =>
+                  table.getColumn("is_published")?.setFilterValue(undefined)
+                }
+              >
+                All Events
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={table.getColumn("is_published")?.getFilterValue() === "published"}
+                onCheckedChange={() =>
+                  table.getColumn("is_published")?.setFilterValue("published")
+                }
+              >
+                Published Only
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={table.getColumn("is_published")?.getFilterValue() === "draft"}
+                onCheckedChange={() =>
+                  table.getColumn("is_published")?.setFilterValue("draft")
+                }
+              >
+                Drafts Only
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      )}
+      bulkActions={(selectedRows, clearSelection) => {
+        const handleDeleteSelected = async () => {
+          await Promise.all(
+            selectedRows.map((row) =>
+              supabase.from("events").delete().eq("id", row.original.id),
+            ),
+          )
+          clearSelection()
+          refresh()
+          toast.success("Selected events deleted")
+        }
 
-      {isAnyRowSelected && (
-        <div className="flex items-center justify-between rounded-lg bg-muted p-3">
-          <div className="flex items-center gap-2">
+        const handlePublishSelected = async (publish: boolean) => {
+          await Promise.all(
+            selectedRows.map((row) =>
+              supabase
+                .from("events")
+                .update({ is_published: publish })
+                .eq("id", row.original.id),
+            ),
+          )
+          clearSelection()
+          refresh()
+          toast.success(`Selected events ${publish ? "published" : "unpublished"}`)
+        }
+
+        return (
+          <>
             <Button
               onClick={() => handlePublishSelected(true)}
               variant="outline"
@@ -415,86 +343,16 @@ export function EventTable({ data }: { data: EventRow[] }) {
             >
               <CrossCircledIcon className="mr-2 h-4 w-4" /> Unpublish
             </Button>
-          </div>
-          <Button
-            onClick={handleDeleteSelected}
-            variant="outline"
-            className="text-red-500"
-          >
-            <TrashIcon className="mr-2 h-4 w-4" /> Delete
-          </Button>
-        </div>
-      )}
-
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  onClick={() => navigateToEvent(row.original.id)}
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                  className="cursor-pointer transition-colors hover:bg-muted/50"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    </div>
+            <Button
+              onClick={handleDeleteSelected}
+              variant="outline"
+              className="text-red-500"
+            >
+              <TrashIcon className="mr-2 h-4 w-4" /> Delete
+            </Button>
+          </>
+        )
+      }}
+    />
   )
 }
