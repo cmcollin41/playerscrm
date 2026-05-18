@@ -52,6 +52,22 @@ export function MainNav({ className, userRole = "general", ...props }: MainNavPr
           Emails
         </Link>
       )}
+      {isAdmin && (
+        <Link
+          href="/store/manage/products"
+          className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
+        >
+          Store
+        </Link>
+      )}
+      {isAdmin && (
+        <Link
+          href="/admin/store/templates"
+          className="text-muted-foreground text-sm font-medium transition-colors hover:text-zinc-900"
+        >
+          Catalog
+        </Link>
+      )}
     </nav>
   )
 }

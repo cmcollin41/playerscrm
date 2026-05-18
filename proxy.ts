@@ -226,9 +226,12 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set("x-subdomain", subdomain)
 
-  // Public tenant paths that don't require auth
+  // Public tenant paths that don't require auth. `/store` covers the hosted
+  // storefront catalog + product detail pages; admin pages under
+  // `/store/manage/*` still gate themselves server-side.
   const tenantPublicPaths = [
     "/register",
+    "/store",
     "/login",
     "/signup",
     "/portal-login",
@@ -237,7 +240,9 @@ export async function proxy(request: NextRequest) {
     "/update-password",
     "/no-access",
   ]
-  const isPublicTenantPath = tenantPublicPaths.some((p) => path.startsWith(p))
+  const isStoreAdminPath = path.startsWith("/store/manage")
+  const isPublicTenantPath =
+    !isStoreAdminPath && tenantPublicPaths.some((p) => path.startsWith(p))
   const isPortalPath = path === "/portal" || path.startsWith("/portal/")
 
   // Check auth for protected tenant routes
