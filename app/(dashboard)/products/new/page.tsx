@@ -1,6 +1,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { createClient } from "@/lib/supabase/server"
+import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Boxes } from "lucide-react"
@@ -16,7 +17,7 @@ export default async function CatalogPickerPage() {
   const { data: templates } = await supabase
     .from("product_templates")
     .select(
-      "id, slug, name, description, category, base_cost_cents, min_markup_cents, shipping_flat_cents, lead_time_days, image_url, fulfillment_partners(slug, name)"
+      "id, slug, name, description, category, base_cost_cents, min_markup_cents, shipping_flat_cents, lead_time_days, image_path, fulfillment_partners(slug, name)"
     )
     .eq("is_active", true)
     .order("name")
@@ -45,7 +46,9 @@ export default async function CatalogPickerPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {templates.map((t: any) => (
+          {templates.map((t: any) => {
+            const imageUrl = getStoreImagePublicUrl(supabase, t.image_path)
+            return (
             <Link
               key={t.id}
               href={`/products/new/${t.id}`}
@@ -53,9 +56,9 @@ export default async function CatalogPickerPage() {
             >
               <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
                 <div className="relative aspect-square bg-muted">
-                  {t.image_url ? (
+                  {imageUrl ? (
                     <Image
-                      src={t.image_url}
+                      src={imageUrl}
                       alt={t.name}
                       fill
                       className="object-cover"
@@ -96,7 +99,8 @@ export default async function CatalogPickerPage() {
                 </CardContent>
               </Card>
             </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
