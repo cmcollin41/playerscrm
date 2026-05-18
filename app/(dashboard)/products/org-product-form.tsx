@@ -19,15 +19,26 @@ import { slugify } from "@/lib/slug"
 import { describeVariant, variantOptionsKey } from "@/lib/store/options"
 import {
   DEFAULT_DESIGN,
+  DEFAULT_MOCKUP_OPTIONS,
   EMBELLISHMENT_LABELS,
   PLACEMENT_DEFAULTS,
   PLACEMENT_LABELS,
   parseDesign,
-  resolveInkColor,
+  type ColorMode,
   type DesignConfig,
   type DesignPlacement,
   type Embellishment,
+  type MockupGenerationOptions,
 } from "@/lib/store/design"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
   getStoreImagePublicUrl,
   makeImageFilename,
@@ -273,6 +284,8 @@ export function OrgProductForm({
   )
   // Which variant (if any) currently has an AI mockup generation in flight.
   const [generatingKey, setGeneratingKey] = useState<string | null>(null)
+  // Variant key of the AI-mockup dialog, or null when closed.
+  const [mockupVariantKey, setMockupVariantKey] = useState<string | null>(null)
 
   // Group active variants by Color and remember the first one per color —
   // used both for the color swatch row and the preview.
@@ -362,7 +375,10 @@ export function OrgProductForm({
 
   // ---- AI mockup generation ----
 
-  async function generateMockup(v: VariantState) {
+  async function generateMockup(
+    v: VariantState,
+    options: MockupGenerationOptions,
+  ) {
     if (!isEdit) {
       toast.error("Save the product once before generating mockups.")
       return
@@ -386,6 +402,12 @@ export function OrgProductForm({
           variant_id: v.id,
           artwork_path: state.artwork_path,
           base_image_path: basePath,
+          embellishment: options.embellishment,
+          color_mode: options.colorMode,
+          ink_color_hex:
+            options.colorMode === "single_ink"
+              ? options.inkColorHex
+              : undefined,
         }),
       })
       const json = await res.json()
@@ -550,10 +572,6 @@ export function OrgProductForm({
                 baseUrl={previewBaseUrl ?? null}
                 artworkUrl={artworkPreviewUrl}
                 design={state.design}
-                inkColorHex={resolveInkColor(
-                  previewVariant.options?.Color,
-                  previewVariant.design_color_hex,
-                )}
                 onDesignChange={updateDesign}
               />
 
@@ -605,46 +623,35 @@ export function OrgProductForm({
             </div>
 
             <div className="flex flex-col gap-4">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Placement">
-                  <Select
-                    value={state.design.placement}
-                    onValueChange={(v) => setPlacement(v as DesignPlacement)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(PLACEMENT_LABELS).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Field label="Embellishment">
-                  <Select
-                    value={state.design.embellishment}
-                    onValueChange={(v) =>
-                      updateDesign({ embellishment: v as Embellishment })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(EMBELLISHMENT_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {label}
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectContent>
-                  </Select>
-                </Field>
-              </div>
+              <Field
+                label="Your design (artwork)"
+                hint="PNG, SVG, or PDF. Private to you — handed to the partner at order time."
+              >
+                <ArtworkDropzone
+                  previewUrl={artworkPreviewUrl}
+                  onSelect={handleArtworkSelect}
+                  onClear={handleArtworkClear}
+                  onError={(msg) => toast.error(msg)}
+                />
+              </Field>
+
+              <Field label="Placement">
+                <Select
+                  value={state.design.placement}
+                  onValueChange={(v) => setPlacement(v as DesignPlacement)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(PLACEMENT_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
 
               <Field
                 label={`Size — ${Math.round(state.design.scale * 100)}% of garment width`}
@@ -693,8 +700,9 @@ export function OrgProductForm({
               </Button>
 
               <p className="text-xs text-muted-foreground">
-                Ink color is set per variant in the table below.
-                Auto picks black or white based on the shirt&apos;s color.
+                You&apos;ll choose embellishment (screenprint, embroidery, etc.)
+                and any color treatment when you generate the AI mockup on a
+                specific variant.
               </p>
             </div>
           </CardContent>
@@ -763,39 +771,25 @@ export function OrgProductForm({
             </Select>
           </Field>
 
-          <div className="grid gap-6 md:grid-cols-2">
-            <Field
-              label="Mockup image"
-              hint="Shown to shoppers on your storefront. Falls back to the template image."
-            >
-              <ImageDropzone
-                value={getStoreImagePublicUrl(supabase, state.image_path) ?? null}
-                onChange={(url) => {
-                  if (url == null) update("image_path", null)
-                }}
-                onFileSelect={async (file) => {
-                  const path = await uploadProductImage(file)
-                  update("image_path", path)
-                  return getStoreImagePublicUrl(supabase, path) ?? path
-                }}
-                onError={(msg) => toast.error(msg)}
-                placeholder="Upload a mockup for shoppers"
-                className="aspect-square w-48"
-              />
-            </Field>
-
-            <Field
-              label="Your design (artwork)"
-              hint="PNG, SVG, or PDF. Private to you — sent to the partner when an order ships."
-            >
-              <ArtworkDropzone
-                previewUrl={artworkPreviewUrl}
-                onSelect={handleArtworkSelect}
-                onClear={handleArtworkClear}
-                onError={(msg) => toast.error(msg)}
-              />
-            </Field>
-          </div>
+          <Field
+            label="Storefront cover image"
+            hint="Optional hero shown on the catalog grid. Falls back to the first variant's image when blank."
+          >
+            <ImageDropzone
+              value={getStoreImagePublicUrl(supabase, state.image_path) ?? null}
+              onChange={(url) => {
+                if (url == null) update("image_path", null)
+              }}
+              onFileSelect={async (file) => {
+                const path = await uploadProductImage(file)
+                update("image_path", path)
+                return getStoreImagePublicUrl(supabase, path) ?? path
+              }}
+              onError={(msg) => toast.error(msg)}
+              placeholder="Optional — upload a custom cover image"
+              className="aspect-square w-48"
+            />
+          </Field>
         </CardContent>
       </Card>
 
@@ -823,7 +817,6 @@ export function OrgProductForm({
                     <TableHead>SKU</TableHead>
                     <TableHead className="text-right">Price (USD)</TableHead>
                     <TableHead>Inventory</TableHead>
-                    <TableHead>Ink</TableHead>
                     <TableHead>Image</TableHead>
                     <TableHead>Active</TableHead>
                   </TableRow>
@@ -885,15 +878,6 @@ export function OrgProductForm({
                           />
                         </TableCell>
                         <TableCell>
-                          <InkColorCell
-                            colorName={v.options?.Color}
-                            value={v.design_color_hex}
-                            onChange={(hex) =>
-                              updateVariant(v.key, { design_color_hex: hex })
-                            }
-                          />
-                        </TableCell>
-                        <TableCell>
                           <div className="flex items-center gap-2">
                             <VariantImageButton
                               currentUrl={imageUrl}
@@ -910,7 +894,7 @@ export function OrgProductForm({
                               variant="ghost"
                               size="sm"
                               type="button"
-                              onClick={() => generateMockup(v)}
+                              onClick={() => setMockupVariantKey(v.key)}
                               disabled={
                                 generatingKey !== null ||
                                 !isEdit ||
@@ -921,7 +905,7 @@ export function OrgProductForm({
                                   ? "Save the product first"
                                   : !state.artwork_path
                                     ? "Upload your design first"
-                                    : "Generate a photorealistic mockup with your artwork"
+                                    : "Generate a photorealistic mockup"
                               }
                               className="h-8 text-xs"
                             >
@@ -977,6 +961,23 @@ export function OrgProductForm({
           </Button>
         </div>
       </div>
+
+      {(() => {
+        const v = state.variants.find((x) => x.key === mockupVariantKey)
+        if (!v) return null
+        return (
+          <MockupDialog
+            open={!!mockupVariantKey}
+            onOpenChange={(o) => !o && setMockupVariantKey(null)}
+            variantLabel={describeVariant(v.options)}
+            busy={generatingKey === v.key}
+            onGenerate={async (opts) => {
+              await generateMockup(v, opts)
+              if (generatingKey === null) setMockupVariantKey(null)
+            }}
+          />
+        )
+      })()}
     </div>
   )
 }
@@ -985,13 +986,11 @@ function DesignPreview({
   baseUrl,
   artworkUrl,
   design,
-  inkColorHex,
   onDesignChange,
 }: {
   baseUrl: string | null
   artworkUrl: string | null
   design: DesignConfig
-  inkColorHex: string
   onDesignChange: (patch: Partial<DesignConfig>) => void
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -1040,21 +1039,6 @@ function DesignPreview({
     }
   }
 
-  // Inline CSS color filter for the design overlay. We tint single-color
-  // designs using the chosen ink color by stacking a colored layer over the
-  // artwork via mask-image. CSS mask is supported in evergreen browsers.
-  const tintStyle: React.CSSProperties = {
-    WebkitMaskImage: `url(${artworkUrl ?? ""})`,
-    maskImage: `url(${artworkUrl ?? ""})`,
-    WebkitMaskRepeat: "no-repeat",
-    maskRepeat: "no-repeat",
-    WebkitMaskSize: "contain",
-    maskSize: "contain",
-    WebkitMaskPosition: "center",
-    maskPosition: "center",
-    backgroundColor: inkColorHex,
-  }
-
   return (
     <div
       ref={containerRef}
@@ -1089,13 +1073,14 @@ function DesignPreview({
             cursor: draggingRef.current ? "grabbing" : "grab",
             touchAction: "none",
           }}
-          className="ring-1 ring-foreground/0 hover:ring-foreground/30"
+          className="rounded-sm ring-1 ring-foreground/0 hover:ring-foreground/30"
         >
-          {/* The tinted layer renders the design in the chosen ink color via CSS mask. */}
-          <div
-            aria-hidden
-            style={tintStyle}
-            className="absolute inset-0"
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={artworkUrl}
+            alt=""
+            draggable={false}
+            className="pointer-events-none h-full w-full select-none object-contain drop-shadow"
           />
         </div>
       )}
@@ -1103,43 +1088,136 @@ function DesignPreview({
   )
 }
 
-function InkColorCell({
-  colorName,
-  value,
-  onChange,
-}: {
-  colorName: string | undefined
-  value: string | null
-  onChange: (hex: string | null) => void
-}) {
-  const autoColor = resolveInkColor(colorName, null)
-  const isAuto = !value
-  const displayColor = value || autoColor
+interface MockupDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  variantLabel: string
+  busy: boolean
+  onGenerate: (options: MockupGenerationOptions) => Promise<void> | void
+}
+
+function MockupDialog({
+  open,
+  onOpenChange,
+  variantLabel,
+  busy,
+  onGenerate,
+}: MockupDialogProps) {
+  const [embellishment, setEmbellishment] = useState<Embellishment>(
+    DEFAULT_MOCKUP_OPTIONS.embellishment,
+  )
+  const [colorMode, setColorMode] = useState<ColorMode>(
+    DEFAULT_MOCKUP_OPTIONS.colorMode,
+  )
+  const [inkColorHex, setInkColorHex] = useState<string>("#000000")
+
+  async function submit() {
+    await onGenerate({
+      embellishment,
+      colorMode,
+      inkColorHex: colorMode === "single_ink" ? inkColorHex : undefined,
+    })
+  }
 
   return (
-    <div className="flex items-center gap-1">
-      <input
-        type="color"
-        value={displayColor}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-7 w-7 cursor-pointer rounded border p-0"
-        title={isAuto ? `Auto: ${autoColor}` : `Custom: ${displayColor}`}
-      />
-      {isAuto ? (
-        <span className="text-[10px] text-muted-foreground">auto</span>
-      ) : (
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-5 w-5 p-0 text-muted-foreground"
-          onClick={() => onChange(null)}
-          title="Reset to auto"
-        >
-          <X className="h-3 w-3" />
-        </Button>
-      )}
-    </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Generate AI mockup</DialogTitle>
+          <DialogDescription>
+            Renders a photorealistic mockup of{" "}
+            <span className="font-medium">{variantLabel}</span> with your
+            artwork applied. ~10–20s, costs ~$0.04 per generation.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-sm font-medium">Embellishment</Label>
+            <Select
+              value={embellishment}
+              onValueChange={(v) => setEmbellishment(v as Embellishment)}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(EMBELLISHMENT_LABELS).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label className="text-sm font-medium">Color treatment</Label>
+            <RadioGroup
+              value={colorMode}
+              onValueChange={(v) => setColorMode(v as ColorMode)}
+              className="gap-2"
+            >
+              <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2">
+                <RadioGroupItem value="preserve" id="mockup-color-preserve" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">
+                    Preserve original colors
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Render the artwork as-is. Best for full-color logos.
+                  </div>
+                </div>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2 rounded-md border p-2">
+                <RadioGroupItem value="single_ink" id="mockup-color-single" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">Single ink color</div>
+                  <div className="text-xs text-muted-foreground">
+                    Replace every color in the artwork with one ink. Best for
+                    screenprint on dark shirts.
+                  </div>
+                  {colorMode === "single_ink" && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={inkColorHex}
+                        onChange={(e) => setInkColorHex(e.target.value)}
+                        className="h-8 w-12 cursor-pointer rounded border p-0"
+                      />
+                      <Input
+                        value={inkColorHex}
+                        onChange={(e) => setInkColorHex(e.target.value)}
+                        className="h-8 max-w-[100px] font-mono text-xs"
+                      />
+                    </div>
+                  )}
+                </div>
+              </label>
+            </RadioGroup>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            type="button"
+            onClick={() => onOpenChange(false)}
+            disabled={busy}
+          >
+            Cancel
+          </Button>
+          <Button onClick={submit} disabled={busy} type="button">
+            {busy ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-1 h-4 w-4" />
+            )}
+            {busy ? "Generating…" : "Generate"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

@@ -8,10 +8,21 @@ import {
   orgVariantImagePath,
 } from "@/lib/storage/store-images"
 import {
+  DEFAULT_MOCKUP_OPTIONS,
   buildMockupPrompt,
   parseDesign,
-  resolveInkColor,
+  type ColorMode,
+  type Embellishment,
+  type MockupGenerationOptions,
 } from "@/lib/store/design"
+
+const VALID_EMBELLISHMENTS: Embellishment[] = [
+  "screenprint",
+  "embroidery",
+  "dtg",
+  "vinyl",
+]
+const VALID_COLOR_MODES: ColorMode[] = ["preserve", "single_ink"]
 
 // Generated mockups are returned by the model as base64 PNGs. We persist
 // them to the same store-images bucket the rest of the UI reads from.
@@ -47,6 +58,9 @@ export async function POST(request: Request) {
     variant_id?: string
     artwork_path?: string
     base_image_path?: string
+    embellishment?: string
+    color_mode?: string
+    ink_color_hex?: string
   }
   try {
     body = await request.json()
@@ -65,6 +79,26 @@ export async function POST(request: Request) {
     )
   }
 
+  const embellishment: Embellishment =
+    body.embellishment &&
+    (VALID_EMBELLISHMENTS as string[]).includes(body.embellishment)
+      ? (body.embellishment as Embellishment)
+      : DEFAULT_MOCKUP_OPTIONS.embellishment
+  const colorMode: ColorMode =
+    body.color_mode &&
+    (VALID_COLOR_MODES as string[]).includes(body.color_mode)
+      ? (body.color_mode as ColorMode)
+      : DEFAULT_MOCKUP_OPTIONS.colorMode
+  const inkColorHex =
+    colorMode === "single_ink" && body.ink_color_hex
+      ? body.ink_color_hex
+      : undefined
+  const mockupOptions: MockupGenerationOptions = {
+    embellishment,
+    colorMode,
+    inkColorHex,
+  }
+
   if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
       { error: "OpenAI API key is not configured on the server" },
@@ -73,12 +107,10 @@ export async function POST(request: Request) {
   }
 
   // Verify the variant belongs to a product owned by the user's active
-  // account, and load the design config + variant options for prompt building.
+  // account, and load the design config for prompt building.
   const { data: variant, error: variantErr } = await supabase
     .from("org_product_variants")
-    .select(
-      "id, product_id, options, design_color_hex, org_products!inner(account_id, design)",
-    )
+    .select("id, product_id, org_products!inner(account_id, design)")
     .eq("id", variant_id)
     .eq("product_id", product_id)
     .maybeSingle()
@@ -96,9 +128,7 @@ export async function POST(request: Request) {
   }
   // @ts-expect-error — embedded join shape
   const design = parseDesign(variant.org_products?.design)
-  const variantColor: string | undefined = (variant.options as any)?.Color
-  const inkColorHex = resolveInkColor(variantColor, variant.design_color_hex)
-  const prompt = buildMockupPrompt({ design, inkColorHex })
+  const prompt = buildMockupPrompt({ design, mockup: mockupOptions })
 
   // --- pull artwork (private bucket) ---
   const { data: artworkBlob, error: artworkErr } = await supabase.storage

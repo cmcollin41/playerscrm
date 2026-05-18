@@ -13,9 +13,23 @@ export type DesignPlacement =
 
 export type Embellishment = "screenprint" | "embroidery" | "dtg" | "vinyl"
 
+export type ColorMode = "preserve" | "single_ink"
+
+/**
+ * Per-mockup-generation options. NOT persisted on the product — these are
+ * chosen each time the org clicks "Generate AI mockup", because the same
+ * artwork might get rendered as screenprint, embroidery, or in a single ink
+ * color depending on the variant or moment.
+ */
+export interface MockupGenerationOptions {
+  embellishment: Embellishment
+  colorMode: ColorMode
+  /** Required when colorMode === 'single_ink'; ignored otherwise. */
+  inkColorHex?: string
+}
+
 export interface DesignConfig {
   placement: DesignPlacement
-  embellishment: Embellishment
   /** Normalized x position (0..1) of the design's center within the garment image. */
   x: number
   /** Normalized y position (0..1) of the design's center within the garment image. */
@@ -56,9 +70,13 @@ export const PLACEMENT_DEFAULTS: Record<
 
 export const DEFAULT_DESIGN: DesignConfig = {
   placement: "front_center",
-  embellishment: "screenprint",
   ...PLACEMENT_DEFAULTS.front_center,
   rotation: 0,
+}
+
+export const DEFAULT_MOCKUP_OPTIONS: MockupGenerationOptions = {
+  embellishment: "screenprint",
+  colorMode: "preserve",
 }
 
 /** Parse a stored design jsonb safely, falling back to defaults. */
@@ -69,14 +87,9 @@ export function parseDesign(raw: unknown): DesignConfig {
     obj.placement && (obj.placement in PLACEMENT_LABELS)
       ? obj.placement
       : DEFAULT_DESIGN.placement
-  const embellishment: Embellishment =
-    obj.embellishment && (obj.embellishment in EMBELLISHMENT_LABELS)
-      ? obj.embellishment
-      : DEFAULT_DESIGN.embellishment
   const fallback = PLACEMENT_DEFAULTS[placement]
   return {
     placement,
-    embellishment,
     x: clamp01(obj.x ?? fallback.x),
     y: clamp01(obj.y ?? fallback.y),
     scale: clamp(obj.scale ?? fallback.scale, 0.05, 1),
@@ -178,21 +191,25 @@ const PLACEMENT_PROMPT_DESCRIPTIONS: Record<DesignPlacement, string> = {
 
 export function buildMockupPrompt(opts: {
   design: DesignConfig
-  inkColorHex: string
+  mockup: MockupGenerationOptions
 }): string {
   const placementCopy = PLACEMENT_PROMPT_DESCRIPTIONS[opts.design.placement]
   const embellishmentCopy =
-    EMBELLISHMENT_PROMPT_DESCRIPTIONS[opts.design.embellishment]
+    EMBELLISHMENT_PROMPT_DESCRIPTIONS[opts.mockup.embellishment]
   const widthPct = Math.round(opts.design.scale * 100)
   const rotation = opts.design.rotation
     ? ` Rotated approximately ${Math.round(opts.design.rotation)} degrees.`
     : ""
+  const colorDirective =
+    opts.mockup.colorMode === "single_ink" && opts.mockup.inkColorHex
+      ? `Render the design in a single ink color: ${opts.mockup.inkColorHex}. Replace every color in the artwork with this single ink, preserving the artwork's shape and detail.`
+      : "Preserve the artwork's original colors exactly as they appear in image 2. Do not recolor, tint, or simplify the design."
   return [
     "Reference image 1 is a blank apparel product photo (the garment).",
     "Reference image 2 is a logo or design artwork.",
     `Apply the design from image 2 to the garment ${placementCopy}, sized to roughly ${widthPct}% of the garment's width.${rotation}`,
     `Render the design as ${embellishmentCopy}.`,
-    `Render the design's ink in the color ${opts.inkColorHex}. Replace any color in the artwork with this single ink color, preserving the artwork's shape and detail.`,
+    colorDirective,
     "Match the garment's fabric shadows, wrinkles, and lighting so the design looks naturally applied.",
     "Do not change the garment's color, pose, background, or overall composition.",
     "Output a clean photorealistic product mockup with the design integrated into the shirt.",
