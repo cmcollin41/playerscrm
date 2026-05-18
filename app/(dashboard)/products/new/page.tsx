@@ -10,6 +10,34 @@ function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
 }
 
+interface ColorSwatch {
+  color: string
+  imagePath: string | null
+}
+
+/**
+ * Reduce a template's variants to one entry per Color option value, using
+ * the first variant (by `ordering`) of each color for the swatch image.
+ * Returns [] when the template has no Color option axis.
+ */
+function colorSwatchesFromVariants(variants: any[]): ColorSwatch[] {
+  if (!Array.isArray(variants)) return []
+  const sorted = [...variants]
+    .filter((v) => v?.is_active)
+    .sort((a, b) => (a.ordering ?? 0) - (b.ordering ?? 0))
+  const seen = new Map<string, string | null>()
+  for (const v of sorted) {
+    const color: string | undefined = v?.options?.Color
+    if (!color) continue
+    if (seen.has(color)) continue
+    seen.set(color, v.image_path ?? null)
+  }
+  return Array.from(seen.entries()).map(([color, imagePath]) => ({
+    color,
+    imagePath,
+  }))
+}
+
 export const dynamic = "force-dynamic"
 
 export default async function CatalogPickerPage() {
@@ -17,7 +45,7 @@ export default async function CatalogPickerPage() {
   const { data: templates } = await supabase
     .from("product_templates")
     .select(
-      "id, slug, name, description, category, base_cost_cents, min_markup_cents, shipping_flat_cents, lead_time_days, image_path, fulfillment_partners(slug, name)"
+      "id, slug, name, description, category, base_cost_cents, min_markup_cents, shipping_flat_cents, lead_time_days, image_path, fulfillment_partners(slug, name), product_template_variants(options, image_path, is_active, ordering)"
     )
     .eq("is_active", true)
     .order("name")
@@ -48,6 +76,10 @@ export default async function CatalogPickerPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {templates.map((t: any) => {
             const imageUrl = getStoreImagePublicUrl(supabase, t.image_path)
+            const swatches = colorSwatchesFromVariants(t.product_template_variants)
+            const MAX_SWATCHES = 6
+            const visibleSwatches = swatches.slice(0, MAX_SWATCHES)
+            const extraSwatchCount = Math.max(0, swatches.length - MAX_SWATCHES)
             return (
             <Link
               key={t.id}
@@ -85,6 +117,33 @@ export default async function CatalogPickerPage() {
                     <p className="line-clamp-2 text-xs text-muted-foreground">
                       {t.description}
                     </p>
+                  )}
+                  {swatches.length > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      {visibleSwatches.map((s) => {
+                        const swatchUrl = getStoreImagePublicUrl(supabase, s.imagePath)
+                        return (
+                          <span
+                            key={s.color}
+                            title={s.color}
+                            className="inline-block h-5 w-5 overflow-hidden rounded-full border bg-muted"
+                          >
+                            {swatchUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={swatchUrl}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : null}
+                          </span>
+                        )
+                      })}
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        {swatches.length} color{swatches.length === 1 ? "" : "s"}
+                        {extraSwatchCount > 0 ? ` (+${extraSwatchCount})` : ""}
+                      </span>
+                    </div>
                   )}
                   <div className="mt-1 flex items-center justify-between text-xs">
                     <span className="text-muted-foreground">
