@@ -4,7 +4,16 @@ import { useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { ArrowLeft, ImagePlus, Save, Trash2, X } from "lucide-react"
+import {
+  ArrowLeft,
+  ImagePlus,
+  Loader2,
+  Save,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { slugify } from "@/lib/slug"
 import { describeVariant, variantOptionsKey } from "@/lib/store/options"
@@ -239,6 +248,44 @@ export function OrgProductForm({
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  // Which variant the big preview pane is showing. Defaults to the first
+  // variant; clicking a color swatch swaps it.
+  const [previewKey, setPreviewKey] = useState<string>(
+    initialVariants[0]?.key ?? "",
+  )
+  // Which variant (if any) currently has an AI mockup generation in flight.
+  const [generatingKey, setGeneratingKey] = useState<string | null>(null)
+
+  // Group active variants by Color and remember the first one per color —
+  // used both for the color swatch row and the preview.
+  const firstVariantPerColor = useMemo(() => {
+    const map = new Map<string, VariantState>()
+    for (const v of state.variants) {
+      if (!v.is_active) continue
+      const c = v.options?.Color
+      if (!c) continue
+      if (!map.has(c)) map.set(c, v)
+    }
+    return map
+  }, [state.variants])
+
+  // Currently previewed variant (falls back to the first variant in state).
+  const previewVariant: VariantState | undefined =
+    state.variants.find((v) => v.key === previewKey) ?? state.variants[0]
+
+  // Resolve a base image for a variant: prefer the variant's own image_path
+  // (which is what the AI mockup overwrites), then the linked template
+  // variant's image, then the template's hero.
+  function variantBaseImagePath(v: VariantState): string | null {
+    if (v.image_path) return v.image_path
+    const tv = templateVariants.find((t) => t.id === v.template_variant_id)
+    return tv?.image_path ?? template.image_path ?? null
+  }
+
+  const previewBaseUrl = previewVariant
+    ? getStoreImagePublicUrl(supabase, variantBaseImagePath(previewVariant))
+    : undefined
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setState((s) => ({ ...s, [key]: value }))
   }
@@ -282,6 +329,47 @@ export function OrgProductForm({
   function handleArtworkClear() {
     update("artwork_path", null)
     setArtworkPreviewUrl(null)
+  }
+
+  // ---- AI mockup generation ----
+
+  async function generateMockup(v: VariantState) {
+    if (!isEdit) {
+      toast.error("Save the product once before generating mockups.")
+      return
+    }
+    if (!state.artwork_path) {
+      toast.error("Upload your design (artwork) first.")
+      return
+    }
+    const basePath = variantBaseImagePath(v)
+    if (!basePath) {
+      toast.error("No base image available for this variant.")
+      return
+    }
+    setGeneratingKey(v.key)
+    try {
+      const res = await fetch("/api/store/generate-mockup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          product_id: productId,
+          variant_id: v.id,
+          artwork_path: state.artwork_path,
+          base_image_path: basePath,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        throw new Error(json.error || "Generation failed")
+      }
+      updateVariant(v.key, { image_path: json.image_path })
+      toast.success(`Mockup ready: ${describeVariant(v.options)}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Generation failed")
+    } finally {
+      setGeneratingKey(null)
+    }
   }
 
   // ---- save / delete ----
@@ -413,6 +501,88 @@ export function OrgProductForm({
         <ArrowLeft className="h-4 w-4" />
         {isEdit ? "All products" : "Pick a different template"}
       </Link>
+
+      {/* live preview */}
+      {previewVariant && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Preview</CardTitle>
+            <CardDescription>
+              How this variant will look on your storefront. The artwork is
+              overlaid as a quick preview — click &quot;Generate AI mockup&quot; on a
+              variant below for a photorealistic version.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-4">
+            <div className="relative aspect-square w-full max-w-[480px] overflow-hidden rounded-lg bg-muted">
+              {previewBaseUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={previewBaseUrl}
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+                  No base image
+                </div>
+              )}
+              {artworkPreviewUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={artworkPreviewUrl}
+                  alt=""
+                  className="pointer-events-none absolute left-1/2 top-[30%] w-[34%] -translate-x-1/2 object-contain drop-shadow"
+                />
+              )}
+            </div>
+
+            {firstVariantPerColor.size > 0 && (
+              <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
+                {Array.from(firstVariantPerColor.entries()).map(([color, v]) => {
+                  const tv = templateVariants.find(
+                    (t) => t.id === v.template_variant_id,
+                  )
+                  const swatchUrl =
+                    getStoreImagePublicUrl(supabase, v.image_path) ??
+                    getStoreImagePublicUrl(supabase, tv?.image_path)
+                  const isActive = previewVariant?.key === v.key
+                  return (
+                    <button
+                      key={color}
+                      type="button"
+                      onClick={() => setPreviewKey(v.key)}
+                      title={color}
+                      className={cn(
+                        "h-9 w-9 overflow-hidden rounded-full border-2 transition",
+                        isActive
+                          ? "border-foreground"
+                          : "border-transparent hover:border-muted-foreground/60",
+                      )}
+                    >
+                      {swatchUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={swatchUrl}
+                          alt={color}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="block h-full w-full bg-muted" />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              Previewing: {describeVariant(previewVariant.options)}
+              {!state.artwork_path && " · upload your design to see it overlaid"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* basics */}
       <Card>
@@ -597,17 +767,45 @@ export function OrgProductForm({
                           />
                         </TableCell>
                         <TableCell>
-                          <VariantImageButton
-                            currentUrl={imageUrl}
-                            onSelect={async (file) => {
-                              const path = await uploadVariantImage(v, file)
-                              updateVariant(v.key, { image_path: path })
-                            }}
-                            onClear={() =>
-                              updateVariant(v.key, { image_path: null })
-                            }
-                            onError={(msg) => toast.error(msg)}
-                          />
+                          <div className="flex items-center gap-2">
+                            <VariantImageButton
+                              currentUrl={imageUrl}
+                              onSelect={async (file) => {
+                                const path = await uploadVariantImage(v, file)
+                                updateVariant(v.key, { image_path: path })
+                              }}
+                              onClear={() =>
+                                updateVariant(v.key, { image_path: null })
+                              }
+                              onError={(msg) => toast.error(msg)}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              type="button"
+                              onClick={() => generateMockup(v)}
+                              disabled={
+                                generatingKey !== null ||
+                                !isEdit ||
+                                !state.artwork_path
+                              }
+                              title={
+                                !isEdit
+                                  ? "Save the product first"
+                                  : !state.artwork_path
+                                    ? "Upload your design first"
+                                    : "Generate a photorealistic mockup with your artwork"
+                              }
+                              className="h-8 text-xs"
+                            >
+                              {generatingKey === v.key ? (
+                                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                              ) : (
+                                <Sparkles className="mr-1 h-3 w-3" />
+                              )}
+                              {generatingKey === v.key ? "Generating…" : "AI mockup"}
+                            </Button>
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Switch
