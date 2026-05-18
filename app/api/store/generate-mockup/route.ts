@@ -16,6 +16,15 @@ import { parseDesign } from "@/lib/store/design"
 export const runtime = "nodejs"
 export const maxDuration = 60
 
+async function fetchAsBuffer(url: string): Promise<Buffer> {
+  const res = await fetch(url)
+  if (!res.ok) {
+    throw new Error(`Failed to fetch image (${res.status}): ${url}`)
+  }
+  const ab = await res.arrayBuffer()
+  return Buffer.from(ab)
+}
+
 export async function POST(request: Request) {
   const auth = await requireAccountAdminApi()
   if (!auth.ok) return auth.response
@@ -162,17 +171,26 @@ export async function POST(request: Request) {
     }
 
     try {
-      const { data: baseBlob, error: baseErr } = await supabase.storage
-        .from(STORE_IMAGES_BUCKET)
-        .download(basePath)
-      if (baseErr || !baseBlob) {
-        errors.push({
-          variant_id: variant.id,
-          error: `Failed to load base image: ${baseErr?.message ?? "not found"}`,
-        })
-        continue
+      // Template-variant images can be either a relative path inside the
+      // store-images bucket or a full https URL (e.g. partner CDN like
+      // Shopify, used by the Truwear seeds). Branch on protocol so we
+      // don't try to treat a CDN URL as a storage key.
+      let baseBuffer: Buffer
+      if (/^https?:\/\//i.test(basePath)) {
+        baseBuffer = await fetchAsBuffer(basePath)
+      } else {
+        const { data: baseBlob, error: baseErr } = await supabase.storage
+          .from(STORE_IMAGES_BUCKET)
+          .download(basePath)
+        if (baseErr || !baseBlob) {
+          errors.push({
+            variant_id: variant.id,
+            error: `Failed to load base image: ${baseErr?.message ?? "not found"}`,
+          })
+          continue
+        }
+        baseBuffer = Buffer.from(await baseBlob.arrayBuffer())
       }
-      const baseBuffer = Buffer.from(await baseBlob.arrayBuffer())
 
       const baseMeta = await sharp(baseBuffer).metadata()
       const bw = baseMeta.width ?? 1024
