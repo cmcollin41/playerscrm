@@ -304,11 +304,12 @@ export function OrgProductForm({
   const previewVariant: VariantState | undefined =
     state.variants.find((v) => v.key === previewKey) ?? state.variants[0]
 
-  // Resolve a base image for a variant: prefer the variant's own image_path
-  // (which is what the AI mockup overwrites), then the linked template
-  // variant's image, then the template's hero.
+  // Resolve the *pristine* base image for a variant — always the partner's
+  // blank, never the org's customized output. The editor preview and the AI
+  // mockup pipeline both depend on this being clean so the org can keep
+  // iterating on a new design after a generation has happened (otherwise
+  // the new artwork would composite onto the previous AI mockup).
   function variantBaseImagePath(v: VariantState): string | null {
-    if (v.image_path) return v.image_path
     const tv = templateVariants.find((t) => t.id === v.template_variant_id)
     return tv?.image_path ?? template.image_path ?? null
   }
