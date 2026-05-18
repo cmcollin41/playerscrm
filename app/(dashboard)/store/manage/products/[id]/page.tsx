@@ -29,11 +29,26 @@ export default async function EditOrgProductPage({ params }: PageProps) {
   const template = (product as any).product_templates
   if (!template) notFound()
 
+  const [{ data: templateVariants }, { data: productVariants }] = await Promise.all([
+    supabase
+      .from("product_template_variants")
+      .select("*")
+      .eq("template_id", template.id)
+      .order("ordering"),
+    supabase
+      .from("org_product_variants")
+      .select("*")
+      .eq("product_id", id)
+      .order("ordering"),
+  ])
+
   return (
     <OrgProductForm
       accountId={profile.account_id}
       template={template}
+      templateVariants={(templateVariants ?? []) as any[]}
       product={product as any}
+      productVariants={(productVariants ?? []) as any[]}
     />
   )
 }

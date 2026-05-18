@@ -343,6 +343,15 @@ export interface Profiles {
 
 export type ProductCategory = 'uniform' | 'apparel' | 'accessory'
 
+/** Map of option name → value, e.g. {"Size": "M", "Color": "Red"}. */
+export type VariantOptionMap = Record<string, string>
+
+/** Option definition shared by templates and org_products. */
+export interface ProductOption {
+  name: string
+  values: string[]
+}
+
 export interface FulfillmentPartners {
   id: string /* primary key */;
   slug: string;
@@ -366,7 +375,8 @@ export interface ProductTemplates {
   min_markup_cents: number;
   shipping_flat_cents: number;
   lead_time_days?: number;
-  image_url?: string;
+  image_path?: string;
+  options: ProductOption[];
   metadata: Record<string, any>;
   is_active: boolean;
   created_at: string;
@@ -379,9 +389,9 @@ export interface ProductTemplateVariants {
   id: string /* primary key */;
   template_id: string /* foreign key to product_templates.id */;
   sku: string;
-  size?: string;
-  color?: string;
+  options: VariantOptionMap;
   delta_cost_cents: number;
+  image_path?: string;
   ordering: number;
   is_active: boolean;
   created_at: string;
@@ -397,13 +407,29 @@ export interface OrgProducts {
   slug: string;
   name: string;
   description?: string;
-  price_cents: number;
   customization: Record<string, any>;
-  image_url?: string;
+  image_path?: string;
+  options: ProductOption[];
   status: OrgProductStatus;
   published_at?: string;
   created_at: string;
   updated_at: string;
   product_templates?: ProductTemplates;
   accounts?: Accounts;
+  org_product_variants?: OrgProductVariants[];
+}
+
+export interface OrgProductVariants {
+  id: string /* primary key */;
+  product_id: string /* foreign key to org_products.id */;
+  template_variant_id?: string /* foreign key to product_template_variants.id */;
+  sku: string;
+  options: VariantOptionMap;
+  price_cents: number;
+  image_path?: string;
+  inventory_qty?: number;
+  is_active: boolean;
+  ordering: number;
+  created_at: string;
+  updated_at: string;
 }

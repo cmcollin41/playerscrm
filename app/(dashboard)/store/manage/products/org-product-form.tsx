@@ -1,12 +1,20 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { ArrowLeft, Save, Trash2 } from "lucide-react"
+import { ArrowLeft, ImagePlus, Save, Trash2, X } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import { slugify } from "@/lib/slug"
+import { describeVariant, variantOptionsKey } from "@/lib/store/options"
+import {
+  getStoreImagePublicUrl,
+  makeImageFilename,
+  orgProductImagePath,
+  orgVariantImagePath,
+  uploadStoreImage,
+} from "@/lib/storage/store-images"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -25,11 +33,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { ImageDropzone } from "@/components/ui/image-dropzone"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import type {
   FulfillmentPartners,
   OrgProducts,
   OrgProductStatus,
+  OrgProductVariants,
   ProductTemplates,
+  ProductTemplateVariants,
 } from "@/types/schema.types"
 
 type TemplateWithPartner = ProductTemplates & {
@@ -39,17 +59,35 @@ type TemplateWithPartner = ProductTemplates & {
 interface OrgProductFormProps {
   accountId: string
   template: TemplateWithPartner
+  templateVariants: ProductTemplateVariants[]
   product?: OrgProducts
+  productVariants?: OrgProductVariants[]
+}
+
+interface VariantState {
+  // Internal stable key (variantOptionsKey of the options map). Used to track
+  // rows across renders so per-variant edits don't drift when option values
+  // change on the parent template.
+  key: string
+  id: string                          // stable across renders; pre-generated client-side
+  template_variant_id: string | null
+  options: Record<string, string>
+  sku: string
+  price: string                       // dollars
+  image_path: string | null
+  inventory_qty: string               // empty string = unlimited
+  is_active: boolean
+  ordering: number
 }
 
 interface FormState {
   slug: string
   name: string
   description: string
-  price: string
   status: OrgProductStatus
-  image_url: string
+  image_path: string | null
   customization: Record<string, string>
+  variants: VariantState[]
 }
 
 function toDollars(cents: number): string {
@@ -62,50 +100,149 @@ function toCents(dollars: string): number {
   return Math.round(n * 100)
 }
 
-// Map a customization field name to a sensible input type. Keep names that end
-// in `_color`, `_url`, etc. mapped to dedicated inputs; everything else is plain
-// text. The template author controls field names via metadata.customizable.
 function fieldKind(name: string): "color" | "url" | "text" {
   if (name.endsWith("_color")) return "color"
   if (name.endsWith("_url")) return "url"
   return "text"
 }
 
-function humanizeField(name: string): string {
+function humanize(name: string): string {
   return name
     .replace(/_/g, " ")
     .replace(/\burl\b/i, "URL")
     .replace(/^\w/, (c) => c.toUpperCase())
 }
 
+/** Seed variants for a brand-new product: one row per active template variant. */
+function seedVariantsFromTemplate(
+  template: TemplateWithPartner,
+  templateVariants: ProductTemplateVariants[],
+): VariantState[] {
+  const floor =
+    template.base_cost_cents + template.min_markup_cents
+  return templateVariants.map((tv, i) => ({
+    key: variantOptionsKey(tv.options),
+    id: crypto.randomUUID(),
+    template_variant_id: tv.id,
+    options: tv.options,
+    sku: tv.sku, // initial sku copies the template variant's sku
+    price: toDollars(floor + tv.delta_cost_cents),
+    image_path: tv.image_path ?? null,
+    inventory_qty: "",
+    is_active: true,
+    ordering: tv.ordering || (i + 1) * 10,
+  }))
+}
+
+/** When editing, reconcile existing rows w/ template variants so newly-added
+ * template variants show up while edits to existing rows persist. */
+function mergeVariants(
+  template: TemplateWithPartner,
+  templateVariants: ProductTemplateVariants[],
+  existing: OrgProductVariants[],
+): VariantState[] {
+  const floor =
+    template.base_cost_cents + template.min_markup_cents
+  const byKey = new Map<string, OrgProductVariants>()
+  for (const v of existing) {
+    byKey.set(variantOptionsKey(v.options), v)
+  }
+  // Preserve template ordering as the canonical sort, but keep existing rows
+  // that no longer match a template variant (custom variants).
+  const rows: VariantState[] = []
+  const consumedKeys = new Set<string>()
+  templateVariants.forEach((tv, i) => {
+    const key = variantOptionsKey(tv.options)
+    consumedKeys.add(key)
+    const v = byKey.get(key)
+    if (v) {
+      rows.push({
+        key,
+        id: v.id,
+        template_variant_id: v.template_variant_id ?? tv.id,
+        options: v.options,
+        sku: v.sku,
+        price: toDollars(v.price_cents),
+        image_path: v.image_path ?? null,
+        inventory_qty:
+          v.inventory_qty == null ? "" : String(v.inventory_qty),
+        is_active: v.is_active,
+        ordering: v.ordering || (i + 1) * 10,
+      })
+    } else {
+      rows.push({
+        key,
+        id: crypto.randomUUID(),
+        template_variant_id: tv.id,
+        options: tv.options,
+        sku: tv.sku,
+        price: toDollars(floor + tv.delta_cost_cents),
+        image_path: tv.image_path ?? null,
+        inventory_qty: "",
+        is_active: true,
+        ordering: tv.ordering || (i + 1) * 10,
+      })
+    }
+  })
+  // Any existing rows not matched (template variant removed upstream) — keep
+  // them visible so the org admin can decide to archive them.
+  for (const v of existing) {
+    const key = variantOptionsKey(v.options)
+    if (consumedKeys.has(key)) continue
+    rows.push({
+      key,
+      id: v.id,
+      template_variant_id: v.template_variant_id ?? null,
+      options: v.options,
+      sku: v.sku,
+      price: toDollars(v.price_cents),
+      image_path: v.image_path ?? null,
+      inventory_qty: v.inventory_qty == null ? "" : String(v.inventory_qty),
+      is_active: v.is_active,
+      ordering: v.ordering,
+    })
+  }
+  return rows
+}
+
 export function OrgProductForm({
   accountId,
   template,
+  templateVariants,
   product,
+  productVariants,
 }: OrgProductFormProps) {
   const router = useRouter()
   const supabase = createClient()
   const isEdit = !!product
+
+  // Pre-generate a product ID so image upload paths are stable before first save.
+  const productId = useRef(product?.id ?? crypto.randomUUID()).current
 
   const customizableFields: string[] = useMemo(() => {
     const raw = (template.metadata as any)?.customizable
     return Array.isArray(raw) ? raw.filter((x: any) => typeof x === "string") : []
   }, [template])
 
-  const minPriceCents = template.base_cost_cents + template.min_markup_cents
+  const initialVariants = useMemo(() => {
+    if (isEdit && productVariants) {
+      return mergeVariants(template, templateVariants, productVariants)
+    }
+    return seedVariantsFromTemplate(template, templateVariants)
+  }, [template, templateVariants, productVariants, isEdit])
 
   const [state, setState] = useState<FormState>({
     slug: product?.slug ?? "",
     name: product?.name ?? template.name,
     description: product?.description ?? template.description ?? "",
-    price: toDollars(product?.price_cents ?? minPriceCents),
     status: product?.status ?? "draft",
-    image_url: product?.image_url ?? template.image_url ?? "",
+    image_path: product?.image_path ?? template.image_path ?? null,
     customization: customizableFields.reduce<Record<string, string>>((acc, f) => {
       const existing = (product?.customization as any)?.[f]
       acc[f] = existing != null ? String(existing) : ""
       return acc
     }, {}),
+    variants: initialVariants,
   })
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -119,30 +256,64 @@ export function OrgProductForm({
       customization: { ...s.customization, [field]: value },
     }))
   }
+  function updateVariant(key: string, patch: Partial<VariantState>) {
+    setState((s) => ({
+      ...s,
+      variants: s.variants.map((v) =>
+        v.key === key ? { ...v, ...patch } : v,
+      ),
+    }))
+  }
+
+  // ---- image uploads ----
+
+  async function uploadProductImage(file: File): Promise<string> {
+    const filename = makeImageFilename(file.name)
+    const path = orgProductImagePath(accountId, productId, filename)
+    return uploadStoreImage(supabase, path, file)
+  }
+
+  async function uploadVariantImage(
+    variant: VariantState,
+    file: File,
+  ): Promise<string> {
+    const filename = makeImageFilename(file.name)
+    const path = orgVariantImagePath(accountId, productId, variant.id, filename)
+    return uploadStoreImage(supabase, path, file)
+  }
+
+  // ---- save / delete ----
 
   async function handleSave() {
-    if (!state.name.trim()) {
-      toast.error("Name is required")
-      return
-    }
-    const priceCents = toCents(state.price)
-    if (priceCents < minPriceCents) {
-      toast.error(
-        `Price must be at least $${(minPriceCents / 100).toFixed(2)} (base + min markup)`
-      )
-      return
+    if (!state.name.trim()) return toast.error("Name is required")
+
+    // markup floor: every variant must clear base + min markup + delta_cost.
+    const baseFloor = template.base_cost_cents + template.min_markup_cents
+    for (const v of state.variants) {
+      if (!v.is_active) continue
+      const priceCents = toCents(v.price)
+      // Look up template-variant delta if known.
+      const tv = templateVariants.find((t) => t.id === v.template_variant_id)
+      const floor = baseFloor + (tv?.delta_cost_cents ?? 0)
+      if (priceCents < floor) {
+        toast.error(
+          `${describeVariant(v.options)}: price must be at least $${(floor / 100).toFixed(2)}`,
+        )
+        return
+      }
     }
 
     const slug = state.slug.trim() || slugify(state.name.trim())
-    const payload = {
+    const productPayload = {
+      id: productId,
       account_id: accountId,
       template_id: template.id,
       slug,
       name: state.name.trim(),
       description: state.description.trim() || null,
-      price_cents: priceCents,
       customization: state.customization,
-      image_url: state.image_url.trim() || null,
+      image_path: state.image_path,
+      options: template.options ?? [],
       status: state.status,
       published_at:
         state.status === "active"
@@ -151,39 +322,64 @@ export function OrgProductForm({
     }
 
     setSaving(true)
-    if (isEdit && product) {
-      const { error } = await supabase
-        .from("org_products")
-        .update(payload)
-        .eq("id", product.id)
+    const { error: prodError } = await supabase
+      .from("org_products")
+      .upsert(productPayload, { onConflict: "id" })
+    if (prodError) {
       setSaving(false)
-      if (error) {
-        if (error.code === "23505") {
-          toast.error("A product with that slug already exists in your account")
-        } else {
-          toast.error(error.message)
-        }
-        return
+      if (prodError.code === "23505") {
+        toast.error("A product with that slug already exists in your account")
+      } else {
+        toast.error(prodError.message)
       }
-      toast.success("Product saved")
+      return
+    }
+
+    // Reconcile variants: upsert by (product_id, sku); delete rows whose SKU
+    // is no longer in the form.
+    const variantRows = state.variants.map((v, i) => ({
+      id: v.id,
+      product_id: productId,
+      template_variant_id: v.template_variant_id,
+      sku: v.sku.trim(),
+      options: v.options,
+      price_cents: toCents(v.price),
+      image_path: v.image_path,
+      inventory_qty: v.inventory_qty.trim() === ""
+        ? null
+        : Math.max(0, parseInt(v.inventory_qty, 10) || 0),
+      is_active: v.is_active,
+      ordering: v.ordering || (i + 1) * 10,
+    }))
+
+    const wantedSkus = new Set(variantRows.map((v) => v.sku))
+    const stale = (productVariants ?? []).filter((v) => !wantedSkus.has(v.sku))
+    if (stale.length > 0) {
+      await supabase
+        .from("org_product_variants")
+        .delete()
+        .eq("product_id", productId)
+        .in(
+          "sku",
+          stale.map((s) => s.sku),
+        )
+    }
+
+    const { error: vError } = await supabase
+      .from("org_product_variants")
+      .upsert(variantRows, { onConflict: "product_id,sku" })
+
+    setSaving(false)
+    if (vError) {
+      toast.error(vError.message)
+      return
+    }
+
+    toast.success(isEdit ? "Product saved" : "Product created")
+    if (isEdit) {
       router.refresh()
     } else {
-      const { data, error } = await supabase
-        .from("org_products")
-        .insert(payload)
-        .select("id")
-        .single()
-      setSaving(false)
-      if (error) {
-        if (error.code === "23505") {
-          toast.error("A product with that slug already exists in your account")
-        } else {
-          toast.error(error.message)
-        }
-        return
-      }
-      toast.success("Product created")
-      router.push(`/store/manage/products/${data.id}`)
+      router.push(`/store/manage/products/${productId}`)
     }
   }
 
@@ -216,6 +412,7 @@ export function OrgProductForm({
         {isEdit ? "All products" : "Pick a different template"}
       </Link>
 
+      {/* basics */}
       <Card>
         <CardHeader>
           <CardTitle>{isEdit ? state.name : `New: ${template.name}`}</CardTitle>
@@ -225,6 +422,8 @@ export function OrgProductForm({
             {" · "}
             Base cost ${toDollars(template.base_cost_cents)} + shipping $
             {toDollars(template.shipping_flat_cents)}
+            {" · "}
+            Min markup ${toDollars(template.min_markup_cents)}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -238,7 +437,6 @@ export function OrgProductForm({
                     update("slug", slugify(state.name.trim()))
                   }
                 }}
-                placeholder="2026 Home Jersey"
               />
             </Field>
             <Field
@@ -248,7 +446,6 @@ export function OrgProductForm({
               <Input
                 value={state.slug}
                 onChange={(e) => update("slug", e.target.value)}
-                placeholder="2026-home-jersey"
               />
             </Field>
           </div>
@@ -261,44 +458,39 @@ export function OrgProductForm({
             />
           </Field>
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field
-              label="Sell price (USD)"
-              hint={`Minimum $${(minPriceCents / 100).toFixed(2)} (base + min markup).`}
+          <Field label="Status">
+            <Select
+              value={state.status}
+              onValueChange={(v) => update("status", v as OrgProductStatus)}
             >
-              <Input
-                type="number"
-                step="0.01"
-                min={(minPriceCents / 100).toFixed(2)}
-                value={state.price}
-                onChange={(e) => update("price", e.target.value)}
-              />
-            </Field>
-            <Field label="Status">
-              <Select
-                value={state.status}
-                onValueChange={(v) => update("status", v as OrgProductStatus)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft (hidden)</SelectItem>
-                  <SelectItem value="active">Active (published)</SelectItem>
-                  <SelectItem value="archived">Archived</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-          </div>
+              <SelectTrigger className="max-w-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Draft (hidden)</SelectItem>
+                <SelectItem value="active">Active (published)</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
 
           <Field
-            label="Override image URL"
-            hint="Defaults to the template image when left blank."
+            label="Product image"
+            hint="Falls back to the template image when left blank."
           >
-            <Input
-              value={state.image_url}
-              onChange={(e) => update("image_url", e.target.value)}
-              placeholder="https://..."
+            <ImageDropzone
+              value={getStoreImagePublicUrl(supabase, state.image_path) ?? null}
+              onChange={(url) => {
+                if (url == null) update("image_path", null)
+              }}
+              onFileSelect={async (file) => {
+                const path = await uploadProductImage(file)
+                update("image_path", path)
+                return getStoreImagePublicUrl(supabase, path) ?? path
+              }}
+              onError={(msg) => toast.error(msg)}
+              placeholder="Upload a hero image for this product"
+              className="aspect-square w-48"
             />
           </Field>
 
@@ -307,7 +499,7 @@ export function OrgProductForm({
               <p className="mb-3 text-sm font-medium">Customization</p>
               <div className="grid gap-4 md:grid-cols-2">
                 {customizableFields.map((field) => (
-                  <CustomizationField
+                  <CustomField
                     key={field}
                     name={field}
                     value={state.customization[field] ?? ""}
@@ -317,38 +509,154 @@ export function OrgProductForm({
               </div>
             </div>
           )}
-
-          <div className="flex items-center justify-between border-t pt-4">
-            <div>
-              {isEdit && (
-                <Button
-                  variant="ghost"
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                >
-                  <Trash2 className="mr-1 h-4 w-4" />
-                  Delete
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" asChild>
-                <Link href="/store/manage/products">Cancel</Link>
-              </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                <Save className="mr-1 h-4 w-4" />
-                {isEdit ? "Save changes" : "Create product"}
-              </Button>
-            </div>
-          </div>
         </CardContent>
       </Card>
+
+      {/* variants */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Variants</CardTitle>
+          <CardDescription>
+            Each variant is sellable separately. Price must clear base cost +
+            min markup + the partner&apos;s size/color delta.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {state.variants.length === 0 ? (
+            <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
+              No variants seeded. Ask the platform admin to add variants to the
+              template.
+            </p>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Variant</TableHead>
+                    <TableHead>SKU</TableHead>
+                    <TableHead className="text-right">Price (USD)</TableHead>
+                    <TableHead>Inventory</TableHead>
+                    <TableHead>Image</TableHead>
+                    <TableHead>Active</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {state.variants.map((v) => {
+                    const tv = templateVariants.find(
+                      (t) => t.id === v.template_variant_id,
+                    )
+                    const floor =
+                      template.base_cost_cents +
+                      template.min_markup_cents +
+                      (tv?.delta_cost_cents ?? 0)
+                    const imageUrl =
+                      getStoreImagePublicUrl(supabase, v.image_path) ?? null
+                    return (
+                      <TableRow key={v.key}>
+                        <TableCell className="font-medium">
+                          {describeVariant(v.options)}
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={v.sku}
+                            onChange={(e) =>
+                              updateVariant(v.key, { sku: e.target.value })
+                            }
+                            className="h-8 text-xs"
+                          />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex flex-col items-end gap-0.5">
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min={(floor / 100).toFixed(2)}
+                              value={v.price}
+                              onChange={(e) =>
+                                updateVariant(v.key, { price: e.target.value })
+                              }
+                              className="h-8 w-24 text-right text-xs tabular-nums"
+                            />
+                            <span className="text-[10px] text-muted-foreground">
+                              min ${(floor / 100).toFixed(2)}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min="0"
+                            value={v.inventory_qty}
+                            onChange={(e) =>
+                              updateVariant(v.key, {
+                                inventory_qty: e.target.value,
+                              })
+                            }
+                            placeholder="∞"
+                            className="h-8 w-20 text-xs tabular-nums"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <VariantImageButton
+                            currentUrl={imageUrl}
+                            onSelect={async (file) => {
+                              const path = await uploadVariantImage(v, file)
+                              updateVariant(v.key, { image_path: path })
+                            }}
+                            onClear={() =>
+                              updateVariant(v.key, { image_path: null })
+                            }
+                            onError={(msg) => toast.error(msg)}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Switch
+                            checked={v.is_active}
+                            onCheckedChange={(c) =>
+                              updateVariant(v.key, { is_active: c })
+                            }
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* save bar */}
+      <div className="sticky bottom-0 -mx-4 flex items-center justify-between border-t bg-background/95 px-4 py-3 backdrop-blur">
+        {isEdit ? (
+          <Button
+            variant="ghost"
+            onClick={handleDelete}
+            disabled={deleting}
+            className="text-red-600 hover:bg-red-50 hover:text-red-700"
+          >
+            <Trash2 className="mr-1 h-4 w-4" />
+            Delete product
+          </Button>
+        ) : (
+          <span />
+        )}
+        <div className="flex gap-2">
+          <Button variant="outline" asChild>
+            <Link href="/store/manage/products">Cancel</Link>
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="mr-1 h-4 w-4" />
+            {saving ? "Saving…" : isEdit ? "Save changes" : "Create product"}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
 
-function CustomizationField({
+function CustomField({
   name,
   value,
   onChange,
@@ -358,7 +666,7 @@ function CustomizationField({
   onChange: (v: string) => void
 }) {
   const kind = fieldKind(name)
-  const label = humanizeField(name)
+  const label = humanize(name)
 
   if (kind === "color") {
     return (
@@ -397,11 +705,74 @@ function CustomizationField({
 
   return (
     <Field label={label}>
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <Input value={value} onChange={(e) => onChange(e.target.value)} />
     </Field>
+  )
+}
+
+function VariantImageButton({
+  currentUrl,
+  onSelect,
+  onClear,
+  onError,
+}: {
+  currentUrl: string | null
+  onSelect: (file: File) => Promise<void>
+  onClear: () => void
+  onError: (message: string) => void
+}) {
+  const [busy, setBusy] = useState(false)
+
+  function openPicker() {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = "image/jpeg,image/png,image/webp"
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0]
+      if (!file) return
+      if (file.size > 5 * 1024 * 1024) {
+        onError("Image must be under 5MB")
+        return
+      }
+      setBusy(true)
+      try {
+        await onSelect(file)
+      } catch (err) {
+        onError(err instanceof Error ? err.message : "Upload failed")
+      } finally {
+        setBusy(false)
+      }
+    }
+    input.click()
+  }
+
+  if (currentUrl) {
+    return (
+      <div className="flex items-center gap-2">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={currentUrl}
+          alt=""
+          className="h-10 w-10 rounded border object-cover"
+        />
+        <Button variant="ghost" size="sm" onClick={onClear}>
+          <X className="h-3 w-3" />
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={openPicker}
+      disabled={busy}
+      className="h-8 text-xs"
+    >
+      <ImagePlus className="mr-1 h-3 w-3" />
+      {busy ? "…" : "Add"}
+    </Button>
   )
 }
 
