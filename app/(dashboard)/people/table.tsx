@@ -1,5 +1,4 @@
 "use client";
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -7,54 +6,28 @@ import { createClient } from "@/lib/supabase/client";
 import {
   TrashIcon,
   ListBulletIcon,
-  MixerHorizontalIcon,
 } from "@radix-ui/react-icons";
 
 import {
-  ShieldIcon, 
+  ShieldIcon,
   UsersIcon,
   Mail,
   Phone as PhoneIcon,
-  User
-} from "lucide-react"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { getInitials } from "@/lib/utils"
+  User,
+} from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getInitials } from "@/lib/utils";
 
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table";
+import type { ColumnDef } from "@tanstack/react-table";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
 
 import AddToTeamModal from "@/components/modal/add-to-team-modal";
 import IconButton from "@/components/modal-buttons/icon-button";
-import LoadingDots from "@/components/icons/loading-dots";
 import SendEmailSheet from "@/components/modal/send-email-sheet";
 import MergePeopleModal from "@/components/modal/merge-people-modal";
 
@@ -99,7 +72,12 @@ const columns: ColumnDef<Person>[] = [
     cell: ({ row }) => (
       <div className="flex items-center gap-3">
         <Avatar className="h-8 w-8">
-          {row.original.photo && <AvatarImage src={row.original.photo} alt={row.getValue("name") as string} />}
+          {row.original.photo && (
+            <AvatarImage
+              src={row.original.photo}
+              alt={row.getValue("name") as string}
+            />
+          )}
           <AvatarFallback className="text-xs">
             {getInitials(row.original.first_name, row.original.last_name)}
           </AvatarFallback>
@@ -107,18 +85,28 @@ const columns: ColumnDef<Person>[] = [
         <div className="flex items-center gap-2">
           {!row.original.dependent ? (
             <span title="Primary Contact">
-              <ShieldIcon className="h-4 w-4 text-green-600" aria-label="Primary Contact" />
+              <ShieldIcon
+                className="h-4 w-4 text-green-600"
+                aria-label="Primary Contact"
+              />
             </span>
           ) : (
             <span title="Dependent">
-              <User className="h-4 w-4 text-blue-600" aria-label="Dependent" />
+              <User
+                className="h-4 w-4 text-blue-600"
+                aria-label="Dependent"
+              />
             </span>
           )}
-          {row.original.relationships && row.original.relationships.length > 0 && (
-            <span title="Has Relationships">
-              <UsersIcon className="h-4 w-4 text-purple-600" aria-label="Has Relationships" />
-            </span>
-          )}
+          {row.original.relationships &&
+            row.original.relationships.length > 0 && (
+              <span title="Has Relationships">
+                <UsersIcon
+                  className="h-4 w-4 text-purple-600"
+                  aria-label="Has Relationships"
+                />
+              </span>
+            )}
         </div>
         <div className="font-medium">{row.getValue("name")}</div>
       </div>
@@ -130,15 +118,17 @@ const columns: ColumnDef<Person>[] = [
     cell: ({ row }) => (
       <div className="flex flex-wrap gap-1">
         {((row.getValue("tags") as any[]) || []).length > 0 ? (
-          ((row.getValue("tags") as any[]) || []).map((tag: any, index: any) => (
-            <Badge
-              key={index}
-              variant="secondary"
-              className="bg-lime-100 text-lime-800 hover:bg-lime-100"
-            >
-              {tag}
-            </Badge>
-          ))
+          ((row.getValue("tags") as any[]) || []).map(
+            (tag: any, index: any) => (
+              <Badge
+                key={index}
+                variant="secondary"
+                className="bg-lime-100 text-lime-800 hover:bg-lime-100"
+              >
+                {tag}
+              </Badge>
+            ),
+          )
         ) : (
           <span className="text-sm text-muted-foreground">—</span>
         )}
@@ -194,69 +184,20 @@ export function PeopleTable({
 }) {
   const router = useRouter();
   const supabase = createClient();
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
-  const [rowSelection, setRowSelection] = useState({});
-  const [tableReady, setTableReady] = useState(false);
-
-  const table = useReactTable({
-    data,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-    },
-  });
-
-  useEffect(() => {
-    table.setPageSize(30);
-  }, []);
-
-  useEffect(() => {
-    if (data.length > 0 && table.getRowModel().rows.length > 0) {
-      setTableReady(true);
-    }
-  }, [data, table]);
-
-  const handleDeleteSelected = async () => {
-    const selectedRows = table.getSelectedRowModel().rows;
-    await Promise.all(
-      selectedRows.map((row) => {
-        return supabase.from("people").delete().eq("id", row.original.id);
-      }),
-    );
-  };
-
-  const handleRowClick = (personId: string, event: React.MouseEvent) => {
-    // Don't navigate if clicking on checkbox or links
-    const target = event.target as HTMLElement;
-    if (
-      target.closest('input[type="checkbox"]') ||
-      target.closest('a')
-    ) {
-      return;
-    }
-    router.push(`/people/${personId}`);
-  };
-
-  const isAnyRowSelected = table.getSelectedRowModel().rows.length > 0;
-  const selectedRows = table.getSelectedRowModel().rows;
-  const people = selectedRows.map((row) => row.original);
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center gap-4">
+    <DataTable
+      columns={columns}
+      data={data}
+      enableRowSelection
+      onRowClick={(person) => router.push(`/people/${person.id}`)}
+      emptyState={
+        <div className="flex flex-col items-center justify-center gap-2">
+          <User className="h-12 w-12 text-muted-foreground/50" />
+          <p className="text-sm text-muted-foreground">No people found</p>
+        </div>
+      }
+      toolbar={(table) => (
         <Input
           placeholder="Search by name..."
           value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
@@ -265,164 +206,53 @@ export function PeopleTable({
           }
           className="max-w-sm"
         />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="ml-auto flex items-center justify-between"
-            >
-              <MixerHorizontalIcon className="mr-2 h-4 w-4" /> View
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => {
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) =>
-                      column.toggleVisibility(!!value)
-                    }
-                  >
-                    {column.id}
-                  </DropdownMenuCheckboxItem>
-                );
-              })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {isAnyRowSelected && (
-        <div className="flex justify-between items-center p-3 bg-muted rounded-lg">
-          <div className="flex items-center gap-2">
+      )}
+      bulkActions={(selectedRows, clearSelection) => {
+        const people = selectedRows.map((r) => r.original);
+        const handleDeleteSelected = async () => {
+          await Promise.all(
+            selectedRows.map((row) =>
+              supabase.from("people").delete().eq("id", row.original.id),
+            ),
+          );
+          clearSelection();
+        };
+        return (
+          <>
             <SendEmailSheet
               people={people}
               account={account}
               cta="Send Email"
-              onClose={() => table.toggleAllPageRowsSelected(false)}
+              onClose={clearSelection}
               context={{
-                type: 'manual',
-                name: 'Selected People'
+                type: "manual",
+                name: "Selected People",
               }}
             />
             <IconButton
               icon={<ListBulletIcon className="mr-2" />}
               cta="Add to Team"
             >
-              <AddToTeamModal
-                people={people}
-                onClose={() => table.toggleAllPageRowsSelected(false)}
-              />
+              <AddToTeamModal people={people} onClose={clearSelection} />
             </IconButton>
             {selectedRows.length === 2 && (
               <MergePeopleModal
                 person1={people[0]}
                 person2={people[1]}
                 account={account}
-                onClose={() => table.toggleAllPageRowsSelected(false)}
+                onClose={clearSelection}
               />
             )}
-          </div>
-          <Button
-            onClick={handleDeleteSelected}
-            variant="outline"
-            className="text-red-500 hover:text-red-700 hover:bg-red-50"
-          >
-            <TrashIcon className="mr-2 h-4 w-4" /> Delete Selected
-          </Button>
-        </div>
-      )}
-
-      <div className="rounded-md border">
-        {!tableReady ? (
-          <div className="flex w-full items-center justify-center p-10">
-            <LoadingDots />
-          </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              {table.getHeaderGroups().map((headerGroup) => (
-                <TableRow key={headerGroup.id}>
-                  {headerGroup.headers.map((header) => {
-                    return (
-                      <TableHead key={header.id}>
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
-                      </TableHead>
-                    );
-                  })}
-                </TableRow>
-              ))}
-            </TableHeader>
-            <TableBody>
-              {data.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && "selected"}
-                    onClick={(e) => handleRowClick(row.original.id, e)}
-                    className="cursor-pointer hover:bg-muted/50 transition-colors"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext(),
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={columns.length}
-                    className="h-24 text-center"
-                  >
-                    <div className="flex flex-col items-center justify-center gap-2">
-                      <User className="h-12 w-12 text-muted-foreground/50" />
-                      <p className="text-sm text-muted-foreground">No people found</p>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s) selected
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    </div>
+            <Button
+              onClick={handleDeleteSelected}
+              variant="outline"
+              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+            >
+              <TrashIcon className="mr-2 h-4 w-4" /> Delete Selected
+            </Button>
+          </>
+        );
+      }}
+    />
   );
 }

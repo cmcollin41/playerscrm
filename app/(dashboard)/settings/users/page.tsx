@@ -1,14 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/client"
 import { toast } from "sonner"
-
-import {
-  MixerHorizontalIcon,
-} from "@radix-ui/react-icons"
 
 import {
   ArrowLeft,
@@ -16,36 +12,12 @@ import {
   Users as UsersIcon,
 } from "lucide-react"
 
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
+import type { ColumnDef } from "@tanstack/react-table"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { DataTable } from "@/components/ui/data-table"
 import {
   Card,
   CardContent,
@@ -202,31 +174,34 @@ export default function UsersPage() {
     fetchUsers()
   }, [isAdmin])
 
-  const handleRoleChange = async (userId: string, newRole: AccountRole) => {
-    setUpdatingUserId(userId)
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, role: newRole }),
-      })
+  const handleRoleChange = useCallback(
+    async (userId: string, newRole: AccountRole) => {
+      setUpdatingUserId(userId)
+      try {
+        const res = await fetch("/api/admin/users", {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId, role: newRole }),
+        })
 
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Failed to update role")
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || "Failed to update role")
+        }
+
+        setAccountUsers((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
+        )
+        toast.success(`Role updated to ${ROLE_CONFIG[newRole].label}`)
+      } catch (error: any) {
+        toast.error(error.message)
+      } finally {
+        setUpdatingUserId(null)
       }
-
-      setAccountUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u)),
-      )
-      toast.success(`Role updated to ${ROLE_CONFIG[newRole].label}`)
-    } catch (error: any) {
-      toast.error(error.message)
-    } finally {
-      setUpdatingUserId(null)
-    }
-  }
+    },
+    [],
+  )
 
   const resetInviteForm = () => {
     setInviteEmail("")
@@ -456,267 +431,160 @@ function UsersTable({
   updatingUserId: string | null
   onRoleChange: (userId: string, newRole: AccountRole) => void
 }) {
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [roleFilter, setRoleFilter] = useState<string>("all")
 
-  const filteredData =
-    roleFilter === "all"
-      ? data
-      : data.filter((u) => u.role === roleFilter)
+  const filteredData = useMemo(
+    () =>
+      roleFilter === "all"
+        ? data
+        : data.filter((u) => u.role === roleFilter),
+    [data, roleFilter],
+  )
 
-  const columns: ColumnDef<AccountUser>[] = [
-    {
-      accessorKey: "name",
-      header: "Name",
-      accessorFn: (row) =>
-        [row.first_name, row.last_name].filter(Boolean).join(" ") || "—",
-      cell: ({ row }) => {
-        const firstName = row.original.first_name || ""
-        const lastName = row.original.last_name || ""
-        const name = [firstName, lastName].filter(Boolean).join(" ") || "—"
-        const isSelf = row.original.id === currentUserId
-        return (
-          <div className="flex items-center gap-3">
-            <Avatar className="h-8 w-8">
-              <AvatarFallback className="text-xs">
-                {firstName && lastName
-                  ? getInitials(firstName, lastName)
-                  : "?"}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex items-center gap-2">
-              <span className="font-medium">{name}</span>
-              {isSelf && (
-                <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                  You
-                </Badge>
-              )}
+  const columns = useMemo<ColumnDef<AccountUser>[]>(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        accessorFn: (row) =>
+          [row.first_name, row.last_name].filter(Boolean).join(" ") || "—",
+        cell: ({ row }) => {
+          const firstName = row.original.first_name || ""
+          const lastName = row.original.last_name || ""
+          const name =
+            [firstName, lastName].filter(Boolean).join(" ") || "—"
+          const isSelf = row.original.id === currentUserId
+          return (
+            <div className="flex items-center gap-3">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback className="text-xs">
+                  {firstName && lastName
+                    ? getInitials(firstName, lastName)
+                    : "?"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">{name}</span>
+                {isSelf && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                    You
+                  </Badge>
+                )}
+              </div>
             </div>
-          </div>
-        )
+          )
+        },
       },
-    },
-    {
-      accessorKey: "email",
-      header: "Email",
-      cell: ({ row }) => (
-        <span className="text-muted-foreground">
-          {row.original.email || "—"}
-        </span>
-      ),
-    },
-    {
-      accessorKey: "role",
-      header: "Role",
-      cell: ({ row }) => {
-        const role = row.original.role as AccountRole
-        const config = ROLE_CONFIG[role] || ROLE_CONFIG.member
-        const Icon = config.icon
-        return (
-          <Badge variant="secondary" className={config.color}>
-            <Icon className="mr-1 h-3 w-3" />
-            {config.label}
-          </Badge>
-        )
+      {
+        accessorKey: "email",
+        header: "Email",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.email || "—"}
+          </span>
+        ),
       },
-    },
-    {
-      accessorKey: "created_at",
-      header: "Joined",
-      cell: ({ row }) => (
-        <span className="text-muted-foreground">
-          {new Date(row.original.created_at).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          })}
-        </span>
-      ),
-    },
-    {
-      id: "actions",
-      header: () => <div className="text-right">Role</div>,
-      cell: ({ row }) => {
-        const isSelf = row.original.id === currentUserId
-        const isUpdating = updatingUserId === row.original.id
-
-        if (isSelf) return null
-
-        return (
-          <div className="text-right">
-            <Select
-              value={row.original.role}
-              onValueChange={(val) => onRoleChange(row.original.id, val as AccountRole)}
-              disabled={isUpdating}
-            >
-              <SelectTrigger className="ml-auto w-[130px] h-8 text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ACCOUNT_ROLES.map((role) => (
-                  <SelectItem key={role} value={role}>
-                    {ROLE_CONFIG[role].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )
+      {
+        accessorKey: "role",
+        header: "Role",
+        cell: ({ row }) => {
+          const role = row.original.role as AccountRole
+          const config = ROLE_CONFIG[role] || ROLE_CONFIG.member
+          const Icon = config.icon
+          return (
+            <Badge variant="secondary" className={config.color}>
+              <Icon className="mr-1 h-3 w-3" />
+              {config.label}
+            </Badge>
+          )
+        },
       },
-    },
-  ]
+      {
+        accessorKey: "created_at",
+        header: "Joined",
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {new Date(row.original.created_at).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-right">Role</div>,
+        cell: ({ row }) => {
+          const isSelf = row.original.id === currentUserId
+          const isUpdating = updatingUserId === row.original.id
 
-  const table = useReactTable({
-    data: filteredData,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-    },
-  })
+          if (isSelf) return null
 
-  useEffect(() => {
-    table.setPageSize(30)
-  }, [])
+          return (
+            <div className="text-right">
+              <Select
+                value={row.original.role}
+                onValueChange={(val) =>
+                  onRoleChange(row.original.id, val as AccountRole)
+                }
+                disabled={isUpdating}
+              >
+                <SelectTrigger className="ml-auto w-[130px] h-8 text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACCOUNT_ROLES.map((role) => (
+                    <SelectItem key={role} value={role}>
+                      {ROLE_CONFIG[role].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )
+        },
+      },
+    ],
+    [currentUserId, updatingUserId, onRoleChange],
+  )
 
   return (
-    <div className="w-full space-y-4">
-      <div className="flex items-center gap-4">
-        <Input
-          placeholder="Search by name..."
-          value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
-          onChange={(event) =>
-            table.getColumn("name")?.setFilterValue(event.target.value)
-          }
-          className="max-w-sm"
-        />
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="All Roles" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            {ACCOUNT_ROLES.map((role) => (
-              <SelectItem key={role} value={role}>
-                {ROLE_CONFIG[role].label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              className="ml-auto flex items-center justify-between"
-            >
-              <MixerHorizontalIcon className="mr-2 h-4 w-4" /> View
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className="capitalize"
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) =>
-                    column.toggleVisibility(!!value)
-                  }
-                >
-                  {column.id}
-                </DropdownMenuCheckboxItem>
+    <DataTable
+      columns={columns}
+      data={filteredData}
+      noun="user(s)"
+      emptyState={
+        <div className="flex flex-col items-center justify-center gap-2">
+          <UsersIcon className="text-muted-foreground/50 h-12 w-12" />
+          <p className="text-muted-foreground text-sm">No users found</p>
+        </div>
+      }
+      toolbar={(table) => (
+        <>
+          <Input
+            placeholder="Search by name..."
+            value={(table.getColumn("name")?.getFilterValue() as string) ?? ""}
+            onChange={(event) =>
+              table.getColumn("name")?.setFilterValue(event.target.value)
+            }
+            className="max-w-sm"
+          />
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue placeholder="All Roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              {ACCOUNT_ROLES.map((role) => (
+                <SelectItem key={role} value={role}>
+                  {ROLE_CONFIG[role].label}
+                </SelectItem>
               ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext(),
-                        )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  className="transition-colors hover:bg-muted/50"
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext(),
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  <div className="flex flex-col items-center justify-center gap-2">
-                    <UsersIcon className="h-12 w-12 text-muted-foreground/50" />
-                    <p className="text-sm text-muted-foreground">No users found</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-muted-foreground">
-          {table.getFilteredRowModel().rows.length} user(s)
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Next
-          </Button>
-        </div>
-      </div>
-    </div>
+            </SelectContent>
+          </Select>
+        </>
+      )}
+    />
   )
 }

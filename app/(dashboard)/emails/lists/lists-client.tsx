@@ -1,20 +1,18 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useCallback, useMemo, useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -27,7 +25,17 @@ import {
 import { Label } from "@/components/ui/label"
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
-import { Mail, Users, ArrowUpDown, Loader2, Trash2, UserPlus, X, Check, ChevronsUpDown, Send } from "lucide-react"
+import {
+  Mail,
+  Users,
+  ArrowUpDown,
+  Loader2,
+  Trash2,
+  UserPlus,
+  X,
+  ChevronsUpDown,
+  Send,
+} from "lucide-react"
 import {
   Popover,
   PopoverContent,
@@ -38,33 +46,13 @@ import {
   CommandEmpty,
   CommandGroup,
   CommandInput,
-  CommandItem,
   CommandList,
 } from "@/components/ui/command"
-import { cn } from "@/lib/utils"
-import {
-  ColumnDef,
-  ColumnFiltersState,
-  SortingState,
-  VisibilityState,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable,
-} from "@tanstack/react-table"
+import type { ColumnDef } from "@tanstack/react-table"
+import { DataTable } from "@/components/ui/data-table"
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import { Checkbox } from "@/components/ui/checkbox"
 
 interface List {
   id: string
@@ -99,22 +87,20 @@ interface ListsClientProps {
   accountId: string
 }
 
-export default function ListsClient({ lists, people, account, accountId }: ListsClientProps) {
+export default function ListsClient({
+  lists,
+  people,
+  accountId,
+  account: _account,
+}: ListsClientProps) {
   const router = useRouter()
   const supabase = createClient()
-  const [globalFilter, setGlobalFilter] = useState("")
-  const [sorting, setSorting] = useState<SortingState>([{ id: "created_at", desc: true }])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [rowSelection, setRowSelection] = useState({})
 
-  // Create list modal state
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createLoading, setCreateLoading] = useState(false)
   const [listName, setListName] = useState("")
   const [listDescription, setListDescription] = useState("")
 
-  // Add people modal state
   const [addPeopleModalOpen, setAddPeopleModalOpen] = useState(false)
   const [selectedListId, setSelectedListId] = useState<string | null>(null)
   const [selectedPeopleIds, setSelectedPeopleIds] = useState<string[]>([])
@@ -139,7 +125,6 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
 
       if (error) throw error
 
-      // Auto-sync to Resend so the list is ready for broadcasts
       const syncResponse = await fetch("/api/lists/sync-to-resend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -162,20 +147,26 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
     }
   }
 
-  const handleDeleteList = async (listId: string) => {
-    if (!confirm("Are you sure you want to delete this list?")) return
+  const handleDeleteList = useCallback(
+    async (listId: string) => {
+      if (!confirm("Are you sure you want to delete this list?")) return
 
-    try {
-      const { error } = await supabase.from("lists").delete().eq("id", listId)
+      try {
+        const { error } = await supabase
+          .from("lists")
+          .delete()
+          .eq("id", listId)
 
-      if (error) throw error
+        if (error) throw error
 
-      toast.success("List deleted successfully")
-      router.refresh()
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete list")
-    }
-  }
+        toast.success("List deleted successfully")
+        router.refresh()
+      } catch (error: any) {
+        toast.error(error.message || "Failed to delete list")
+      }
+    },
+    [router, supabase],
+  )
 
   const handleAddPeople = async () => {
     if (!selectedListId || selectedPeopleIds.length === 0) return
@@ -186,19 +177,23 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
       const response = await fetch("/api/lists/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ listId: selectedListId, personIds: selectedPeopleIds }),
+        body: JSON.stringify({
+          listId: selectedListId,
+          personIds: selectedPeopleIds,
+        }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.error || "Failed to add people")
 
-      // Auto-sync to Resend so new members are included
       await fetch("/api/lists/sync-to-resend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ listId: selectedListId }),
       })
 
-      toast.success(`Added ${data.added} people to list and synced to Resend`)
+      toast.success(
+        `Added ${data.added} people to list and synced to Resend`,
+      )
       setAddPeopleModalOpen(false)
       setSelectedPeopleIds([])
       router.refresh()
@@ -209,28 +204,29 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
     }
   }
 
-  // Define columns
   const columns = useMemo<ColumnDef<List>[]>(
     () => [
       {
         accessorKey: "name",
-        header: ({ column }) => {
-          return (
-            <Button
-              variant="ghost"
-              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-              className="hover:bg-transparent p-0"
-            >
-              List Name
-              <ArrowUpDown className="ml-2 h-4 w-4" />
-            </Button>
-          )
-        },
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() =>
+              column.toggleSorting(column.getIsSorted() === "asc")
+            }
+            className="hover:bg-transparent p-0"
+          >
+            List Name
+            <ArrowUpDown className="ml-2 h-4 w-4" />
+          </Button>
+        ),
         cell: ({ row }) => (
           <div>
             <div className="font-medium">{row.original.name}</div>
             {row.original.description && (
-              <div className="text-sm text-muted-foreground">{row.original.description}</div>
+              <div className="text-sm text-muted-foreground">
+                {row.original.description}
+              </div>
             )}
           </div>
         ),
@@ -256,7 +252,9 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
         header: "Created",
         cell: ({ row }) => (
           <div className="text-sm text-muted-foreground">
-            {formatDistanceToNow(new Date(row.original.created_at), { addSuffix: true })}
+            {formatDistanceToNow(new Date(row.original.created_at), {
+              addSuffix: true,
+            })}
           </div>
         ),
       },
@@ -264,7 +262,10 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
         id: "actions",
         header: "Actions",
         cell: ({ row }) => (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="flex items-center gap-2"
+            onClick={(e) => e.stopPropagation()}
+          >
             <Button
               variant="outline"
               size="sm"
@@ -288,69 +289,35 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
         ),
       },
     ],
-    []
+    [handleDeleteList],
   )
 
-  const table = useReactTable({
-    data: lists,
-    columns,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnVisibilityChange: setColumnVisibility,
-    onRowSelectionChange: setRowSelection,
-    onGlobalFilterChange: setGlobalFilter,
-    globalFilterFn: (row, columnId, filterValue) => {
-      const searchValue = filterValue.toLowerCase()
-      return (
-        row.original.name.toLowerCase().includes(searchValue) ||
-        row.original.description?.toLowerCase().includes(searchValue) ||
-        false
-      )
-    },
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-      globalFilter,
-    },
-  })
-
-  useEffect(() => {
-    table.setPageSize(25)
-  }, [table])
-
-  // Calculate statistics
   const stats = useMemo(() => {
     const total = lists.length
-    const totalMembers = lists.reduce((acc, list) => acc + list.list_people.length, 0)
-    const avgMembersPerList = total > 0 ? Math.round(totalMembers / total) : 0
+    const totalMembers = lists.reduce(
+      (acc, list) => acc + list.list_people.length,
+      0,
+    )
+    const avgMembersPerList =
+      total > 0 ? Math.round(totalMembers / total) : 0
 
-    return {
-      total,
-      totalMembers,
-      avgMembersPerList,
-    }
+    return { total, totalMembers, avgMembersPerList }
   }, [lists])
 
-  // Filter people not already in the selected list
   const availablePeople = useMemo(() => {
     if (!selectedListId) return people
 
     const selectedList = lists.find((l) => l.id === selectedListId)
     if (!selectedList) return people
 
-    const existingPeopleIds = selectedList.list_people.map((lp) => lp.people.id)
+    const existingPeopleIds = selectedList.list_people.map(
+      (lp) => lp.people.id,
+    )
     return people.filter((p) => !existingPeopleIds.includes(p.id))
   }, [selectedListId, lists, people])
 
   return (
     <div className="space-y-6">
-      {/* Header with Create Button */}
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" asChild>
           <Link href="/emails/broadcasts">
@@ -370,7 +337,8 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
               <DialogHeader>
                 <DialogTitle>Create New List</DialogTitle>
                 <DialogDescription>
-                  Create a segment for organizing and sending broadcasts to specific groups
+                  Create a segment for organizing and sending broadcasts to
+                  specific groups
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
@@ -404,7 +372,9 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
                   Cancel
                 </Button>
                 <Button type="submit" disabled={createLoading}>
-                  {createLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {createLoading && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
                   Create List
                 </Button>
               </DialogFooter>
@@ -413,7 +383,6 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
         </Dialog>
       </div>
 
-      {/* Statistics Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -428,7 +397,9 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Members</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Members
+            </CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -449,138 +420,73 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
         </Card>
       </div>
 
-      {/* Search */}
       <Card>
         <CardHeader>
-          <CardTitle>Search</CardTitle>
-          <CardDescription>Find lists by name or description</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="relative">
-            <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <Input
-              placeholder="Search lists..."
-              value={globalFilter ?? ""}
-              onChange={(e) => setGlobalFilter(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Lists Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>All Lists ({table.getFilteredRowModel().rows.length})</CardTitle>
+          <CardTitle>All Lists ({lists.length})</CardTitle>
           <CardDescription>
             Manage your segments for sending broadcasts
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="rounded-md border">
-              <Table>
-                <TableHeader>
-                  {table.getHeaderGroups().map((headerGroup) => (
-                    <TableRow key={headerGroup.id}>
-                      {headerGroup.headers.map((header) => (
-                        <TableHead key={header.id}>
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(header.column.columnDef.header, header.getContext())}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {table.getRowModel().rows?.length ? (
-                    table.getRowModel().rows.map((row) => (
-                      <TableRow
-                        key={row.id}
-                        data-state={row.getIsSelected() && "selected"}
-                        className="cursor-pointer hover:bg-muted/50 transition-colors"
-                        onClick={() => router.push(`/emails/lists/${row.original.id}`)}
-                      >
-                        {row.getVisibleCells().map((cell) => (
-                          <TableCell key={cell.id}>
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : (
-                    <TableRow>
-                      <TableCell colSpan={columns.length} className="h-24 text-center">
-                        {lists.length === 0 ? (
-                          <div className="flex flex-col items-center gap-2 py-8">
-                            <Mail className="h-12 w-12 text-muted-foreground/50" />
-                            <p className="font-medium">No lists created yet</p>
-                            <p className="text-sm text-muted-foreground">
-                              Create your first list to start organizing people
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-muted-foreground">No lists match your search</p>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-
-            {/* Pagination Controls */}
-            {table.getPageCount() > 1 && (
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                  Showing{" "}
-                  {table.getState().pagination.pageIndex *
-                    table.getState().pagination.pageSize +
-                    1}{" "}
-                  to{" "}
-                  {Math.min(
-                    (table.getState().pagination.pageIndex + 1) *
-                      table.getState().pagination.pageSize,
-                    table.getFilteredRowModel().rows.length
-                  )}{" "}
-                  of {table.getFilteredRowModel().rows.length} list(s)
+          <DataTable
+            columns={columns}
+            data={lists}
+            pageSize={25}
+            noun="list(s)"
+            showColumnVisibility={false}
+            initialSorting={[{ id: "created_at", desc: true }]}
+            enableGlobalFilter
+            globalFilterFn={(row, _columnId, filterValue) => {
+              const searchValue = String(filterValue).toLowerCase()
+              return (
+                row.original.name.toLowerCase().includes(searchValue) ||
+                row.original.description
+                  ?.toLowerCase()
+                  .includes(searchValue) ||
+                false
+              )
+            }}
+            onRowClick={(list) => router.push(`/emails/lists/${list.id}`)}
+            emptyState={
+              lists.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-8">
+                  <Mail className="h-12 w-12 text-muted-foreground/50" />
+                  <p className="font-medium">No lists created yet</p>
+                  <p className="text-sm text-muted-foreground">
+                    Create your first list to start organizing people
+                  </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => table.previousPage()}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    Previous
-                  </Button>
-                  <div className="text-sm text-muted-foreground">
-                    Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => table.nextPage()}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    Next
-                  </Button>
-                </div>
+              ) : (
+                <p className="text-muted-foreground">
+                  No lists match your search
+                </p>
+              )
+            }
+            toolbar={(table) => (
+              <div className="relative flex-1 max-w-md">
+                <MagnifyingGlassIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Search lists..."
+                  value={(table.getState().globalFilter as string) ?? ""}
+                  onChange={(e) => table.setGlobalFilter(e.target.value)}
+                  className="pl-10"
+                />
               </div>
             )}
-          </div>
+          />
         </CardContent>
       </Card>
 
-      {/* Add People Modal */}
-      <Dialog open={addPeopleModalOpen} onOpenChange={(open) => {
-        setAddPeopleModalOpen(open)
-        if (!open) {
-          setSelectedPeopleIds([])
-          setPeopleSearchQuery("")
-        }
-      }}>
+      <Dialog
+        open={addPeopleModalOpen}
+        onOpenChange={(open) => {
+          setAddPeopleModalOpen(open)
+          if (!open) {
+            setSelectedPeopleIds([])
+            setPeopleSearchQuery("")
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Add People to List</DialogTitle>
@@ -595,7 +501,10 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
               </p>
             ) : (
               <>
-                <Popover open={peopleSearchOpen} onOpenChange={setPeopleSearchOpen}>
+                <Popover
+                  open={peopleSearchOpen}
+                  onOpenChange={setPeopleSearchOpen}
+                >
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
@@ -625,7 +534,8 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
                           {availablePeople
                             .filter((p) => {
                               if (!peopleSearchQuery) return true
-                              const name = `${p.first_name} ${p.last_name}`.toLowerCase()
+                              const name =
+                                `${p.first_name} ${p.last_name}`.toLowerCase()
                               const email = (p.email || "").toLowerCase()
                               const q = peopleSearchQuery.toLowerCase()
                               return name.includes(q) || email.includes(q)
@@ -636,7 +546,10 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
                               <div
                                 key={person.id}
                                 onClick={() => {
-                                  setSelectedPeopleIds((prev) => [...prev, person.id])
+                                  setSelectedPeopleIds((prev) => [
+                                    ...prev,
+                                    person.id,
+                                  ])
                                   setPeopleSearchQuery("")
                                 }}
                                 className="relative flex cursor-pointer select-none items-center rounded-sm px-2 py-2 text-sm outline-none hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -645,11 +558,15 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
                                   <div className="font-medium truncate">
                                     {person.first_name} {person.last_name}
                                     {person.dependent && (
-                                      <span className="ml-1.5 text-xs text-muted-foreground">(Dependent)</span>
+                                      <span className="ml-1.5 text-xs text-muted-foreground">
+                                        (Dependent)
+                                      </span>
                                     )}
                                   </div>
                                   {person.email && (
-                                    <div className="text-xs text-muted-foreground truncate">{person.email}</div>
+                                    <div className="text-xs text-muted-foreground truncate">
+                                      {person.email}
+                                    </div>
                                   )}
                                 </div>
                               </div>
@@ -674,7 +591,11 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
                           {person.first_name} {person.last_name}
                           <button
                             type="button"
-                            onClick={() => setSelectedPeopleIds((prev) => prev.filter((pid) => pid !== id))}
+                            onClick={() =>
+                              setSelectedPeopleIds((prev) =>
+                                prev.filter((pid) => pid !== id),
+                              )
+                            }
                             className="ml-0.5 rounded-full hover:bg-gray-300/50 p-0.5"
                           >
                             <X className="h-3 w-3" />
@@ -702,8 +623,11 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
               onClick={handleAddPeople}
               disabled={addPeopleLoading || selectedPeopleIds.length === 0}
             >
-              {addPeopleLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add {selectedPeopleIds.length} {selectedPeopleIds.length === 1 ? "Person" : "People"}
+              {addPeopleLoading && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
+              Add {selectedPeopleIds.length}{" "}
+              {selectedPeopleIds.length === 1 ? "Person" : "People"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -711,4 +635,3 @@ export default function ListsClient({ lists, people, account, accountId }: Lists
     </div>
   )
 }
-
