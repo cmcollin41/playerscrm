@@ -182,36 +182,28 @@ const EMBELLISHMENT_PROMPT_DESCRIPTIONS: Record<Embellishment, string> = {
     "heat-pressed vinyl: smooth slightly glossy material sitting on top of the fabric",
 }
 
-const PLACEMENT_PROMPT_DESCRIPTIONS: Record<DesignPlacement, string> = {
-  front_chest: "centered on the upper chest area (small, near the collar)",
-  front_center: "centered on the chest, large and prominent",
-  back_center: "centered on the upper back, large and prominent",
-  left_chest: "small, on the wearer's left chest pocket area",
-}
-
+/**
+ * Prompt for the AI mockup pipeline. The route composites the artwork into
+ * the base image via sharp first, so the model receives a single image with
+ * the design *already in place*. The prompt asks it to refine — adding
+ * fabric texture, shadows, and the right embellishment look — without
+ * changing the design's content or position. This avoids the common
+ * "hallucinated similar design" failure mode of image-edit endpoints when
+ * given two separate images.
+ */
 export function buildMockupPrompt(opts: {
   design: DesignConfig
   mockup: MockupGenerationOptions
 }): string {
-  const placementCopy = PLACEMENT_PROMPT_DESCRIPTIONS[opts.design.placement]
   const embellishmentCopy =
     EMBELLISHMENT_PROMPT_DESCRIPTIONS[opts.mockup.embellishment]
-  const widthPct = Math.round(opts.design.scale * 100)
-  const rotation = opts.design.rotation
-    ? ` Rotated approximately ${Math.round(opts.design.rotation)} degrees.`
-    : ""
-  const colorDirective =
-    opts.mockup.colorMode === "single_ink" && opts.mockup.inkColorHex
-      ? `Render the design in a single ink color: ${opts.mockup.inkColorHex}. Replace every color in the artwork with this single ink, preserving the artwork's shape and detail.`
-      : "Preserve the artwork's original colors exactly as they appear in image 2. Do not recolor, tint, or simplify the design."
   return [
-    "Reference image 1 is a blank apparel product photo (the garment).",
-    "Reference image 2 is a logo or design artwork.",
-    `Apply the design from image 2 to the garment ${placementCopy}, sized to roughly ${widthPct}% of the garment's width.${rotation}`,
-    `Render the design as ${embellishmentCopy}.`,
-    colorDirective,
-    "Match the garment's fabric shadows, wrinkles, and lighting so the design looks naturally applied.",
-    "Do not change the garment's color, pose, background, or overall composition.",
-    "Output a clean photorealistic product mockup with the design integrated into the shirt.",
+    "This image is a product photo of a garment with a design already positioned on it.",
+    `Make the design look as if it were physically ${embellishmentCopy} on the fabric.`,
+    "Add the fabric's natural shadows, wrinkles, and lighting interactions where the design sits, and pick up subtle texture from the underlying material.",
+    "Critical constraints — do not violate any of these:",
+    "Preserve the design's exact content, shape, colors, position, scale, and rotation as they appear in the input. Do not redraw, restyle, or substitute it.",
+    "Do not change the garment's color, fit, pose, background, or overall composition.",
+    "Output a clean photorealistic product mockup.",
   ].join(" ")
 }

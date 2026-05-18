@@ -205,23 +205,108 @@ export async function POST(request: Request) {
     baseName = base_image_path.split("/").pop() || "base.png"
   }
 
+  // --- composite the artwork into the base image so the AI receives the
+  //     exact pixels we want, not a description ---
+  //
+  // gpt-image-1 with multiple input images treats the secondary image as
+  // "inspiration" and re-renders something similar from scratch. Instead we
+  // bake the artwork into the base via sharp at the configured x/y/scale/
+  // rotation, then ask the model to *refine* the result (add fabric texture,
+  // shadows, etc.) — preserving the artwork's actual content.
+
+  let compositedBuffer: Buffer
+  try {
+    const baseMeta = await sharp(baseBuffer).metadata()
+    const bw = baseMeta.width ?? 1024
+    const bh = baseMeta.height ?? 1024
+
+    // Recolor the artwork for single_ink mode. The 'in' blend mode keeps the
+    // ink color only where the artwork is opaque, preserving its shape.
+    let preparedArtwork = artworkBuffer
+    if (
+      mockupOptions.colorMode === "single_ink" &&
+      mockupOptions.inkColorHex
+    ) {
+      const hex = mockupOptions.inkColorHex.replace(/^#/, "")
+      const r = parseInt(hex.slice(0, 2), 16) || 0
+      const g = parseInt(hex.slice(2, 4), 16) || 0
+      const b = parseInt(hex.slice(4, 6), 16) || 0
+      const artMeta = await sharp(artworkBuffer).metadata()
+      const aw = artMeta.width ?? 1024
+      const ah = artMeta.height ?? 1024
+      const tintLayer = await sharp({
+        create: {
+          width: aw,
+          height: ah,
+          channels: 4,
+          background: { r, g, b, alpha: 1 },
+        },
+      })
+        .png()
+        .toBuffer()
+      preparedArtwork = await sharp(artworkBuffer)
+        .ensureAlpha()
+        .composite([{ input: tintLayer, blend: "in" }])
+        .png()
+        .toBuffer()
+    }
+
+    // Resize the artwork to design.scale × base width, then rotate (with a
+    // transparent background so the rotated bounding box doesn't add a fill).
+    const targetArtWidth = Math.max(16, Math.round(design.scale * bw))
+    const resizedArt = await sharp(preparedArtwork)
+      .ensureAlpha()
+      .resize({
+        width: targetArtWidth,
+        fit: "inside",
+        withoutEnlargement: false,
+      })
+      .png()
+      .toBuffer()
+    const rotatedArt =
+      design.rotation === 0
+        ? resizedArt
+        : await sharp(resizedArt)
+            .ensureAlpha()
+            .rotate(design.rotation, {
+              background: { r: 0, g: 0, b: 0, alpha: 0 },
+            })
+            .png()
+            .toBuffer()
+    const finalArtMeta = await sharp(rotatedArt).metadata()
+    const aw = finalArtMeta.width ?? targetArtWidth
+    const ah = finalArtMeta.height ?? targetArtWidth
+
+    const left = Math.max(0, Math.round(design.x * bw - aw / 2))
+    const top = Math.max(0, Math.round(design.y * bh - ah / 2))
+    const clippedLeft = Math.min(left, bw - 1)
+    const clippedTop = Math.min(top, bh - 1)
+
+    compositedBuffer = await sharp(baseBuffer)
+      .composite([{ input: rotatedArt, left: clippedLeft, top: clippedTop }])
+      .png()
+      .toBuffer()
+  } catch (err) {
+    return NextResponse.json(
+      {
+        error: `Failed to composite artwork: ${err instanceof Error ? err.message : String(err)}`,
+      },
+      { status: 500 },
+    )
+  }
+
   // --- call OpenAI ---
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-  const [baseUpload, artworkUpload] = await Promise.all([
-    toFile(baseBuffer, baseName, {
-      type: contentTypeForName(baseName),
-    }),
-    toFile(artworkBuffer, artworkName, {
-      type: artworkContentType,
-    }),
-  ])
+  const compositeUpload = await toFile(compositedBuffer, "composited.png", {
+    type: "image/png",
+  })
 
   let b64: string | undefined
   try {
     const response = await client.images.edit({
       model: "gpt-image-1",
-      image: [baseUpload, artworkUpload],
+      image: compositeUpload,
       prompt,
       n: 1,
       size: "1024x1024",
