@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
+import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -10,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Plus } from "lucide-react"
+import { ImageIcon, Plus } from "lucide-react"
 
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
@@ -22,7 +23,7 @@ export default async function AdminTemplatesListPage() {
   const { data: templates } = await supabase
     .from("product_templates")
     .select(
-      "id, slug, name, category, base_cost_cents, shipping_flat_cents, is_active, fulfillment_partners(slug, name)"
+      "id, slug, name, category, base_cost_cents, shipping_flat_cents, image_path, is_active, fulfillment_partners(slug, name)"
     )
     .order("created_at", { ascending: false })
 
@@ -45,6 +46,7 @@ export default async function AdminTemplatesListPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-16"></TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Partner</TableHead>
               <TableHead>Category</TableHead>
@@ -55,36 +57,53 @@ export default async function AdminTemplatesListPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(templates ?? []).map((t: any) => (
-              <TableRow key={t.id}>
-                <TableCell>
-                  <div className="font-medium">{t.name}</div>
-                  <div className="text-xs text-muted-foreground">{t.slug}</div>
-                </TableCell>
-                <TableCell>{t.fulfillment_partners?.name ?? "—"}</TableCell>
-                <TableCell className="capitalize">{t.category}</TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatPrice(t.base_cost_cents)}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatPrice(t.shipping_flat_cents)}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={t.is_active ? "default" : "secondary"}>
-                    {t.is_active ? "Active" : "Inactive"}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button asChild variant="ghost" size="sm">
-                    <Link href={`/admin/store/templates/${t.id}`}>Edit</Link>
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {(templates ?? []).map((t: any) => {
+              const imageUrl = getStoreImagePublicUrl(supabase, t.image_path)
+              return (
+                <TableRow key={t.id}>
+                  <TableCell>
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded border bg-muted">
+                      {imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={imageUrl}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <ImageIcon className="h-5 w-5 text-muted-foreground/40" />
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{t.name}</div>
+                    <div className="text-xs text-muted-foreground">{t.slug}</div>
+                  </TableCell>
+                  <TableCell>{t.fulfillment_partners?.name ?? "—"}</TableCell>
+                  <TableCell className="capitalize">{t.category}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatPrice(t.base_cost_cents)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatPrice(t.shipping_flat_cents)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={t.is_active ? "default" : "secondary"}>
+                      {t.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button asChild variant="ghost" size="sm">
+                      <Link href={`/admin/store/templates/${t.id}`}>Edit</Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
             {(!templates || templates.length === 0) && (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="py-8 text-center text-sm text-muted-foreground"
                 >
                   No templates yet. Create your first one.
