@@ -18,6 +18,17 @@ import { createClient } from "@/lib/supabase/client"
 import { slugify } from "@/lib/slug"
 import { describeVariant, variantOptionsKey } from "@/lib/store/options"
 import {
+  DEFAULT_DESIGN,
+  EMBELLISHMENT_LABELS,
+  PLACEMENT_DEFAULTS,
+  PLACEMENT_LABELS,
+  parseDesign,
+  resolveInkColor,
+  type DesignConfig,
+  type DesignPlacement,
+  type Embellishment,
+} from "@/lib/store/design"
+import {
   getStoreImagePublicUrl,
   makeImageFilename,
   orgProductImagePath,
@@ -93,6 +104,7 @@ interface VariantState {
   price: string                       // dollars
   image_path: string | null
   inventory_qty: string               // empty string = unlimited
+  design_color_hex: string | null     // explicit ink color; null = auto
   is_active: boolean
   ordering: number
 }
@@ -104,6 +116,7 @@ interface FormState {
   status: OrgProductStatus
   image_path: string | null
   artwork_path: string | null
+  design: DesignConfig
   variants: VariantState[]
 }
 
@@ -133,6 +146,7 @@ function seedVariantsFromTemplate(
     price: toDollars(floor + tv.delta_cost_cents),
     image_path: tv.image_path ?? null,
     inventory_qty: "",
+    design_color_hex: null,
     is_active: true,
     ordering: tv.ordering || (i + 1) * 10,
   }))
@@ -170,6 +184,7 @@ function mergeVariants(
         image_path: v.image_path ?? null,
         inventory_qty:
           v.inventory_qty == null ? "" : String(v.inventory_qty),
+        design_color_hex: v.design_color_hex ?? null,
         is_active: v.is_active,
         ordering: v.ordering || (i + 1) * 10,
       })
@@ -183,6 +198,7 @@ function mergeVariants(
         price: toDollars(floor + tv.delta_cost_cents),
         image_path: tv.image_path ?? null,
         inventory_qty: "",
+        design_color_hex: null,
         is_active: true,
         ordering: tv.ordering || (i + 1) * 10,
       })
@@ -202,6 +218,7 @@ function mergeVariants(
       price: toDollars(v.price_cents),
       image_path: v.image_path ?? null,
       inventory_qty: v.inventory_qty == null ? "" : String(v.inventory_qty),
+      design_color_hex: v.design_color_hex ?? null,
       is_active: v.is_active,
       ordering: v.ordering,
     })
@@ -238,6 +255,7 @@ export function OrgProductForm({
     status: product?.status ?? "draft",
     image_path: product?.image_path ?? template.image_path ?? null,
     artwork_path: product?.artwork_path ?? null,
+    design: parseDesign(product?.design),
     variants: initialVariants,
   })
   // Artwork is in a private bucket; its preview is a signed URL we refresh
@@ -288,6 +306,17 @@ export function OrgProductForm({
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setState((s) => ({ ...s, [key]: value }))
+  }
+  function updateDesign(patch: Partial<DesignConfig>) {
+    setState((s) => ({ ...s, design: { ...s.design, ...patch } }))
+  }
+  function setPlacement(p: DesignPlacement) {
+    // Switching placement snaps position + scale to that placement's defaults.
+    const d = PLACEMENT_DEFAULTS[p]
+    setState((s) => ({
+      ...s,
+      design: { ...s.design, placement: p, x: d.x, y: d.y, scale: d.scale },
+    }))
   }
   function updateVariant(key: string, patch: Partial<VariantState>) {
     setState((s) => ({
@@ -404,6 +433,7 @@ export function OrgProductForm({
       image_path: state.image_path,
       artwork_path: state.artwork_path,
       options: template.options ?? [],
+      design: state.design,
       status: state.status,
       published_at:
         state.status === "active"
@@ -438,6 +468,7 @@ export function OrgProductForm({
       inventory_qty: v.inventory_qty.trim() === ""
         ? null
         : Math.max(0, parseInt(v.inventory_qty, 10) || 0),
+      design_color_hex: v.design_color_hex,
       is_active: v.is_active,
       ordering: v.ordering || (i + 1) * 10,
     }))
@@ -502,84 +533,170 @@ export function OrgProductForm({
         {isEdit ? "All products" : "Pick a different template"}
       </Link>
 
-      {/* live preview */}
+      {/* live preview + design controls */}
       {previewVariant && (
         <Card>
           <CardHeader>
-            <CardTitle>Preview</CardTitle>
+            <CardTitle>Design</CardTitle>
             <CardDescription>
-              How this variant will look on your storefront. The artwork is
-              overlaid as a quick preview — click &quot;Generate AI mockup&quot; on a
-              variant below for a photorealistic version.
+              Drag the artwork on the preview, resize it, set placement /
+              embellishment, and choose ink color per variant. Click
+              &quot;AI mockup&quot; on a variant below for the photoreal version.
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col items-center gap-4">
-            <div className="relative aspect-square w-full max-w-[480px] overflow-hidden rounded-lg bg-muted">
-              {previewBaseUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewBaseUrl}
-                  alt=""
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-                  No base image
+          <CardContent className="grid gap-6 lg:grid-cols-[480px_1fr]">
+            <div className="flex flex-col items-center gap-4">
+              <DesignPreview
+                baseUrl={previewBaseUrl ?? null}
+                artworkUrl={artworkPreviewUrl}
+                design={state.design}
+                inkColorHex={resolveInkColor(
+                  previewVariant.options?.Color,
+                  previewVariant.design_color_hex,
+                )}
+                onDesignChange={updateDesign}
+              />
+
+              {firstVariantPerColor.size > 0 && (
+                <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
+                  {Array.from(firstVariantPerColor.entries()).map(
+                    ([color, v]) => {
+                      const tv = templateVariants.find(
+                        (t) => t.id === v.template_variant_id,
+                      )
+                      const swatchUrl =
+                        getStoreImagePublicUrl(supabase, v.image_path) ??
+                        getStoreImagePublicUrl(supabase, tv?.image_path)
+                      const isActive = previewVariant?.key === v.key
+                      return (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setPreviewKey(v.key)}
+                          title={color}
+                          className={cn(
+                            "h-9 w-9 overflow-hidden rounded-full border-2 transition",
+                            isActive
+                              ? "border-foreground"
+                              : "border-transparent hover:border-muted-foreground/60",
+                          )}
+                        >
+                          {swatchUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={swatchUrl}
+                              alt={color}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="block h-full w-full bg-muted" />
+                          )}
+                        </button>
+                      )
+                    },
+                  )}
                 </div>
               )}
-              {artworkPreviewUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={artworkPreviewUrl}
-                  alt=""
-                  className="pointer-events-none absolute left-1/2 top-[30%] w-[34%] -translate-x-1/2 object-contain drop-shadow"
-                />
-              )}
+
+              <p className="text-xs text-muted-foreground">
+                Previewing: {describeVariant(previewVariant.options)}
+                {!state.artwork_path && " · upload your design to see it"}
+              </p>
             </div>
 
-            {firstVariantPerColor.size > 0 && (
-              <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
-                {Array.from(firstVariantPerColor.entries()).map(([color, v]) => {
-                  const tv = templateVariants.find(
-                    (t) => t.id === v.template_variant_id,
-                  )
-                  const swatchUrl =
-                    getStoreImagePublicUrl(supabase, v.image_path) ??
-                    getStoreImagePublicUrl(supabase, tv?.image_path)
-                  const isActive = previewVariant?.key === v.key
-                  return (
-                    <button
-                      key={color}
-                      type="button"
-                      onClick={() => setPreviewKey(v.key)}
-                      title={color}
-                      className={cn(
-                        "h-9 w-9 overflow-hidden rounded-full border-2 transition",
-                        isActive
-                          ? "border-foreground"
-                          : "border-transparent hover:border-muted-foreground/60",
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field label="Placement">
+                  <Select
+                    value={state.design.placement}
+                    onValueChange={(v) => setPlacement(v as DesignPlacement)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(PLACEMENT_LABELS).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field label="Embellishment">
+                  <Select
+                    value={state.design.embellishment}
+                    onValueChange={(v) =>
+                      updateDesign({ embellishment: v as Embellishment })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(EMBELLISHMENT_LABELS).map(
+                        ([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ),
                       )}
-                    >
-                      {swatchUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={swatchUrl}
-                          alt={color}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <span className="block h-full w-full bg-muted" />
-                      )}
-                    </button>
-                  )
-                })}
+                    </SelectContent>
+                  </Select>
+                </Field>
               </div>
-            )}
 
-            <p className="text-xs text-muted-foreground">
-              Previewing: {describeVariant(previewVariant.options)}
-              {!state.artwork_path && " · upload your design to see it overlaid"}
-            </p>
+              <Field
+                label={`Size — ${Math.round(state.design.scale * 100)}% of garment width`}
+              >
+                <input
+                  type="range"
+                  min={0.05}
+                  max={0.8}
+                  step={0.01}
+                  value={state.design.scale}
+                  onChange={(e) =>
+                    updateDesign({ scale: parseFloat(e.target.value) })
+                  }
+                  className="w-full"
+                />
+              </Field>
+              <Field label={`Rotation — ${Math.round(state.design.rotation)}°`}>
+                <input
+                  type="range"
+                  min={-180}
+                  max={180}
+                  step={1}
+                  value={state.design.rotation}
+                  onChange={(e) =>
+                    updateDesign({ rotation: parseFloat(e.target.value) })
+                  }
+                  className="w-full"
+                />
+              </Field>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const d = PLACEMENT_DEFAULTS[state.design.placement]
+                  updateDesign({
+                    x: d.x,
+                    y: d.y,
+                    scale: d.scale,
+                    rotation: 0,
+                  })
+                }}
+              >
+                Reset to default position
+              </Button>
+
+              <p className="text-xs text-muted-foreground">
+                Ink color is set per variant in the table below.
+                Auto picks black or white based on the shirt&apos;s color.
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -706,6 +823,7 @@ export function OrgProductForm({
                     <TableHead>SKU</TableHead>
                     <TableHead className="text-right">Price (USD)</TableHead>
                     <TableHead>Inventory</TableHead>
+                    <TableHead>Ink</TableHead>
                     <TableHead>Image</TableHead>
                     <TableHead>Active</TableHead>
                   </TableRow>
@@ -764,6 +882,15 @@ export function OrgProductForm({
                             }
                             placeholder="∞"
                             className="h-8 w-20 text-xs tabular-nums"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <InkColorCell
+                            colorName={v.options?.Color}
+                            value={v.design_color_hex}
+                            onChange={(hex) =>
+                              updateVariant(v.key, { design_color_hex: hex })
+                            }
                           />
                         </TableCell>
                         <TableCell>
@@ -850,6 +977,168 @@ export function OrgProductForm({
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function DesignPreview({
+  baseUrl,
+  artworkUrl,
+  design,
+  inkColorHex,
+  onDesignChange,
+}: {
+  baseUrl: string | null
+  artworkUrl: string | null
+  design: DesignConfig
+  inkColorHex: string
+  onDesignChange: (patch: Partial<DesignConfig>) => void
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const draggingRef = useRef<{
+    startX: number
+    startY: number
+    designX: number
+    designY: number
+    rect: DOMRect
+  } | null>(null)
+
+  function clamp01(n: number) {
+    return Math.min(1, Math.max(0, n))
+  }
+
+  function onPointerDown(e: React.PointerEvent) {
+    if (!artworkUrl || !containerRef.current) return
+    e.preventDefault()
+    e.stopPropagation()
+    const rect = containerRef.current.getBoundingClientRect()
+    draggingRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      designX: design.x,
+      designY: design.y,
+      rect,
+    }
+    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    const drag = draggingRef.current
+    if (!drag) return
+    const dx = (e.clientX - drag.startX) / drag.rect.width
+    const dy = (e.clientY - drag.startY) / drag.rect.height
+    onDesignChange({
+      x: clamp01(drag.designX + dx),
+      y: clamp01(drag.designY + dy),
+    })
+  }
+
+  function onPointerUp(e: React.PointerEvent) {
+    draggingRef.current = null
+    if ((e.target as HTMLElement).hasPointerCapture?.(e.pointerId)) {
+      ;(e.target as HTMLElement).releasePointerCapture(e.pointerId)
+    }
+  }
+
+  // Inline CSS color filter for the design overlay. We tint single-color
+  // designs using the chosen ink color by stacking a colored layer over the
+  // artwork via mask-image. CSS mask is supported in evergreen browsers.
+  const tintStyle: React.CSSProperties = {
+    WebkitMaskImage: `url(${artworkUrl ?? ""})`,
+    maskImage: `url(${artworkUrl ?? ""})`,
+    WebkitMaskRepeat: "no-repeat",
+    maskRepeat: "no-repeat",
+    WebkitMaskSize: "contain",
+    maskSize: "contain",
+    WebkitMaskPosition: "center",
+    maskPosition: "center",
+    backgroundColor: inkColorHex,
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative aspect-square w-full max-w-[480px] select-none overflow-hidden rounded-lg bg-muted"
+    >
+      {baseUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={baseUrl}
+          alt=""
+          className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+          No base image
+        </div>
+      )}
+
+      {artworkUrl && (
+        <div
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          style={{
+            position: "absolute",
+            left: `${design.x * 100}%`,
+            top: `${design.y * 100}%`,
+            width: `${design.scale * 100}%`,
+            aspectRatio: "1 / 1",
+            transform: `translate(-50%, -50%) rotate(${design.rotation}deg)`,
+            cursor: draggingRef.current ? "grabbing" : "grab",
+            touchAction: "none",
+          }}
+          className="ring-1 ring-foreground/0 hover:ring-foreground/30"
+        >
+          {/* The tinted layer renders the design in the chosen ink color via CSS mask. */}
+          <div
+            aria-hidden
+            style={tintStyle}
+            className="absolute inset-0"
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InkColorCell({
+  colorName,
+  value,
+  onChange,
+}: {
+  colorName: string | undefined
+  value: string | null
+  onChange: (hex: string | null) => void
+}) {
+  const autoColor = resolveInkColor(colorName, null)
+  const isAuto = !value
+  const displayColor = value || autoColor
+
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        type="color"
+        value={displayColor}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-7 w-7 cursor-pointer rounded border p-0"
+        title={isAuto ? `Auto: ${autoColor}` : `Custom: ${displayColor}`}
+      />
+      {isAuto ? (
+        <span className="text-[10px] text-muted-foreground">auto</span>
+      ) : (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-5 w-5 p-0 text-muted-foreground"
+          onClick={() => onChange(null)}
+          title="Reset to auto"
+        >
+          <X className="h-3 w-3" />
+        </Button>
+      )}
     </div>
   )
 }

@@ -7,20 +7,16 @@ import {
   STORE_IMAGES_BUCKET,
   orgVariantImagePath,
 } from "@/lib/storage/store-images"
+import {
+  buildMockupPrompt,
+  parseDesign,
+  resolveInkColor,
+} from "@/lib/store/design"
 
 // Generated mockups are returned by the model as base64 PNGs. We persist
 // them to the same store-images bucket the rest of the UI reads from.
 export const runtime = "nodejs"
 export const maxDuration = 60
-
-const MOCKUP_PROMPT = [
-  "Reference image 1 is a blank apparel product photo (the garment).",
-  "Reference image 2 is a logo or design artwork.",
-  "Place the design from image 2 centered on the chest of the garment in image 1, sized to roughly one-third of the garment's width.",
-  "Make the design look naturally printed onto the fabric: match the shirt's shadows, wrinkles, and lighting. Respect the fabric texture.",
-  "Do not change the garment's color, pose, background, or overall composition.",
-  "Output a clean photorealistic product mockup with the design integrated into the shirt.",
-].join(" ")
 
 async function fetchAsBuffer(url: string): Promise<Buffer> {
   const res = await fetch(url)
@@ -77,11 +73,12 @@ export async function POST(request: Request) {
   }
 
   // Verify the variant belongs to a product owned by the user's active
-  // account. The RLS-bound supabase client does this implicitly on the
-  // read, but checking explicitly returns a clearer error.
+  // account, and load the design config + variant options for prompt building.
   const { data: variant, error: variantErr } = await supabase
     .from("org_product_variants")
-    .select("id, product_id, org_products!inner(account_id)")
+    .select(
+      "id, product_id, options, design_color_hex, org_products!inner(account_id, design)",
+    )
     .eq("id", variant_id)
     .eq("product_id", product_id)
     .maybeSingle()
@@ -93,9 +90,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Variant not found" }, { status: 404 })
   }
   // @ts-expect-error — embedded join shape
-  if (variant.org_products?.account_id !== activeAccountId) {
+  const productAccountId = variant.org_products?.account_id
+  if (productAccountId !== activeAccountId) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
+  // @ts-expect-error — embedded join shape
+  const design = parseDesign(variant.org_products?.design)
+  const variantColor: string | undefined = (variant.options as any)?.Color
+  const inkColorHex = resolveInkColor(variantColor, variant.design_color_hex)
+  const prompt = buildMockupPrompt({ design, inkColorHex })
 
   // --- pull artwork (private bucket) ---
   const { data: artworkBlob, error: artworkErr } = await supabase.storage
@@ -152,7 +155,7 @@ export async function POST(request: Request) {
     const response = await client.images.edit({
       model: "gpt-image-1",
       image: [baseUpload, artworkUpload],
-      prompt: MOCKUP_PROMPT,
+      prompt,
       n: 1,
       size: "1024x1024",
     })

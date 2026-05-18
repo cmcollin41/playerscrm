@@ -411,6 +411,7 @@ export interface OrgProducts {
   image_path?: string;
   artwork_path?: string;
   options: ProductOption[];
+  design: Record<string, any>;
   status: OrgProductStatus;
   published_at?: string;
   created_at: string;
@@ -429,6 +430,7 @@ export interface OrgProductVariants {
   price_cents: number;
   image_path?: string;
   inventory_qty?: number;
+  design_color_hex?: string;
   is_active: boolean;
   ordering: number;
   created_at: string;
