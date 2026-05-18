@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import OpenAI from "openai"
 import { toFile } from "openai/uploads"
+import sharp from "sharp"
 import { requireAccountAdminApi } from "@/lib/auth"
 import { STORE_ARTWORK_BUCKET } from "@/lib/storage/store-artwork"
 import {
@@ -142,8 +143,44 @@ export async function POST(request: Request) {
       { status: 404 },
     )
   }
-  const artworkBuffer = Buffer.from(await artworkBlob.arrayBuffer())
-  const artworkName = artwork_path.split("/").pop() || "artwork.png"
+  let artworkBuffer: Buffer = Buffer.from(await artworkBlob.arrayBuffer())
+  let artworkName = artwork_path.split("/").pop() || "artwork.png"
+  let artworkContentType = artworkBlob.type || contentTypeForName(artworkName)
+
+  // gpt-image-1 only accepts PNG / JPEG / WebP. Rasterize SVG via sharp.
+  // PDF rasterization is heavier (needs a PDF runtime); reject for now with
+  // a clear message — the org's PDF stays uploaded for partner handoff.
+  if (
+    artworkContentType === "image/svg+xml" ||
+    artworkName.toLowerCase().endsWith(".svg")
+  ) {
+    try {
+      artworkBuffer = await sharp(artworkBuffer, { density: 300 })
+        .resize(2048, 2048, { fit: "inside", withoutEnlargement: true })
+        .png()
+        .toBuffer()
+      artworkName = artworkName.replace(/\.svg$/i, ".png") || "artwork.png"
+      artworkContentType = "image/png"
+    } catch (err) {
+      return NextResponse.json(
+        {
+          error: `Failed to rasterize SVG: ${err instanceof Error ? err.message : String(err)}`,
+        },
+        { status: 400 },
+      )
+    }
+  } else if (
+    artworkContentType === "application/pdf" ||
+    artworkName.toLowerCase().endsWith(".pdf")
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "PDF artwork can't be used for AI mockups yet. Upload a PNG, JPEG, WebP, or SVG version. Your PDF stays saved for partner handoff.",
+      },
+      { status: 400 },
+    )
+  }
 
   // --- pull base image (may be a full URL pointing at partner CDN, or a
   //     path inside our public store-images bucket) ---
@@ -176,7 +213,7 @@ export async function POST(request: Request) {
       type: contentTypeForName(baseName),
     }),
     toFile(artworkBuffer, artworkName, {
-      type: contentTypeForName(artworkName),
+      type: artworkContentType,
     }),
   ])
 
