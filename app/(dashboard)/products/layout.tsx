@@ -22,8 +22,9 @@ export default async function ProductsLayout({
       <div>
         <h1 className="font-cal text-3xl font-bold">Products</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pick a blank from a partner, add your design, and publish. Active
-          products show on your shop and via the public API.
+          Connect a fulfillment partner (Printify, Printful) in Settings →
+          Integrations, then publish products from your partner shop to this
+          store.
         </p>
       </div>
       {children}

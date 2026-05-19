@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ExternalLink, Plus, ShoppingBag } from "lucide-react"
+import { ExternalLink, Plug, ShoppingBag } from "lucide-react"
 import { productStorefrontUrl, storefrontUrl } from "@/lib/store/links"
 import { PublishButton } from "./publish-button"
 
@@ -43,7 +43,7 @@ export default async function OrgProductsListPage() {
     supabase
       .from("org_products")
       .select(
-        "id, slug, name, status, updated_at, product_templates(name, category, fulfillment_partners(name)), org_product_variants(price_cents, is_active)"
+        "id, slug, name, status, updated_at, org_product_variants(price_cents, is_active)",
       )
       .eq("account_id", profile.account_id)
       .order("updated_at", { ascending: false }),
@@ -94,24 +94,25 @@ export default async function OrgProductsListPage() {
           {(products?.length ?? 0) === 1 ? "" : "s"}
         </p>
         <Button asChild>
-          <Link href="/products/new">
-            <Plus className="mr-1 h-4 w-4" />
-            Add from catalog
+          <Link href="/settings/integrations">
+            <Plug className="mr-1 h-4 w-4" />
+            Connect a partner
           </Link>
         </Button>
       </div>
 
-      {(!products || products.length === 0) ? (
+      {!products || products.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-md border border-dashed py-16 text-center">
           <ShoppingBag className="mb-3 h-10 w-10 text-muted-foreground/50" />
           <p className="text-sm font-medium">No products yet</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Start by picking a template from the platform catalog.
+            Connect Printify, Printful, or another partner and publish products
+            from their catalog to your storefront.
           </p>
           <Button asChild className="mt-4">
-            <Link href="/products/new">
-              <Plus className="mr-1 h-4 w-4" />
-              Browse catalog
+            <Link href="/settings/integrations">
+              <Plug className="mr-1 h-4 w-4" />
+              Open Integrations
             </Link>
           </Button>
         </div>
@@ -121,8 +122,6 @@ export default async function OrgProductsListPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Template</TableHead>
-                <TableHead>Partner</TableHead>
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead>Variants</TableHead>
                 <TableHead>Status</TableHead>
@@ -139,18 +138,9 @@ export default async function OrgProductsListPage() {
                   <TableRow key={p.id}>
                     <TableCell>
                       <div className="font-medium">{p.name}</div>
-                      <div className="text-xs text-muted-foreground">{p.slug}</div>
-                    </TableCell>
-                    <TableCell>
-                      {p.product_templates?.name ?? "—"}
-                      {p.product_templates?.category && (
-                        <span className="ml-1 text-xs text-muted-foreground capitalize">
-                          ({p.product_templates.category})
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {p.product_templates?.fulfillment_partners?.name ?? "—"}
+                      <div className="text-xs text-muted-foreground">
+                        {p.slug}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {priceRangeLabel(activePrices)}
@@ -177,9 +167,6 @@ export default async function OrgProductsListPage() {
                           />
                         ) : null}
                         <PublishButton productId={p.id} status={p.status} />
-                        <Button asChild variant="ghost" size="sm">
-                          <Link href={`/products/${p.id}`}>Edit</Link>
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
