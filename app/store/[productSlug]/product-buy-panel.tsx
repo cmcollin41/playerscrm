@@ -1,19 +1,13 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState } from "react"
 import Image from "next/image"
 import { toast } from "sonner"
 import { ShoppingBag } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { variantOptionsKey } from "@/lib/store/options"
 
 interface VariantForClient {
@@ -29,7 +23,9 @@ interface ProductBuyPanelProps {
   productName: string
   options: { name: string; values: string[] }[]
   variants: VariantForClient[]
-  fallbackImageUrl: string | null
+  /** Controlled selection — owned by the parent so the gallery can sync. */
+  selection: Record<string, string>
+  onSelectionChange: (next: Record<string, string>) => void
 }
 
 function formatPrice(cents: number): string {
@@ -40,7 +36,8 @@ export function ProductBuyPanel({
   productName,
   options,
   variants,
-  fallbackImageUrl,
+  selection,
+  onSelectionChange,
 }: ProductBuyPanelProps) {
   // Only show selectors for option axes that actually exist across the
   // active variants — orgs can disable some combinations.
@@ -55,36 +52,48 @@ export function ProductBuyPanel({
     return acc
   }, [variants])
 
-  // Initial selection: pick the first active variant's option values so
-  // something is always selected.
-  const [selection, setSelection] = useState<Record<string, string>>(() => {
-    return variants[0]?.options ?? {}
-  })
+  // First variant per color → swatch image. Used by the Color option row.
+  const colorImage = useMemo(() => {
+    const m: Record<string, string | null> = {}
+    for (const v of variants) {
+      const c = v.options?.Color
+      if (!c) continue
+      if (m[c] == null) m[c] = v.image_url ?? null
+    }
+    return m
+  }, [variants])
+
+  // For non-color axes, figure out which values are *currently reachable*
+  // given the other selected option values. Greyed-out (still clickable) when
+  // unreachable so users can pivot without hitting dead-ends.
+  function isValueReachable(optName: string, value: string): boolean {
+    return variants.some((v) => {
+      if (v.options[optName] !== value) return false
+      for (const [k, val] of Object.entries(selection)) {
+        if (k === optName) continue
+        if (v.options[k] !== val) return false
+      }
+      return true
+    })
+  }
+
   const [quantity, setQuantity] = useState<number>(1)
 
   // Resolve the variant matching the current selection. Falls back to null
   // when the combination isn't offered.
   const selectedVariant = useMemo(() => {
     const targetKey = variantOptionsKey(selection)
-    return variants.find((v) => variantOptionsKey(v.options) === targetKey) ?? null
+    return (
+      variants.find((v) => variantOptionsKey(v.options) === targetKey) ?? null
+    )
   }, [selection, variants])
 
-  // Surface the variant image to the parent's <Image> via a CustomEvent so
-  // we don't need to lift state. The parent renders the product image by
-  // default; we override when a variant has its own image.
-  useEffect(() => {
-    if (typeof window === "undefined") return
-    const url = selectedVariant?.image_url ?? fallbackImageUrl ?? null
-    window.dispatchEvent(
-      new CustomEvent("store:variant-image", { detail: { url } }),
-    )
-  }, [selectedVariant, fallbackImageUrl])
-
   const outOfStock =
-    selectedVariant?.inventory_qty != null && selectedVariant.inventory_qty <= 0
+    selectedVariant?.inventory_qty != null &&
+    selectedVariant.inventory_qty <= 0
 
   function setOption(name: string, value: string) {
-    setSelection((s) => ({ ...s, [name]: value }))
+    onSelectionChange({ ...selection, [name]: value })
   }
 
   function handleBuy() {
@@ -98,59 +107,115 @@ export function ProductBuyPanel({
     }
     // Slice 4 will swap this for a POST to /api/checkout/store that creates a
     // Stripe Connect Checkout Session and redirects to it.
-    toast(
-      `Checkout coming online soon for "${productName}".`,
-      {
-        description: `Variant ${selectedVariant.sku} · qty ${quantity} · ${formatPrice(selectedVariant.price_cents)}`,
-      },
-    )
+    toast(`Checkout coming online soon for "${productName}".`, {
+      description: `Variant ${selectedVariant.sku} · qty ${quantity} · ${formatPrice(selectedVariant.price_cents)}`,
+    })
   }
 
   return (
     <div className="flex flex-col gap-3 border-t pt-4">
-      {/* Variant image preview (replaces the hero when the selected variant
-          has its own image). */}
-      {selectedVariant?.image_url &&
-        selectedVariant.image_url !== fallbackImageUrl && (
-          <div className="relative aspect-square w-24 overflow-hidden rounded-md border">
-            <Image
-              src={selectedVariant.image_url}
-              alt={`${productName} variant`}
-              fill
-              className="object-cover"
-            />
-          </div>
-        )}
-
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="flex flex-col gap-4">
         {options.map((opt) => {
-          // Filter to values that are actually offered (some combos may be
-          // disabled via is_active).
-          const values = opt.values.filter((v) => offeredValues[opt.name]?.has(v))
+          const values = opt.values.filter((v) =>
+            offeredValues[opt.name]?.has(v),
+          )
           if (values.length === 0) return null
+          const isColor = opt.name === "Color"
+          const selectedValue = selection[opt.name] ?? ""
+
           return (
-            <div key={opt.name} className="flex flex-col gap-1.5">
-              <Label className="text-sm font-medium">{opt.name}</Label>
-              <Select
-                value={selection[opt.name] ?? ""}
-                onValueChange={(v) => setOption(opt.name, v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={`Select ${opt.name.toLowerCase()}`} />
-                </SelectTrigger>
-                <SelectContent>
-                  {values.map((v) => (
-                    <SelectItem key={v} value={v}>
-                      {v}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div key={opt.name} className="flex flex-col gap-2">
+              <div className="flex items-baseline gap-2">
+                <Label className="text-xs font-semibold uppercase tracking-wide">
+                  {opt.name}
+                </Label>
+                {selectedValue && (
+                  <span className="text-sm text-muted-foreground">
+                    {selectedValue}
+                  </span>
+                )}
+              </div>
+
+              {isColor ? (
+                <ul
+                  role="radiogroup"
+                  aria-label={opt.name}
+                  className="flex flex-wrap gap-2"
+                >
+                  {values.map((v) => {
+                    const isSelected = selectedValue === v
+                    const img = colorImage[v]
+                    return (
+                      <li key={v}>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          aria-label={v}
+                          title={v}
+                          onClick={() => setOption(opt.name, v)}
+                          className={cn(
+                            "relative block h-12 w-12 overflow-hidden rounded-md border-2 bg-muted transition",
+                            isSelected
+                              ? "border-foreground"
+                              : "border-transparent hover:border-muted-foreground/60",
+                          )}
+                        >
+                          {img ? (
+                            <Image
+                              src={img}
+                              alt=""
+                              fill
+                              className="object-cover"
+                              sizes="48px"
+                            />
+                          ) : null}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              ) : (
+                <ul
+                  role="radiogroup"
+                  aria-label={opt.name}
+                  className="flex flex-wrap gap-2"
+                >
+                  {values.map((v) => {
+                    const isSelected = selectedValue === v
+                    const reachable = isValueReachable(opt.name, v)
+                    return (
+                      <li key={v}>
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          onClick={() => setOption(opt.name, v)}
+                          className={cn(
+                            "inline-flex min-w-10 items-center justify-center rounded-md border px-3 py-2 text-sm font-medium transition",
+                            isSelected
+                              ? "border-foreground bg-foreground text-background"
+                              : "border-input bg-background hover:border-foreground/60",
+                            !reachable &&
+                              !isSelected &&
+                              "text-muted-foreground line-through opacity-60",
+                          )}
+                        >
+                          {v}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
           )
         })}
-        <div className="flex flex-col gap-1.5">
-          <Label className="text-sm font-medium">Quantity</Label>
+
+        <div className="flex flex-col gap-2">
+          <Label className="text-xs font-semibold uppercase tracking-wide">
+            Quantity
+          </Label>
           <Input
             type="number"
             min={1}
@@ -160,6 +225,7 @@ export function ProductBuyPanel({
               const n = parseInt(e.target.value, 10)
               if (Number.isFinite(n) && n >= 1) setQuantity(Math.min(n, 50))
             }}
+            className="w-24"
           />
         </div>
       </div>
