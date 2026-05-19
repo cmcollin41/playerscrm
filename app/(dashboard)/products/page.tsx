@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table"
 import { ExternalLink, Plus, ShoppingBag } from "lucide-react"
 import { productStorefrontUrl, storefrontUrl } from "@/lib/store/links"
+import { PublishButton } from "./publish-button"
 
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
@@ -175,6 +176,7 @@ export default async function OrgProductsListPage() {
                             disabled={!productStorefrontUrl(account, p.slug)}
                           />
                         ) : null}
+                        <PublishButton productId={p.id} status={p.status} />
                         <Button asChild variant="ghost" size="sm">
                           <Link href={`/products/${p.id}`}>Edit</Link>
                         </Button>
