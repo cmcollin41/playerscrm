@@ -440,8 +440,19 @@ export function OrgProductForm({
 
   // ---- save / delete ----
 
-  async function handleSave() {
+  async function handleSave(opts: { statusOverride?: OrgProductStatus } = {}) {
     if (!state.name.trim()) return toast.error("Name is required")
+    const effectiveStatus = opts.statusOverride ?? state.status
+
+    // Publishing demands at least one active variant — otherwise the
+    // storefront silently 404s the product.
+    if (
+      effectiveStatus === "active" &&
+      !state.variants.some((v) => v.is_active)
+    ) {
+      toast.error("Add at least one active variant before publishing.")
+      return
+    }
 
     // markup floor: every variant must clear base + min markup + delta_cost.
     const baseFloor = template.base_cost_cents + template.min_markup_cents
@@ -471,9 +482,9 @@ export function OrgProductForm({
       artwork_path: state.artwork_path,
       options: template.options ?? [],
       design: state.design,
-      status: state.status,
+      status: effectiveStatus,
       published_at:
-        state.status === "active"
+        effectiveStatus === "active"
           ? (product?.published_at ?? new Date().toISOString())
           : null,
     }
@@ -533,7 +544,21 @@ export function OrgProductForm({
       return
     }
 
-    toast.success(isEdit ? "Product saved" : "Product created")
+    // Reflect the effective status locally so the UI updates immediately.
+    if (effectiveStatus !== state.status) {
+      setState((s) => ({ ...s, status: effectiveStatus }))
+    }
+
+    const flipped = opts.statusOverride && opts.statusOverride !== product?.status
+    toast.success(
+      flipped
+        ? effectiveStatus === "active"
+          ? "Product published"
+          : "Product unpublished"
+        : isEdit
+          ? "Product saved"
+          : "Product created",
+    )
     if (isEdit) {
       router.refresh()
     } else {
@@ -969,9 +994,24 @@ export function OrgProductForm({
           <Button variant="outline" asChild>
             <Link href="/products">Cancel</Link>
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button
+            variant="outline"
+            onClick={() => handleSave()}
+            disabled={saving}
+          >
             <Save className="mr-1 h-4 w-4" />
-            {saving ? "Saving…" : isEdit ? "Save changes" : "Create product"}
+            {saving ? "Saving…" : isEdit ? "Save changes" : "Create draft"}
+          </Button>
+          <Button
+            onClick={() =>
+              handleSave({
+                statusOverride: state.status === "active" ? "draft" : "active",
+              })
+            }
+            disabled={saving}
+            variant={state.status === "active" ? "secondary" : "default"}
+          >
+            {state.status === "active" ? "Unpublish" : "Save & publish"}
           </Button>
         </div>
       </div>
