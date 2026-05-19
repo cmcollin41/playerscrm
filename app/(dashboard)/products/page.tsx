@@ -1,4 +1,5 @@
 import Link from "next/link"
+import Image from "next/image"
 import { createClient } from "@/lib/supabase/server"
 import { getUserProfile } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
@@ -12,8 +13,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { ExternalLink, Plus, ShoppingBag } from "lucide-react"
+import { ExternalLink, Plug, ShoppingBag, ChevronRight } from "lucide-react"
 import { productStorefrontUrl, storefrontUrl } from "@/lib/store/links"
+import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
 import { PublishButton } from "./publish-button"
 
 function formatPrice(cents: number): string {
@@ -34,27 +36,45 @@ function statusVariant(status: string): "default" | "secondary" | "outline" {
   return "secondary"
 }
 
+interface ConnectionRow {
+  id: string
+  external_account_label: string | null
+  is_active: boolean
+  // Supabase returns nested joins as arrays even when the FK is single-valued.
+  // The first (and only) element is the partner.
+  fulfillment_partners: { name: string; slug: string }[] | null
+}
+
 export default async function OrgProductsListPage() {
   const profile = await getUserProfile()
   if (!profile) return null
 
   const supabase = await createClient()
-  const [{ data: products }, { data: account }] = await Promise.all([
-    supabase
-      .from("org_products")
-      .select(
-        "id, slug, name, status, updated_at, product_templates(name, category, fulfillment_partners(name)), org_product_variants(price_cents, is_active)"
-      )
-      .eq("account_id", profile.account_id)
-      .order("updated_at", { ascending: false }),
-    supabase
-      .from("accounts")
-      .select("subdomain, custom_domain")
-      .eq("id", profile.account_id)
-      .maybeSingle(),
-  ])
+  const [{ data: products }, { data: connections }, { data: account }] =
+    await Promise.all([
+      supabase
+        .from("org_products")
+        .select(
+          "id, slug, name, status, updated_at, image_path, connection_id, org_product_variants(price_cents, is_active)",
+        )
+        .eq("account_id", profile.account_id)
+        .order("updated_at", { ascending: false }),
+      supabase
+        .from("account_partner_connections")
+        .select(
+          "id, external_account_label, is_active, fulfillment_partners(name, slug)",
+        )
+        .eq("account_id", profile.account_id)
+        .eq("is_active", true),
+      supabase
+        .from("accounts")
+        .select("subdomain, custom_domain")
+        .eq("id", profile.account_id)
+        .maybeSingle(),
+    ])
 
   const storeUrl = account ? storefrontUrl(account) : null
+  const activeConnections = (connections ?? []) as ConnectionRow[]
 
   return (
     <div className="flex flex-col gap-4">
@@ -88,41 +108,77 @@ export default async function OrgProductsListPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {products?.length ?? 0} product
-          {(products?.length ?? 0) === 1 ? "" : "s"}
-        </p>
-        <Button asChild>
-          <Link href="/products/new">
-            <Plus className="mr-1 h-4 w-4" />
-            Add from catalog
-          </Link>
-        </Button>
-      </div>
-
-      {(!products || products.length === 0) ? (
+      {activeConnections.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-md border border-dashed py-16 text-center">
-          <ShoppingBag className="mb-3 h-10 w-10 text-muted-foreground/50" />
-          <p className="text-sm font-medium">No products yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Start by picking a template from the platform catalog.
+          <Plug className="mb-3 h-10 w-10 text-muted-foreground/50" />
+          <p className="text-sm font-medium">No fulfillment partners connected</p>
+          <p className="mt-1 max-w-md text-xs text-muted-foreground">
+            Connect Printify, Printful, or another partner to start publishing
+            products to your storefront. You design products on the
+            partner&apos;s side; we sync them here and handle checkout +
+            payments.
           </p>
           <Button asChild className="mt-4">
-            <Link href="/products/new">
-              <Plus className="mr-1 h-4 w-4" />
-              Browse catalog
+            <Link href="/settings/integrations">
+              <Plug className="mr-1 h-4 w-4" />
+              Connect a partner
             </Link>
           </Button>
         </div>
+      ) : (
+        <div className="flex flex-col gap-2 rounded-md border bg-card p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Publish from your partner shop
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {activeConnections.map((c) => {
+              const partner = c.fulfillment_partners?.[0]
+              return (
+                <Button
+                  key={c.id}
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="gap-1"
+                >
+                  <Link href={`/products/browse/${c.id}`}>
+                    Browse {partner?.name ?? "partner"}
+                    {c.external_account_label
+                      ? ` (${c.external_account_label})`
+                      : ""}
+                    <ChevronRight className="ml-1 h-3 w-3" />
+                  </Link>
+                </Button>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pt-2">
+        <p className="text-sm text-muted-foreground">
+          {products?.length ?? 0} published product
+          {(products?.length ?? 0) === 1 ? "" : "s"}
+        </p>
+      </div>
+
+      {!products || products.length === 0 ? (
+        activeConnections.length > 0 && (
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed py-12 text-center">
+            <ShoppingBag className="mb-3 h-8 w-8 text-muted-foreground/50" />
+            <p className="text-sm font-medium">No products published yet</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Browse your connected partner shop above to publish products.
+            </p>
+          </div>
+        )
       ) : (
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead></TableHead>
                 <TableHead>Name</TableHead>
-                <TableHead>Template</TableHead>
-                <TableHead>Partner</TableHead>
                 <TableHead className="text-right">Price</TableHead>
                 <TableHead>Variants</TableHead>
                 <TableHead>Status</TableHead>
@@ -135,22 +191,28 @@ export default async function OrgProductsListPage() {
                   .filter((v: any) => v.is_active)
                   .map((v: any) => v.price_cents)
                 const variantCount = (p.org_product_variants ?? []).length
+                const imageUrl = getStoreImagePublicUrl(supabase, p.image_path)
                 return (
                   <TableRow key={p.id}>
+                    <TableCell className="w-12">
+                      <div className="relative h-10 w-10 overflow-hidden rounded-md bg-muted">
+                        {imageUrl ? (
+                          <Image
+                            src={imageUrl}
+                            alt={p.name}
+                            fill
+                            className="object-cover"
+                            sizes="40px"
+                            unoptimized
+                          />
+                        ) : null}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium">{p.name}</div>
-                      <div className="text-xs text-muted-foreground">{p.slug}</div>
-                    </TableCell>
-                    <TableCell>
-                      {p.product_templates?.name ?? "—"}
-                      {p.product_templates?.category && (
-                        <span className="ml-1 text-xs text-muted-foreground capitalize">
-                          ({p.product_templates.category})
-                        </span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {p.product_templates?.fulfillment_partners?.name ?? "—"}
+                      <div className="text-xs text-muted-foreground">
+                        {p.slug}
+                      </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {priceRangeLabel(activePrices)}
@@ -177,9 +239,6 @@ export default async function OrgProductsListPage() {
                           />
                         ) : null}
                         <PublishButton productId={p.id} status={p.status} />
-                        <Button asChild variant="ghost" size="sm">
-                          <Link href={`/products/${p.id}`}>Edit</Link>
-                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

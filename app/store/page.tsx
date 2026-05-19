@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server"
 import { getTenantAccount } from "@/lib/tenant"
 import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { ShoppingBag } from "lucide-react"
 
 export const dynamic = "force-dynamic"
@@ -41,15 +40,15 @@ export default async function PublicStorePage() {
   const { data: products } = await supabase
     .from("org_products")
     .select(
-      "id, slug, name, description, image_path, product_templates(category, image_path, lead_time_days), org_product_variants(price_cents, is_active)"
+      "id, slug, name, description, image_path, org_product_variants(price_cents, is_active)",
     )
     .eq("account_id", account.id)
     .eq("status", "active")
     .order("published_at", { ascending: false, nullsFirst: false })
 
   // Only show products that have at least one active variant.
-  const visibleProducts = (products ?? []).filter(
-    (p: any) => (p.org_product_variants ?? []).some((v: any) => v.is_active),
+  const visibleProducts = (products ?? []).filter((p: any) =>
+    (p.org_product_variants ?? []).some((v: any) => v.is_active),
   )
 
   if (visibleProducts.length === 0) {
@@ -57,9 +56,7 @@ export default async function PublicStorePage() {
       <div className="flex flex-col items-center justify-center rounded-md border border-dashed py-20 text-center">
         <ShoppingBag className="mb-3 h-10 w-10 text-muted-foreground/50" />
         <p className="text-sm font-medium">No products available yet</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Check back soon.
-        </p>
+        <p className="mt-1 text-xs text-muted-foreground">Check back soon.</p>
       </div>
     )
   }
@@ -75,8 +72,7 @@ export default async function PublicStorePage() {
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {visibleProducts.map((p: any) => {
-          const imagePath = p.image_path || p.product_templates?.image_path
-          const imageUrl = getStoreImagePublicUrl(supabase, imagePath)
+          const imageUrl = getStoreImagePublicUrl(supabase, p.image_path)
           const activePrices = p.org_product_variants
             .filter((v: any) => v.is_active)
             .map((v: any) => v.price_cents)
@@ -99,28 +95,16 @@ export default async function PublicStorePage() {
                   )}
                 </div>
                 <CardContent className="flex flex-col gap-2 p-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-medium leading-tight">{p.name}</p>
-                    {p.product_templates?.category && (
-                      <Badge variant="outline" className="capitalize">
-                        {p.product_templates.category}
-                      </Badge>
-                    )}
-                  </div>
+                  <p className="font-medium leading-tight">{p.name}</p>
                   {p.description && (
                     <p className="line-clamp-2 text-xs text-muted-foreground">
                       {p.description}
                     </p>
                   )}
-                  <div className="mt-1 flex items-center justify-between">
+                  <div className="mt-1">
                     <span className="text-sm font-semibold tabular-nums">
                       {price ?? "—"}
                     </span>
-                    {p.product_templates?.lead_time_days != null && (
-                      <span className="text-xs text-muted-foreground">
-                        ~{p.product_templates.lead_time_days}d to ship
-                      </span>
-                    )}
                   </div>
                 </CardContent>
               </Card>

@@ -341,17 +341,6 @@ export interface Profiles {
   people?: People;
 }
 
-export type ProductCategory = 'uniform' | 'apparel' | 'accessory'
-
-/** Map of option name → value, e.g. {"Size": "M", "Color": "Red"}. */
-export type VariantOptionMap = Record<string, string>
-
-/** Option definition shared by templates and org_products. */
-export interface ProductOption {
-  name: string
-  values: string[]
-}
-
 export interface FulfillmentPartners {
   id: string /* primary key */;
   slug: string;
@@ -364,59 +353,42 @@ export interface FulfillmentPartners {
   updated_at: string;
 }
 
-export interface ProductTemplates {
+export type AccountPartnerAuthType = 'personal_token' | 'oauth'
+
+export interface AccountPartnerConnections {
   id: string /* primary key */;
+  account_id: string /* foreign key to accounts.id */;
   partner_id: string /* foreign key to fulfillment_partners.id */;
-  slug: string;
-  name: string;
-  description?: string;
-  category: ProductCategory;
-  base_cost_cents: number;
-  min_markup_cents: number;
-  shipping_flat_cents: number;
-  lead_time_days?: number;
-  image_path?: string;
-  options: ProductOption[];
-  metadata: Record<string, any>;
+  /** AES-256-GCM ciphertext blob from lib/fulfillment/crypto. Never read raw. */
+  credentials_encrypted: Buffer;
+  external_shop_id?: string;
+  external_account_label?: string;
+  auth_type: AccountPartnerAuthType;
   is_active: boolean;
+  last_synced_at?: string;
   created_at: string;
   updated_at: string;
   fulfillment_partners?: FulfillmentPartners;
-  product_template_variants?: ProductTemplateVariants[];
-}
-
-export interface ProductTemplateVariants {
-  id: string /* primary key */;
-  template_id: string /* foreign key to product_templates.id */;
-  sku: string;
-  options: VariantOptionMap;
-  delta_cost_cents: number;
-  image_path?: string;
-  ordering: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
 }
 
 export type OrgProductStatus = 'draft' | 'active' | 'archived'
+export type OrgProductSyncStatus = 'synced' | 'stale' | 'error' | 'deleted'
 
 export interface OrgProducts {
   id: string /* primary key */;
   account_id: string /* foreign key to accounts.id */;
-  template_id: string /* foreign key to product_templates.id */;
+  connection_id: string /* foreign key to account_partner_connections.id */;
+  external_product_id: string;
   slug: string;
   name: string;
   description?: string;
-  customization: Record<string, any>;
   image_path?: string;
-  artwork_path?: string;
-  options: ProductOption[];
-  design: Record<string, any>;
   status: OrgProductStatus;
+  sync_status: OrgProductSyncStatus;
+  last_synced_at?: string;
   published_at?: string;
   created_at: string;
   updated_at: string;
-  product_templates?: ProductTemplates;
   accounts?: Accounts;
   org_product_variants?: OrgProductVariants[];
 }
@@ -424,14 +396,16 @@ export interface OrgProducts {
 export interface OrgProductVariants {
   id: string /* primary key */;
   product_id: string /* foreign key to org_products.id */;
-  template_variant_id?: string /* foreign key to product_template_variants.id */;
   sku: string;
-  options: VariantOptionMap;
+  /** Legacy: option name → value map read by the storefront buy panel. */
+  options: Record<string, string>;
+  external_variant_id: string;
+  /** Partner-defined option map, e.g. {"size":"M","color":"Red"}. */
+  external_options: Record<string, string>;
   price_cents: number;
+  partner_cost_cents?: number;
   image_path?: string;
-  artwork_path?: string;
   inventory_qty?: number;
-  design_color_hex?: string;
   is_active: boolean;
   ordering: number;
   created_at: string;

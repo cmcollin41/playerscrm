@@ -16,6 +16,10 @@ module.exports = {
       { hostname: "framerusercontent.com" },
       { hostname: "bloximages.chicago2.vip.townnews.com" },
       { hostname: "cdn.shopify.com" },
+      // fulfillment partner CDNs — synced product images
+      { hostname: "images.printify.com" },
+      { hostname: "images-api.printify.com" },
+      { hostname: "files.cdn.printful.com" },
     ],
   },
   reactStrictMode: false
