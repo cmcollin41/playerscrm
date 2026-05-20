@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { requireAuth } from "@/lib/auth"
-import { encryptCredentials } from "@/lib/fulfillment/crypto"
+import { encryptCredentialsForBytea } from "@/lib/fulfillment/crypto"
 import { getAdapter } from "@/lib/fulfillment/registry"
 
 export interface ConnectResult {
@@ -53,7 +53,7 @@ export async function connectPartner(input: {
     }
   }
 
-  const ciphertext = encryptCredentials({ token: trimmed })
+  const ciphertext = encryptCredentialsForBytea({ token: trimmed })
 
   const { error: upsertErr } = await supabase
     .from("account_partner_connections")

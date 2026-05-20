@@ -49,6 +49,19 @@ export function encryptCredentials(payload: ConnectionCredentials): Buffer {
   return Buffer.concat([iv, enc, tag])
 }
 
+/**
+ * Encrypt + format for direct insert into a Postgres `bytea` column via
+ * supabase-js. Plain `Buffer` doesn't round-trip through PostgREST — it
+ * gets `JSON.stringify`'d as `{"type":"Buffer","data":[...]}` and stored
+ * as that literal string. The `\x<hex>` prefix is Postgres's standard
+ * bytea text representation, which PostgREST decodes correctly.
+ */
+export function encryptCredentialsForBytea(
+  payload: ConnectionCredentials,
+): string {
+  return "\\x" + encryptCredentials(payload).toString("hex")
+}
+
 export function decryptCredentials(blob: Buffer): ConnectionCredentials {
   if (blob.length < IV_LEN + TAG_LEN + 1) {
     throw new Error("Ciphertext too short — credentials blob is corrupt.")
