@@ -15,7 +15,8 @@ interface VariantForClient {
 
 interface ProductViewProps {
   productName: string
-  description: string | null
+  /** Already-sanitized HTML from the server (lib/store/sanitize.ts). */
+  descriptionHtml: string
   options: { name: string; values: string[] }[]
   variants: VariantForClient[]
   fallbackImageUrl: string | null
@@ -27,7 +28,7 @@ function formatPrice(cents: number): string {
 
 export function ProductView({
   productName,
-  description,
+  descriptionHtml,
   options,
   variants,
   fallbackImageUrl,
@@ -84,10 +85,11 @@ export function ProductView({
           </p>
         </div>
 
-        {description && (
-          <p className="whitespace-pre-line text-sm text-muted-foreground">
-            {description}
-          </p>
+        {descriptionHtml && (
+          <div
+            className="prose prose-sm max-w-none text-muted-foreground prose-a:text-foreground prose-strong:text-foreground prose-headings:text-foreground"
+            dangerouslySetInnerHTML={{ __html: descriptionHtml }}
+          />
         )}
 
         <ProductBuyPanel

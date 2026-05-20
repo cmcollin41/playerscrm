@@ -5,6 +5,7 @@ import { ArrowLeft } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { getTenantAccount } from "@/lib/tenant"
 import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
+import { sanitizeProductDescription } from "@/lib/store/sanitize"
 import { ProductView } from "./product-view"
 
 export const dynamic = "force-dynamic"
@@ -114,7 +115,7 @@ export default async function PublicProductPage({ params }: PageProps) {
 
       <ProductView
         productName={product.name}
-        description={product.description ?? null}
+        descriptionHtml={sanitizeProductDescription(product.description)}
         options={productOptions}
         variants={variantsForClient}
         fallbackImageUrl={productImageUrl ?? null}
