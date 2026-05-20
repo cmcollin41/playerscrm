@@ -10,13 +10,21 @@
  * Rate limit: ~600 req / 30min per shop.
  */
 
+import crypto from "node:crypto"
 import type {
   ConnectionContext,
   ConnectionCredentials,
+  CreateOrderInput,
+  CreateOrderResult,
+  DispatchStatus,
   FulfillmentAdapter,
+  FulfillmentLine,
   PartnerSyncProduct,
   PartnerSyncVariant,
+  ShippingAddress,
+  ShippingQuote,
   ValidationResult,
+  WebhookEvent,
 } from "../../types"
 
 const PRINTIFY_BASE = "https://api.printify.com/v1"
@@ -81,21 +89,33 @@ interface PrintifyListResponse<T> {
   data: T[]
 }
 
+interface PrintifyFetchOptions {
+  method?: "GET" | "POST"
+  body?: unknown
+}
+
 async function printifyFetch<T>(
   token: string,
   path: string,
+  opts: PrintifyFetchOptions = {},
 ): Promise<T> {
-  const res = await fetch(`${PRINTIFY_BASE}${path}`, {
+  const method = opts.method ?? "GET"
+  const init: RequestInit = {
+    method,
     headers: {
       Authorization: `Bearer ${token}`,
       "User-Agent": UA,
+      ...(opts.body ? { "Content-Type": "application/json" } : {}),
     },
     cache: "no-store",
-  })
+  }
+  if (opts.body !== undefined) init.body = JSON.stringify(opts.body)
+
+  const res = await fetch(`${PRINTIFY_BASE}${path}`, init)
   if (!res.ok) {
     const body = await res.text().catch(() => "")
     throw new Error(
-      `Printify ${path} responded ${res.status}: ${body.slice(0, 200)}`,
+      `Printify ${method} ${path} responded ${res.status}: ${body.slice(0, 200)}`,
     )
   }
   return (await res.json()) as T
@@ -259,9 +279,239 @@ async function syncProduct(
   return { product, variants, images }
 }
 
+// ---------------------------------------------------------------------------
+// Slice 4: calculateShipping
+// ---------------------------------------------------------------------------
+
+interface PrintifyShippingResponse {
+  // All amounts in cents.
+  standard?: number
+  express?: number
+  priority?: number
+  printify_express?: number
+  economy?: number
+}
+
+interface PrintifyAddressTo {
+  first_name: string
+  last_name: string
+  email?: string
+  phone?: string
+  country: string
+  region?: string
+  address1: string
+  address2?: string
+  city: string
+  zip: string
+}
+
+function splitName(full: string): { first: string; last: string } {
+  const trimmed = full.trim()
+  if (!trimmed) return { first: "Customer", last: "" }
+  const idx = trimmed.indexOf(" ")
+  if (idx < 0) return { first: trimmed, last: "" }
+  return {
+    first: trimmed.slice(0, idx),
+    last: trimmed.slice(idx + 1).trim(),
+  }
+}
+
+function toPrintifyAddress(address: ShippingAddress): PrintifyAddressTo {
+  const { first, last } = splitName(address.name)
+  return {
+    first_name: first,
+    last_name: last || first,
+    email: address.email,
+    phone: address.phone,
+    country: address.country,
+    region: address.region,
+    address1: address.address1,
+    address2: address.address2,
+    city: address.city,
+    zip: address.postalCode,
+  }
+}
+
+async function calculateShipping(
+  ctx: ConnectionContext,
+  lines: FulfillmentLine[],
+  address: ShippingAddress,
+): Promise<ShippingQuote> {
+  const shopId = requireShopId(ctx)
+  if (lines.length === 0) return { shippingCents: 0 }
+
+  const body = {
+    line_items: lines.map((l) => ({
+      product_id: l.externalProductId,
+      variant_id: Number(l.externalVariantId),
+      quantity: l.quantity,
+    })),
+    address_to: toPrintifyAddress(address),
+  }
+
+  const res = await printifyFetch<PrintifyShippingResponse>(
+    ctx.credentials.token,
+    `/shops/${shopId}/orders/shipping.json`,
+    { method: "POST", body },
+  )
+
+  // Default to standard. Premium tiers can be exposed later as a UI choice.
+  const cents = res.standard ?? res.economy ?? res.priority ?? res.express ?? 0
+  return { shippingCents: cents, breakdown: res }
+}
+
+// ---------------------------------------------------------------------------
+// Slice 5: createOrder
+// ---------------------------------------------------------------------------
+
+interface PrintifyOrderCreateResponse {
+  id: string
+}
+
+async function createOrder(
+  ctx: ConnectionContext,
+  input: CreateOrderInput,
+): Promise<CreateOrderResult> {
+  const shopId = requireShopId(ctx)
+
+  const body = {
+    external_id: input.externalOrderRef,
+    label: `athletes.app · ${input.externalOrderRef}`,
+    line_items: input.lines.map((l) => ({
+      product_id: l.externalProductId,
+      variant_id: Number(l.externalVariantId),
+      quantity: l.quantity,
+    })),
+    shipping_method: 1, // 1 = standard. Premium tiers can be exposed later.
+    send_shipping_notification: false,
+    address_to: toPrintifyAddress(input.address),
+  }
+
+  const created = await printifyFetch<PrintifyOrderCreateResponse>(
+    ctx.credentials.token,
+    `/shops/${shopId}/orders.json`,
+    { method: "POST", body },
+  )
+
+  // Push the order into production. Without this Printify keeps it in "on
+  // hold" — useful for review but not what merchants want once payment lands.
+  await printifyFetch(
+    ctx.credentials.token,
+    `/shops/${shopId}/orders/${created.id}/send_to_production.json`,
+    { method: "POST", body: {} },
+  ).catch((err) => {
+    // Don't fail the whole dispatch if production send fails — the order
+    // already exists on Printify and an admin can release it manually.
+    console.error(
+      "[printify] send_to_production failed for order",
+      created.id,
+      err instanceof Error ? err.message : err,
+    )
+  })
+
+  return {
+    externalOrderId: created.id,
+    externalOrderUrl: `https://printify.com/app/orders/${shopId}/details/${created.id}`,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Slice 5: webhooks (verify + handle)
+// ---------------------------------------------------------------------------
+
+interface PrintifyWebhookPayload {
+  id?: string
+  type?: string
+  created_at?: string
+  shop_id?: number | string
+  resource?: {
+    id?: string
+    data?: {
+      shipments?: Array<{
+        carrier?: string
+        number?: string
+        url?: string
+      }>
+    }
+  }
+}
+
+async function verifyWebhook(
+  req: Request,
+  ctx: ConnectionContext,
+): Promise<boolean> {
+  const secret = (ctx.credentials.webhook_secret as string | undefined) ?? ""
+  if (!secret) return false
+  const signatureHeader = req.headers.get("x-pfy-signature") ?? ""
+  if (!signatureHeader) return false
+
+  // Stripe-style "sha256=hexdigest". Accept either bare hex or prefixed.
+  const provided = signatureHeader.startsWith("sha256=")
+    ? signatureHeader.slice(7)
+    : signatureHeader
+
+  const raw = Buffer.from(await req.clone().arrayBuffer())
+  const expected = crypto.createHmac("sha256", secret).update(raw).digest("hex")
+
+  if (expected.length !== provided.length) return false
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(expected, "hex"),
+      Buffer.from(provided, "hex"),
+    )
+  } catch {
+    return false
+  }
+}
+
+function mapPrintifyEventType(type: string | undefined): DispatchStatus | null {
+  switch (type) {
+    case "order:created":
+      return "sent"
+    case "order:sent-to-production":
+      return "accepted"
+    case "order:shipment:created":
+    case "order:shipment:delivered":
+      return "fulfilled"
+    case "order:canceled":
+      return "cancelled"
+    default:
+      return null
+  }
+}
+
+async function handleWebhook(
+  body: unknown,
+  _ctx: ConnectionContext,
+): Promise<WebhookEvent | null> {
+  const payload = (body ?? {}) as PrintifyWebhookPayload
+  const externalOrderId = payload.resource?.id
+  const status = mapPrintifyEventType(payload.type)
+  if (!externalOrderId || !status) return null
+
+  const shipment = payload.resource?.data?.shipments?.[0]
+  const tracking = shipment
+    ? {
+        number: shipment.number,
+        url: shipment.url,
+        carrier: shipment.carrier,
+      }
+    : undefined
+
+  return {
+    externalOrderId,
+    status,
+    tracking,
+  }
+}
+
 export const printifyAdapter: FulfillmentAdapter = {
   key: "printify",
   validateCredentials,
   listSyncProducts,
   syncProduct,
+  calculateShipping,
+  createOrder,
+  verifyWebhook,
+  handleWebhook,
 }

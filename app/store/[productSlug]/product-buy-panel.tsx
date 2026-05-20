@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { variantOptionsKey } from "@/lib/store/options"
+import { useCart } from "@/providers/cart-provider"
 
 interface VariantForClient {
   id: string
@@ -20,12 +21,17 @@ interface VariantForClient {
 }
 
 interface ProductBuyPanelProps {
+  productId: string
+  productSlug: string
   productName: string
   options: { name: string; values: string[] }[]
   variants: VariantForClient[]
   /** Controlled selection — owned by the parent so the gallery can sync. */
   selection: Record<string, string>
   onSelectionChange: (next: Record<string, string>) => void
+  fallbackImageUrl: string | null
+  connectionId: string
+  partnerSlug: string
 }
 
 function formatPrice(cents: number): string {
@@ -33,12 +39,18 @@ function formatPrice(cents: number): string {
 }
 
 export function ProductBuyPanel({
+  productId,
+  productSlug,
   productName,
   options,
   variants,
   selection,
   onSelectionChange,
+  fallbackImageUrl,
+  connectionId,
+  partnerSlug,
 }: ProductBuyPanelProps) {
+  const { addLine } = useCart()
   // Only show selectors for option axes that actually exist across the
   // active variants — orgs can disable some combinations.
   const offeredValues = useMemo(() => {
@@ -96,7 +108,7 @@ export function ProductBuyPanel({
     onSelectionChange({ ...selection, [name]: value })
   }
 
-  function handleBuy() {
+  function handleAddToCart() {
     if (!selectedVariant) {
       toast.error("Pick a variant first")
       return
@@ -105,10 +117,27 @@ export function ProductBuyPanel({
       toast.error("That variant is out of stock")
       return
     }
-    // Slice 4 will swap this for a POST to /api/checkout/store that creates a
-    // Stripe Connect Checkout Session and redirects to it.
-    toast(`Checkout coming online soon for "${productName}".`, {
-      description: `Variant ${selectedVariant.sku} · qty ${quantity} · ${formatPrice(selectedVariant.price_cents)}`,
+    addLine({
+      variantId: selectedVariant.id,
+      productId,
+      productSlug,
+      productName,
+      variantSku: selectedVariant.sku,
+      options: selectedVariant.options,
+      priceCents: selectedVariant.price_cents,
+      imageUrl: selectedVariant.image_url ?? fallbackImageUrl,
+      connectionId,
+      partnerSlug,
+      quantity,
+    })
+    toast.success(`Added to cart`, {
+      description: `${productName} · ${selectedVariant.sku} · qty ${quantity}`,
+      action: {
+        label: "View cart",
+        onClick: () => {
+          window.location.href = "/store/cart"
+        },
+      },
     })
   }
 
@@ -251,11 +280,11 @@ export function ProductBuyPanel({
         </div>
         <Button
           size="lg"
-          onClick={handleBuy}
+          onClick={handleAddToCart}
           disabled={!selectedVariant || outOfStock}
         >
           <ShoppingBag className="mr-2 h-4 w-4" />
-          {outOfStock ? "Sold out" : "Buy now"}
+          {outOfStock ? "Sold out" : "Add to cart"}
         </Button>
       </div>
       <p className="text-center text-xs text-muted-foreground">

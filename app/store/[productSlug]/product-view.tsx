@@ -14,12 +14,16 @@ interface VariantForClient {
 }
 
 interface ProductViewProps {
+  productId: string
+  productSlug: string
   productName: string
   /** Already-sanitized HTML from the server (lib/store/sanitize.ts). */
   descriptionHtml: string
   options: { name: string; values: string[] }[]
   variants: VariantForClient[]
   fallbackImageUrl: string | null
+  connectionId: string
+  partnerSlug: string
 }
 
 function formatPrice(cents: number): string {
@@ -27,11 +31,15 @@ function formatPrice(cents: number): string {
 }
 
 export function ProductView({
+  productId,
+  productSlug,
   productName,
   descriptionHtml,
   options,
   variants,
   fallbackImageUrl,
+  connectionId,
+  partnerSlug,
 }: ProductViewProps) {
   // One slide per color (de-duplicated), in the order they first appear so
   // the gallery follows the variant ordering. Falls back to the product image
@@ -93,11 +101,16 @@ export function ProductView({
         )}
 
         <ProductBuyPanel
+          productId={productId}
+          productSlug={productSlug}
           productName={productName}
           options={options}
           variants={variants}
           selection={selection}
           onSelectionChange={setSelection}
+          fallbackImageUrl={fallbackImageUrl}
+          connectionId={connectionId}
+          partnerSlug={partnerSlug}
         />
       </div>
     </div>
