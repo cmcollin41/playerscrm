@@ -27,8 +27,26 @@ export default async function BrowsePartnerCatalogPage({ params }: PageProps) {
   let connection
   try {
     connection = await loadConnection(connectionId, profile.account_id)
-  } catch {
-    notFound()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error(
+      "[products/browse] loadConnection failed",
+      { connectionId, accountId: profile.account_id, message: msg },
+    )
+    return (
+      <div className="flex flex-col gap-4 py-8">
+        <BackLink />
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          <p className="font-medium">Couldn&apos;t load the partner connection.</p>
+          <p className="mt-1 text-xs">{msg}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            If this persists, the encryption key may have changed since the
+            connection was created. Disconnect and reconnect the integration
+            in Settings → Integrations.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   if (!connection.adapter.listSyncProducts) {
