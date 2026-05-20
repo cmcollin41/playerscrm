@@ -158,10 +158,11 @@ async function listSyncProducts(
   ctx: ConnectionContext,
 ): Promise<PartnerSyncProduct[]> {
   const shopId = requireShopId(ctx)
-  // MVP: fetch page 1 only (limit=100). Larger shops can paginate later.
+  // MVP: fetch page 1 only (limit=50, Printify's max). Larger shops can
+  // paginate later.
   const res = await printifyFetch<PrintifyListResponse<PrintifyProductListItem>>(
     ctx.credentials.token,
-    `/shops/${shopId}/products.json?limit=100`,
+    `/shops/${shopId}/products.json?limit=50`,
   )
   return res.data.map((p) => ({
     externalId: String(p.id),
