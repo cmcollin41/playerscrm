@@ -32,6 +32,7 @@ import { RRule, Frequency, Weekday } from "rrule"
 import { getIntegration } from "@/lib/integrations"
 import { listEnabledIntegrations, installIntegration } from "@/lib/integrations/install"
 import type { Integration } from "@/lib/integrations"
+import { EventIntegrationsCarousel } from "@/components/events/event-integrations-carousel"
 
 type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly"
 
@@ -414,29 +415,15 @@ export default function NewEventPage() {
                   </p>
                 </div>
               ) : (
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {selectableApps.map((a) => (
-                    <button
-                      key={a.slug}
-                      type="button"
-                      onClick={() => setAppSlug(a.slug)}
-                      className={`rounded-lg border p-3 text-left transition-colors ${
-                        appSlug === a.slug
-                          ? "border-gray-900 bg-gray-900 text-white"
-                          : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                      }`}
-                    >
-                      <p className="text-sm font-medium">{a.name}</p>
-                      <p
-                        className={`mt-0.5 text-xs ${
-                          appSlug === a.slug ? "text-gray-300" : "text-gray-500"
-                        }`}
-                      >
-                        {a.description}
-                      </p>
-                    </button>
-                  ))}
-                </div>
+                <EventIntegrationsCarousel
+                  items={selectableApps.map((a) => ({
+                    slug: a.slug,
+                    name: a.name,
+                    description: a.description,
+                  }))}
+                  selectedSlug={appSlug}
+                  onSelect={setAppSlug}
+                />
               )}
             </CardContent>
           </Card>

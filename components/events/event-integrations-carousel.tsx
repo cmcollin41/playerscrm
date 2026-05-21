@@ -38,9 +38,15 @@ export interface EventIntegrationsCarouselItem {
 
 export function EventIntegrationsCarousel({
   items,
+  selectedSlug,
+  onSelect,
 }: {
   items: EventIntegrationsCarouselItem[]
+  /** When provided, each slide becomes a clickable picker tile and the matching slug is highlighted. */
+  selectedSlug?: string
+  onSelect?: (slug: string) => void
 }) {
+  const interactive = !!onSelect
   const [api, setApi] = React.useState<CarouselApi>()
   const [current, setCurrent] = React.useState(0)
   const [count, setCount] = React.useState(0)
@@ -65,33 +71,70 @@ export function EventIntegrationsCarousel({
           {items.map((item) => {
             const branding = partnerBranding(item.slug)
             const Icon = ICON_BY_SLUG[item.slug] ?? Calendar
+            const isSelected = interactive && item.slug === selectedSlug
+            const cardClasses = cn(
+              "flex h-full w-full flex-col gap-3 rounded-lg border p-4 text-left transition-colors",
+              interactive
+                ? isSelected
+                  ? "border-gray-900 bg-gray-900 text-white"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                : "bg-card",
+            )
+            const inner = (
+              <>
+                <div
+                  className={cn(
+                    "flex h-10 w-10 items-center justify-center rounded-md",
+                    isSelected ? "bg-white/15" : "bg-muted",
+                  )}
+                >
+                  {branding.logoPath ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={branding.logoPath}
+                      alt={item.name}
+                      className="h-6 w-6 object-contain"
+                    />
+                  ) : (
+                    <Icon
+                      className={cn(
+                        "h-5 w-5",
+                        isSelected ? "text-white" : "text-foreground",
+                      )}
+                    />
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium">{item.name}</p>
+                  {item.description && (
+                    <p
+                      className={cn(
+                        "mt-0.5 text-xs",
+                        isSelected ? "text-gray-300" : "text-muted-foreground",
+                      )}
+                    >
+                      {item.description}
+                    </p>
+                  )}
+                </div>
+              </>
+            )
             return (
               <CarouselItem
                 key={item.slug}
                 className="basis-full sm:basis-1/2 lg:basis-1/3"
               >
-                <div className="flex h-full flex-col gap-3 rounded-lg border bg-card p-4">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
-                    {branding.logoPath ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={branding.logoPath}
-                        alt={item.name}
-                        className="h-6 w-6 object-contain"
-                      />
-                    ) : (
-                      <Icon className="h-5 w-5 text-foreground" />
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">{item.name}</p>
-                    {item.description && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {item.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
+                {interactive ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelect?.(item.slug)}
+                    className={cardClasses}
+                  >
+                    {inner}
+                  </button>
+                ) : (
+                  <div className={cardClasses}>{inner}</div>
+                )}
               </CarouselItem>
             )
           })}
