@@ -4,7 +4,7 @@ import Image from "next/image"
 import { ArrowLeft, CheckCircle2, Clock, Package, Truck, XCircle } from "lucide-react"
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { getTenantAccount } from "@/lib/tenant"
-import { partnerDisplayName } from "@/lib/store/partners"
+import { PartnerBadge } from "@/components/store/partner-badge"
 import { ClearCartOnSuccess } from "./clear-cart-on-success"
 
 export const dynamic = "force-dynamic"
@@ -172,8 +172,12 @@ export default async function OrderConfirmationPage({ params }: PageProps) {
                   <li key={d.id} className="flex flex-col gap-3 p-4">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium">
-                          Ships from {partnerDisplayName(d.partner_slug as string)}
+                        <span className="inline-flex items-center gap-1.5 font-medium">
+                          Ships from
+                          <PartnerBadge
+                            slug={d.partner_slug as string}
+                            size={16}
+                          />
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {dispatchItems.length} item

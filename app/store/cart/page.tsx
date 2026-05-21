@@ -4,9 +4,9 @@ import Image from "next/image"
 import Link from "next/link"
 import { useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Minus, Package, Plus, ShoppingBag, X } from "lucide-react"
+import { ArrowLeft, Minus, Plus, ShoppingBag, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { partnerDisplayName } from "@/lib/store/partners"
+import { PartnerBadge } from "@/components/store/partner-badge"
 import { useCart, type CartLine } from "@/providers/cart-provider"
 
 function formatPrice(cents: number): string {
@@ -100,8 +100,12 @@ export default function CartPage() {
               {groups.length > 1 ? (
                 <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2 text-xs">
                   <span className="inline-flex items-center gap-1.5 font-medium uppercase tracking-wide text-muted-foreground">
-                    <Package className="h-3.5 w-3.5" />
-                    Ships from {partnerDisplayName(group.partnerSlug)}
+                    Ships from
+                    <PartnerBadge
+                      slug={group.partnerSlug}
+                      size={14}
+                      className="normal-case text-foreground"
+                    />
                   </span>
                   <span className="text-muted-foreground">
                     Shipment {i + 1} of {groups.length}

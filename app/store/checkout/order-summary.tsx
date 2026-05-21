@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
-import { ChevronDown, Package, ShoppingBag, Truck } from "lucide-react"
+import { ChevronDown, ShoppingBag, Truck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   Carousel,
@@ -10,7 +10,7 @@ import {
   CarouselItem,
   type CarouselApi,
 } from "@/components/ui/carousel"
-import { partnerDisplayName } from "@/lib/store/partners"
+import { PartnerBadge } from "@/components/store/partner-badge"
 import type { CartLine } from "@/providers/cart-provider"
 
 function formatPrice(cents: number): string {
@@ -183,8 +183,12 @@ function PartnerGroupSection({
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between text-xs">
         <span className="inline-flex items-center gap-1.5 font-medium uppercase tracking-wide text-muted-foreground">
-          <Package className="h-3.5 w-3.5" />
-          Ships from {partnerDisplayName(group.partnerSlug)}
+          Ships from
+          <PartnerBadge
+            slug={group.partnerSlug}
+            size={14}
+            className="normal-case text-foreground"
+          />
         </span>
         <span className="text-muted-foreground">
           Shipment {index + 1} of {totalGroups}
@@ -239,7 +243,12 @@ function Totals({
           <div key={p.connectionId} className="flex items-center justify-between">
             <dt className="inline-flex items-center gap-1.5 text-muted-foreground">
               <Truck className="h-3.5 w-3.5" />
-              Shipping · {partnerDisplayName(p.partnerSlug)}
+              <span>Shipping ·</span>
+              <PartnerBadge
+                slug={p.partnerSlug}
+                size={14}
+                className="text-foreground"
+              />
             </dt>
             <dd className="tabular-nums">{formatPrice(p.shippingCents)}</dd>
           </div>
