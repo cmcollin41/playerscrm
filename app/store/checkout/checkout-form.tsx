@@ -94,7 +94,7 @@ export function CheckoutForm({
   initialUser: InitialUser | null
 }) {
   const router = useRouter()
-  const { lines, hydrated, subtotalCents } = useCart()
+  const { lines, hydrated, subtotalCents, openCart } = useCart()
   const [form, setForm] = useState<AddressForm>(() => ({
     ...DEFAULT_FORM,
     email: initialUser?.email ?? "",
@@ -276,13 +276,14 @@ export function CheckoutForm({
   if (needsAuthChoice) {
     return (
       <div className="flex flex-col gap-6">
-        <Link
-          href="/store/cart"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        <button
+          type="button"
+          onClick={openCart}
+          className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to cart
-        </Link>
+        </button>
 
         <div>
           <h1 className="font-cal text-3xl font-bold">Checkout</h1>
@@ -352,13 +353,14 @@ export function CheckoutForm({
 
   return (
     <div className="flex flex-col gap-6">
-      <Link
-        href="/store/cart"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      <button
+        type="button"
+        onClick={openCart}
+        className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" />
         Back to cart
-      </Link>
+      </button>
 
       <div>
         <h1 className="font-cal text-3xl font-bold">Checkout</h1>

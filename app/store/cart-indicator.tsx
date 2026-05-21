@@ -1,17 +1,17 @@
 "use client"
 
-import Link from "next/link"
 import { ShoppingBag } from "lucide-react"
 import { useCart } from "@/providers/cart-provider"
 
 export function CartIndicator() {
-  const { itemCount, hydrated } = useCart()
+  const { itemCount, hydrated, openCart } = useCart()
   const showBadge = hydrated && itemCount > 0
 
   return (
-    <Link
-      href="/store/cart"
-      aria-label={`Cart${showBadge ? ` (${itemCount} item${itemCount === 1 ? "" : "s"})` : ""}`}
+    <button
+      type="button"
+      onClick={openCart}
+      aria-label={`Open cart${showBadge ? ` (${itemCount} item${itemCount === 1 ? "" : "s"})` : ""}`}
       className="relative inline-flex items-center justify-center rounded-md p-2 text-foreground transition hover:bg-muted"
     >
       <ShoppingBag className="h-5 w-5" />
@@ -20,6 +20,6 @@ export function CartIndicator() {
           {itemCount > 99 ? "99+" : itemCount}
         </span>
       ) : null}
-    </Link>
+    </button>
   )
 }

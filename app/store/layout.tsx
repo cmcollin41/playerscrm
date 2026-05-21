@@ -6,6 +6,7 @@ import { getOrganizationLogoPublicUrl } from "@/lib/storage/organization-logo"
 import { createClient } from "@/lib/supabase/server"
 import { CartProvider } from "@/providers/cart-provider"
 import { CartIndicator } from "./cart-indicator"
+import { CartSheet } from "./cart-sheet"
 
 export const dynamic = "force-dynamic"
 
@@ -64,6 +65,7 @@ export default async function PublicStoreLayout({
         <footer className="border-t py-6 text-center text-xs text-muted-foreground">
           Powered by Athletes App
         </footer>
+        <CartSheet />
       </div>
     </CartProvider>
   )
