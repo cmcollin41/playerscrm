@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/tooltip"
 import { EventDetailClient, DeleteEventButton, ShareLinkBanner } from "./event-detail-client"
 import { AddToCalendarButton } from "@/components/events/add-to-calendar-button"
+import { EventIntegrationsCarousel } from "@/components/events/event-integrations-carousel"
 import { getIntegration } from "@/lib/integrations"
 import { getEventIntegrations } from "@/lib/integrations/install"
 import { Plus } from "lucide-react"
@@ -151,9 +152,6 @@ export default async function EventDetailPage({
             <Badge variant={event.is_published ? "default" : "secondary"}>
               {event.is_published ? "Published" : "Draft"}
             </Badge>
-            {app.slug !== "unknown" && (
-              <Badge variant="outline">{app.name}</Badge>
-            )}
             {siblings && siblings.length > 1 && (
               <Badge variant="outline">
                 Series · {event.series_index} of {siblings.length}
@@ -195,6 +193,16 @@ export default async function EventDetailPage({
 
       {event.is_published && event.is_registerable && (
         <ShareLinkBanner slug={event.slug} />
+      )}
+
+      {installedIntegrations.length > 0 && (
+        <EventIntegrationsCarousel
+          items={installedIntegrations.map((i) => ({
+            slug: i.integration.slug,
+            name: i.integration.name,
+            description: i.integration.description,
+          }))}
+        />
       )}
 
       <div className="grid gap-4 md:grid-cols-4">
