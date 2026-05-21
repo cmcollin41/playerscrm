@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { loadStripe, type Stripe } from "@stripe/stripe-js"
@@ -11,12 +10,19 @@ import {
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js"
-import { ArrowLeft, Loader2, ShoppingBag, UserCircle2 } from "lucide-react"
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Loader2,
+  ShoppingBag,
+  UserCircle2,
+} from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useCart, type CartLine } from "@/providers/cart-provider"
+import { MobileOrderSummary, OrderSummary } from "./order-summary"
 
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
@@ -322,6 +328,15 @@ export function CheckoutForm({
     )
   }
 
+  const shippingDisplay = quoting
+    ? "Calculating…"
+    : shippingCents == null
+      ? quoteError
+        ? "Quote failed"
+        : "Enter address"
+      : null
+  const totalForSummary = shippingCents == null ? null : totalCents
+
   return (
     <div className="flex flex-col gap-6">
       <Link
@@ -335,6 +350,14 @@ export function CheckoutForm({
       <div>
         <h1 className="font-cal text-3xl font-bold">Checkout</h1>
       </div>
+
+      <MobileOrderSummary
+        lines={lines}
+        subtotalCents={subtotalCents}
+        shippingCents={shippingCents}
+        shippingDisplay={shippingDisplay}
+        totalCents={totalForSummary}
+      />
 
       <div className="grid gap-6 md:grid-cols-[1fr,320px]">
         <div className="flex flex-col gap-6">
@@ -462,85 +485,41 @@ export function CheckoutForm({
               />
             </div>
           </section>
+
+          <div className="flex flex-col gap-2 rounded-md border p-4">
+            {quoteError ? (
+              <p className="text-xs text-red-600">{quoteError}</p>
+            ) : null}
+            <Button
+              size="lg"
+              className="w-full"
+              disabled={
+                submitting ||
+                quoting ||
+                shippingCents == null ||
+                !isFormComplete(form)
+              }
+              onClick={handleContinueToPayment}
+            >
+              {submitting ? (
+                <span className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Preparing
+                  payment…
+                </span>
+              ) : (
+                "Continue to payment"
+              )}
+            </Button>
+          </div>
         </div>
 
-        <aside className="h-fit rounded-md border p-4 md:sticky md:top-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wide">
-            Order summary
-          </h2>
-          <ul className="mt-3 flex flex-col gap-3 border-b pb-3">
-            {lines.map((line) => (
-              <li key={line.variantId} className="flex items-start gap-3">
-                <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-md bg-muted">
-                  {line.imageUrl ? (
-                    <Image
-                      src={line.imageUrl}
-                      alt={line.productName}
-                      fill
-                      sizes="48px"
-                      className="object-cover"
-                    />
-                  ) : null}
-                </div>
-                <div className="flex-1 text-xs">
-                  <p className="font-medium leading-tight">{line.productName}</p>
-                  <p className="text-muted-foreground">
-                    Qty {line.quantity} · {formatPrice(line.priceCents)}
-                  </p>
-                </div>
-                <p className="text-sm font-medium tabular-nums">
-                  {formatPrice(line.priceCents * line.quantity)}
-                </p>
-              </li>
-            ))}
-          </ul>
-
-          <dl className="mt-3 flex flex-col gap-2 text-sm">
-            <Row label="Subtotal" value={formatPrice(subtotalCents)} />
-            <Row
-              label="Shipping"
-              value={
-                quoting
-                  ? "Calculating…"
-                  : shippingCents == null
-                    ? quoteError
-                      ? "Quote failed"
-                      : "Enter address"
-                    : formatPrice(shippingCents)
-              }
-            />
-            <div className="mt-1 flex items-center justify-between border-t pt-2 text-base font-semibold">
-              <dt>Total</dt>
-              <dd className="tabular-nums">
-                {shippingCents == null ? "—" : formatPrice(totalCents)}
-              </dd>
-            </div>
-          </dl>
-
-          {quoteError ? (
-            <p className="mt-2 text-xs text-red-600">{quoteError}</p>
-          ) : null}
-
-          <Button
-            size="lg"
-            className="mt-4 w-full"
-            disabled={
-              submitting ||
-              quoting ||
-              shippingCents == null ||
-              !isFormComplete(form)
-            }
-            onClick={handleContinueToPayment}
-          >
-            {submitting ? (
-              <span className="inline-flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Preparing payment…
-              </span>
-            ) : (
-              "Continue to payment"
-            )}
-          </Button>
-        </aside>
+        <OrderSummary
+          lines={lines}
+          subtotalCents={subtotalCents}
+          shippingCents={shippingCents}
+          shippingDisplay={shippingDisplay}
+          totalCents={totalForSummary}
+        />
       </div>
     </div>
   )
@@ -573,15 +552,6 @@ function Field({ label, value, onChange, type, required, maxLength }: FieldProps
   )
 }
 
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="tabular-nums">{value}</dd>
-    </div>
-  )
-}
-
 // ---------------------------------------------------------------------------
 // Payment step
 // ---------------------------------------------------------------------------
@@ -608,15 +578,41 @@ function PaymentStep({
   totalCents,
   onBack,
 }: PaymentStepProps) {
-  // Memoize so loadStripe is called once per session — recreating breaks the
-  // Elements provider mid-mount.
-  const stripePromise = useMemo<Promise<Stripe | null>>(
-    () =>
-      loadStripe(session.publishableKey, {
-        stripeAccount: session.stripeAccountId,
-      }),
-    [session.publishableKey, session.stripeAccountId],
-  )
+  // Bumping retryKey re-runs the loadStripe useMemo and remounts Elements
+  // when the buyer clicks "Try again" after a failed script load.
+  const [retryKey, setRetryKey] = useState(0)
+  const [stripeStatus, setStripeStatus] = useState<
+    "loading" | "ready" | "error"
+  >("loading")
+  const [slowLoad, setSlowLoad] = useState(false)
+
+  // Memoize so loadStripe runs once per (key + account) — recreating mid-render
+  // would unmount and remount Elements, breaking the iframe.
+  const stripePromise = useMemo<Promise<Stripe | null>>(() => {
+    const p = loadStripe(session.publishableKey, {
+      stripeAccount: session.stripeAccountId,
+    })
+    p.then((s) => {
+      setStripeStatus(s ? "ready" : "error")
+    }).catch(() => setStripeStatus("error"))
+    return p
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.publishableKey, session.stripeAccountId, retryKey])
+
+  // Surface a "still loading" hint after 6s — script-blocking extensions or
+  // slow networks are the usual culprits.
+  useEffect(() => {
+    if (stripeStatus !== "loading") return
+    setSlowLoad(false)
+    const t = setTimeout(() => setSlowLoad(true), 6000)
+    return () => clearTimeout(t)
+  }, [stripeStatus, retryKey])
+
+  function retry() {
+    setStripeStatus("loading")
+    setSlowLoad(false)
+    setRetryKey((k) => k + 1)
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -631,33 +627,81 @@ function PaymentStep({
 
       <h1 className="font-cal text-3xl font-bold">Payment</h1>
 
-      <div className="grid gap-6 md:grid-cols-[1fr,320px]">
-        <Elements
-          stripe={stripePromise}
-          options={{
-            clientSecret: session.clientSecret,
-            appearance: { theme: "stripe" },
-          }}
-        >
-          <PaymentForm orderToken={session.orderToken} totalCents={totalCents} />
-        </Elements>
+      <MobileOrderSummary
+        lines={lines}
+        subtotalCents={subtotalCents}
+        shippingCents={shippingCents}
+        totalCents={totalCents}
+      />
 
-        <aside className="h-fit rounded-md border p-4">
-          <h2 className="text-sm font-semibold uppercase tracking-wide">
-            Order summary
-          </h2>
-          <p className="mt-2 text-xs text-muted-foreground">
-            {lines.length} item{lines.length === 1 ? "" : "s"}
-          </p>
-          <dl className="mt-3 flex flex-col gap-2 text-sm">
-            <Row label="Subtotal" value={formatPrice(subtotalCents)} />
-            <Row label="Shipping" value={formatPrice(shippingCents)} />
-            <div className="mt-1 flex items-center justify-between border-t pt-2 text-base font-semibold">
-              <dt>Total</dt>
-              <dd className="tabular-nums">{formatPrice(totalCents)}</dd>
+      <div className="grid gap-6 md:grid-cols-[1fr,320px]">
+        <div className="flex flex-col gap-4">
+          {stripeStatus === "error" ? (
+            <div className="flex flex-col items-start gap-3 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4" />
+                <p className="font-medium">Couldn&apos;t load Stripe</p>
+              </div>
+              <p className="text-xs">
+                A browser extension or your network blocked Stripe&apos;s
+                checkout script. Disable any ad / privacy blockers for this
+                site and try again.
+              </p>
+              <Button size="sm" variant="outline" onClick={retry}>
+                Try again
+              </Button>
             </div>
-          </dl>
-        </aside>
+          ) : null}
+
+          {stripeStatus === "loading" ? (
+            <div className="flex flex-col items-stretch gap-3 rounded-md border p-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading secure payment form…
+              </div>
+              <div className="h-10 animate-pulse rounded-md bg-muted/60" />
+              <div className="h-10 animate-pulse rounded-md bg-muted/60" />
+              {slowLoad ? (
+                <p className="text-xs text-amber-700">
+                  Taking longer than usual — check your connection or disable
+                  ad / privacy blockers.{" "}
+                  <button
+                    type="button"
+                    onClick={retry}
+                    className="underline"
+                  >
+                    Retry
+                  </button>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Keep <Elements> mounted only while stripePromise has resolved
+              successfully. Once mounted Stripe owns the iframe lifecycle. */}
+          {stripeStatus === "ready" ? (
+            <Elements
+              key={retryKey}
+              stripe={stripePromise}
+              options={{
+                clientSecret: session.clientSecret,
+                appearance: { theme: "stripe" },
+              }}
+            >
+              <PaymentForm
+                orderToken={session.orderToken}
+                totalCents={totalCents}
+              />
+            </Elements>
+          ) : null}
+        </div>
+
+        <OrderSummary
+          lines={lines}
+          subtotalCents={subtotalCents}
+          shippingCents={shippingCents}
+          totalCents={totalCents}
+        />
       </div>
     </div>
   )
