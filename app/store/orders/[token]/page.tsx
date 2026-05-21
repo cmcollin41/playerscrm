@@ -4,6 +4,7 @@ import Image from "next/image"
 import { ArrowLeft, CheckCircle2, Clock, Package, Truck, XCircle } from "lucide-react"
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { getTenantAccount } from "@/lib/tenant"
+import { partnerDisplayName } from "@/lib/store/partners"
 import { ClearCartOnSuccess } from "./clear-cart-on-success"
 
 export const dynamic = "force-dynamic"
@@ -169,14 +170,20 @@ export default async function OrderConfirmationPage({ params }: PageProps) {
                   | null
                 return (
                   <li key={d.id} className="flex flex-col gap-3 p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm">
-                        <DispatchIcon className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium">
+                          Ships from {partnerDisplayName(d.partner_slug as string)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {dispatchItems.length} item
+                          {dispatchItems.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <DispatchIcon className="h-3.5 w-3.5" />
                         <span>{label}</span>
                       </div>
-                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                        {d.partner_slug}
-                      </span>
                     </div>
                     {tracking?.number ? (
                       <p className="text-xs text-muted-foreground">
