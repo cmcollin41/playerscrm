@@ -79,7 +79,7 @@ export function CartSheet() {
     <Sheet open={isOpen} onOpenChange={setOpen}>
       <SheetContent
         side="right"
-        className="flex w-full flex-col gap-0 p-0 sm:max-w-md"
+        className="flex w-full flex-col gap-0 bg-white p-0 text-foreground sm:max-w-md"
       >
         <SheetHeader className="flex flex-row items-center justify-between border-b px-4 py-4 sm:px-5">
           <SheetTitle className="text-base font-semibold">
@@ -139,7 +139,7 @@ export function CartSheet() {
               </div>
             </div>
 
-            <div className="border-t bg-background px-4 py-4 sm:px-5">
+            <div className="border-t bg-white px-4 py-4 sm:px-5">
               <dl className="flex flex-col gap-2 text-sm">
                 <div className="flex items-center justify-between">
                   <dt className="text-muted-foreground">Subtotal</dt>
