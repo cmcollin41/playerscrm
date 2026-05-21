@@ -50,7 +50,7 @@ export function ProductBuyPanel({
   connectionId,
   partnerSlug,
 }: ProductBuyPanelProps) {
-  const { addLine } = useCart()
+  const { addLine, openCart } = useCart()
   // Only show selectors for option axes that actually exist across the
   // active variants — orgs can disable some combinations.
   const offeredValues = useMemo(() => {
@@ -130,15 +130,7 @@ export function ProductBuyPanel({
       partnerSlug,
       quantity,
     })
-    toast.success(`Added to cart`, {
-      description: `${productName} · ${selectedVariant.sku} · qty ${quantity}`,
-      action: {
-        label: "View cart",
-        onClick: () => {
-          window.location.href = "/store/cart"
-        },
-      },
-    })
+    openCart()
   }
 
   return (

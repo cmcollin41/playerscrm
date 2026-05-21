@@ -27,6 +27,10 @@ interface CartContextValue {
   itemCount: number
   subtotalCents: number
   hydrated: boolean
+  isOpen: boolean
+  setOpen: (open: boolean) => void
+  openCart: () => void
+  closeCart: () => void
   addLine: (line: Omit<CartLine, "quantity"> & { quantity?: number }) => void
   setQuantity: (variantId: string, quantity: number) => void
   removeLine: (variantId: string) => void
@@ -40,6 +44,7 @@ const MAX_QTY = 50
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([])
   const [hydrated, setHydrated] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -99,6 +104,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clear = useCallback(() => setLines([]), [])
 
+  const openCart = useCallback(() => setIsOpen(true), [])
+  const closeCart = useCallback(() => setIsOpen(false), [])
+
   const itemCount = lines.reduce((s, l) => s + l.quantity, 0)
   const subtotalCents = lines.reduce(
     (s, l) => s + l.priceCents * l.quantity,
@@ -112,6 +120,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         itemCount,
         subtotalCents,
         hydrated,
+        isOpen,
+        setOpen: setIsOpen,
+        openCart,
+        closeCart,
         addLine,
         setQuantity,
         removeLine,
