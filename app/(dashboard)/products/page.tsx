@@ -18,6 +18,7 @@ import { productStorefrontUrl, storefrontUrl } from "@/lib/store/links"
 import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
 import { PublishButton } from "./publish-button"
 import { PartnerCard } from "./partner-card"
+import { listIntegrations } from "@/lib/integrations"
 
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
@@ -55,9 +56,18 @@ export default async function OrgProductsListPage() {
   if (!profile) return null
 
   const supabase = await createClient()
+  // Only show product integrations that (a) exist in the code-side registry
+  // — i.e. have an adapter built — and (b) the account has enabled in
+  // Settings > Integrations. Stops disabled / unimplemented partners from
+  // cluttering the picker.
+  const productIntegrationSlugs = listIntegrations({
+    category: "products",
+  }).map((i) => i.slug)
+
   const [
     { data: partners },
     { data: connections },
+    { data: enabledRows },
     { data: products },
     { data: account },
   ] = await Promise.all([
@@ -65,12 +75,19 @@ export default async function OrgProductsListPage() {
       .from("fulfillment_partners")
       .select("id, slug, name, config")
       .eq("is_active", true)
+      .in("slug", productIntegrationSlugs)
       .order("name"),
     supabase
       .from("account_partner_connections")
       .select("id, partner_id, external_account_label")
       .eq("account_id", profile.account_id)
       .eq("is_active", true),
+    supabase
+      .from("account_integrations")
+      .select("integration_slug")
+      .eq("account_id", profile.account_id)
+      .eq("is_enabled", true)
+      .in("integration_slug", productIntegrationSlugs),
     supabase
       .from("org_products")
       .select(
@@ -84,6 +101,13 @@ export default async function OrgProductsListPage() {
       .eq("id", profile.account_id)
       .maybeSingle(),
   ])
+
+  const enabledSlugs = new Set(
+    (enabledRows ?? []).map((r: { integration_slug: string }) => r.integration_slug),
+  )
+  const visiblePartners = ((partners ?? []) as PartnerRow[]).filter((p) =>
+    enabledSlugs.has(p.slug),
+  )
 
   const storeUrl = account ? storefrontUrl(account) : null
 
@@ -145,13 +169,20 @@ export default async function OrgProductsListPage() {
             Manage tokens →
           </Link>
         </div>
-        {!partners || partners.length === 0 ? (
+        {visiblePartners.length === 0 ? (
           <div className="rounded-md border border-dashed py-12 text-center text-sm text-muted-foreground">
-            No integrations registered yet.
+            No product integrations enabled. Turn one on in{" "}
+            <Link
+              href="/settings/integrations"
+              className="underline hover:text-foreground"
+            >
+              Settings → Integrations
+            </Link>
+            .
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {(partners as PartnerRow[]).map((partner) => {
+            {visiblePartners.map((partner) => {
               const connection = connectionByPartnerId.get(partner.id) ?? null
               const publishedCount = connection
                 ? (publishedByConnectionId.get(connection.id) ?? 0)
