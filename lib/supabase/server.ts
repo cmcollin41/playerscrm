@@ -1,12 +1,21 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 
-function authCookieDomain(): string | undefined {
+function authCookieDomain(requestHost: string | null): string | undefined {
   const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN
   if (!root) return undefined
-  const host = root.split(":")[0]
-  if (host === "localhost" || host === "127.0.0.1") return undefined
-  return `.${host}`
+  const rootHost = root.split(":")[0]
+  if (rootHost === "localhost" || rootHost === "127.0.0.1") return undefined
+  if (!requestHost) return undefined
+  const reqHost = requestHost.split(":")[0]
+  // Span across subdomains only when the request is actually under the root
+  // domain. Custom domains (e.g. app.provobasketball.com) get host-only
+  // cookies — the browser drops a `Domain=.athletes.app` cookie when the
+  // request came in on a different domain, killing the session.
+  if (reqHost === rootHost || reqHost.endsWith(`.${rootHost}`)) {
+    return `.${rootHost}`
+  }
+  return undefined
 }
 
 /**
@@ -27,6 +36,8 @@ function isAuthRefreshError(err: unknown): boolean {
 
 export async function createClient() {
   const cookieStore = await cookies()
+  const headerList = await headers()
+  const requestHost = headerList.get('host')
 
   const client = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,7 +49,7 @@ export async function createClient() {
         },
         setAll(cookiesToSet) {
           try {
-            const domain = authCookieDomain()
+            const domain = authCookieDomain(requestHost)
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, {
                 ...options,
