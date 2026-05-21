@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getUserProfile, hasAccountAdminAccess } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, ExternalLink, Plug } from "lucide-react"
+import { PartnerBadge } from "@/components/store/partner-badge"
 import { ConnectButton } from "./connect-button"
 import { DisconnectButton } from "./disconnect-button"
 
@@ -87,6 +88,7 @@ export default async function IntegrationsSettingsPage() {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex items-center gap-2">
+                    <PartnerBadge slug={partner.slug} variant="logo-only" size={20} />
                     <h2 className="text-base font-semibold">{partner.name}</h2>
                     {connection ? (
                       <Badge

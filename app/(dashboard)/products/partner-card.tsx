@@ -1,8 +1,12 @@
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
-import { ArrowRight, Boxes, CheckCircle2, Plug, Shirt, Truck } from "lucide-react"
+import { ArrowRight, CheckCircle2, Plug, Truck } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { partnerBranding } from "@/lib/store/partners"
 
 export interface PartnerCardProps {
   partnerSlug: string
@@ -16,32 +20,38 @@ export interface PartnerCardProps {
 }
 
 /**
- * Stylized partner "logo" — colored disc with a brand-coded Lucide glyph.
- * Real brand logos can replace this later (would go in /public/partners/
- * and read from fulfillment_partners.config.logo_url).
+ * Partner logo disc: renders the real brand mark from /public/partners when
+ * one is registered for the slug (lib/store/partners), falling back to a
+ * Lucide glyph for partners without a logo (e.g. "manual" fulfillment).
  */
 function PartnerLogo({ slug }: { slug: string }) {
-  const config = (() => {
-    switch (slug) {
-      case "printify":
-        return { Icon: Boxes, ring: "bg-emerald-50 text-emerald-700" }
-      case "printful":
-        return { Icon: Shirt, ring: "bg-rose-50 text-rose-700" }
-      case "manual":
-        return { Icon: Truck, ring: "bg-slate-100 text-slate-700" }
-      default:
-        return { Icon: Plug, ring: "bg-muted text-muted-foreground" }
-    }
-  })()
-  const { Icon, ring } = config
+  const { logoPath, name } = partnerBranding(slug)
+  const [failed, setFailed] = useState(false)
+  const showLogo = logoPath && !failed
+
+  const fallbackIcon = slug === "manual" ? Truck : Plug
+  const FallbackIcon = fallbackIcon
+  const ring =
+    slug === "manual" ? "bg-slate-100 text-slate-700" : "bg-white text-foreground"
+
   return (
     <div
       className={cn(
-        "flex h-12 w-12 shrink-0 items-center justify-center rounded-lg",
+        "flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg border",
         ring,
       )}
     >
-      <Icon className="h-6 w-6" />
+      {showLogo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={logoPath!}
+          alt={name}
+          onError={() => setFailed(true)}
+          className="h-7 w-auto max-w-[36px] object-contain"
+        />
+      ) : (
+        <FallbackIcon className="h-6 w-6" />
+      )}
     </div>
   )
 }
