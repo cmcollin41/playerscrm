@@ -22,7 +22,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useCart, type CartLine } from "@/providers/cart-provider"
-import { MobileOrderSummary, OrderSummary } from "./order-summary"
+import {
+  MobileOrderSummary,
+  OrderSummary,
+  type PartnerShipping,
+} from "./order-summary"
 
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
@@ -112,6 +116,9 @@ export function CheckoutForm({
   }, [])
   const needsAuthChoice = initialUser == null && !guestChosen
   const [shippingCents, setShippingCents] = useState<number | null>(null)
+  const [partnerShipping, setPartnerShipping] = useState<
+    PartnerShipping[] | null
+  >(null)
   const [quoting, setQuoting] = useState(false)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [paymentSession, setPaymentSession] = useState<{
@@ -128,6 +135,7 @@ export function CheckoutForm({
     if (lines.length === 0) return
     if (!isFormComplete(form)) {
       setShippingCents(null)
+      setPartnerShipping(null)
       return
     }
     const handle = setTimeout(() => {
@@ -157,12 +165,16 @@ export function CheckoutForm({
         })
         .then((data) => {
           setShippingCents(data.totalShippingCents ?? 0)
+          setPartnerShipping(
+            Array.isArray(data.perConnection) ? data.perConnection : null,
+          )
         })
         .catch((err) => {
           if (err?.name === "AbortError") return
           const msg = err instanceof Error ? err.message : String(err)
           setQuoteError(msg)
           setShippingCents(null)
+          setPartnerShipping(null)
         })
         .finally(() => setQuoting(false))
     }, 400)
@@ -254,6 +266,7 @@ export function CheckoutForm({
         lines={lines}
         subtotalCents={subtotalCents}
         shippingCents={shippingCents ?? 0}
+        partnerShipping={partnerShipping}
         totalCents={totalCents}
         onBack={() => setPaymentSession(null)}
       />
@@ -356,6 +369,7 @@ export function CheckoutForm({
         subtotalCents={subtotalCents}
         shippingCents={shippingCents}
         shippingDisplay={shippingDisplay}
+        partnerShipping={partnerShipping}
         totalCents={totalForSummary}
       />
 
@@ -518,6 +532,7 @@ export function CheckoutForm({
           subtotalCents={subtotalCents}
           shippingCents={shippingCents}
           shippingDisplay={shippingDisplay}
+          partnerShipping={partnerShipping}
           totalCents={totalForSummary}
         />
       </div>
@@ -566,6 +581,7 @@ interface PaymentStepProps {
   lines: CartLine[]
   subtotalCents: number
   shippingCents: number
+  partnerShipping: PartnerShipping[] | null
   totalCents: number
   onBack: () => void
 }
@@ -575,6 +591,7 @@ function PaymentStep({
   lines,
   subtotalCents,
   shippingCents,
+  partnerShipping,
   totalCents,
   onBack,
 }: PaymentStepProps) {
@@ -631,6 +648,7 @@ function PaymentStep({
         lines={lines}
         subtotalCents={subtotalCents}
         shippingCents={shippingCents}
+        partnerShipping={partnerShipping}
         totalCents={totalCents}
       />
 
@@ -700,6 +718,7 @@ function PaymentStep({
           lines={lines}
           subtotalCents={subtotalCents}
           shippingCents={shippingCents}
+          partnerShipping={partnerShipping}
           totalCents={totalCents}
         />
       </div>

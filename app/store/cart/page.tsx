@@ -2,9 +2,11 @@
 
 import Image from "next/image"
 import Link from "next/link"
+import { useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Minus, Plus, ShoppingBag, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { PartnerBadge } from "@/components/store/partner-badge"
 import { useCart, type CartLine } from "@/providers/cart-provider"
 
 function formatPrice(cents: number): string {
@@ -16,10 +18,34 @@ function optionsLabel(options: Record<string, string>): string {
   return parts.join(" · ")
 }
 
+interface PartnerGroup {
+  connectionId: string
+  partnerSlug: string
+  items: CartLine[]
+}
+
+function groupByPartner(lines: CartLine[]): PartnerGroup[] {
+  const map = new Map<string, PartnerGroup>()
+  for (const line of lines) {
+    const existing = map.get(line.connectionId)
+    if (existing) {
+      existing.items.push(line)
+    } else {
+      map.set(line.connectionId, {
+        connectionId: line.connectionId,
+        partnerSlug: line.partnerSlug,
+        items: [line],
+      })
+    }
+  }
+  return Array.from(map.values())
+}
+
 export default function CartPage() {
   const router = useRouter()
   const { lines, hydrated, itemCount, subtotalCents, setQuantity, removeLine } =
     useCart()
+  const groups = useMemo(() => groupByPartner(lines), [lines])
 
   if (!hydrated) {
     return (
@@ -58,25 +84,57 @@ export default function CartPage() {
         <h1 className="font-cal text-3xl font-bold">Cart</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {itemCount} item{itemCount === 1 ? "" : "s"}
+          {groups.length > 1
+            ? ` · ships in ${groups.length} packages`
+            : ""}
         </p>
       </div>
 
       <div className="grid gap-6 md:grid-cols-[1fr,320px]">
-        <ul className="flex flex-col divide-y rounded-md border">
-          {lines.map((line) => (
-            <CartLineRow
-              key={line.variantId}
-              line={line}
-              onQtyChange={(q) => setQuantity(line.variantId, q)}
-              onRemove={() => removeLine(line.variantId)}
-            />
+        <div className="flex flex-col gap-4">
+          {groups.map((group, i) => (
+            <section
+              key={group.connectionId}
+              className="overflow-hidden rounded-md border"
+            >
+              {groups.length > 1 ? (
+                <div className="flex items-center justify-between border-b bg-muted/30 px-4 py-2 text-xs">
+                  <span className="inline-flex items-center gap-1.5 font-medium uppercase tracking-wide text-muted-foreground">
+                    Ships from
+                    <PartnerBadge
+                      slug={group.partnerSlug}
+                      size={14}
+                      className="normal-case text-foreground"
+                    />
+                  </span>
+                  <span className="text-muted-foreground">
+                    Shipment {i + 1} of {groups.length}
+                  </span>
+                </div>
+              ) : null}
+              <ul className="flex flex-col divide-y">
+                {group.items.map((line) => (
+                  <CartLineRow
+                    key={line.variantId}
+                    line={line}
+                    onQtyChange={(q) => setQuantity(line.variantId, q)}
+                    onRemove={() => removeLine(line.variantId)}
+                  />
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
 
         <aside className="h-fit rounded-md border p-4 md:sticky md:top-6">
           <h2 className="text-sm font-semibold uppercase tracking-wide">
             Summary
           </h2>
+          {groups.length > 1 ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Your order will ship in {groups.length} separate packages.
+            </p>
+          ) : null}
           <dl className="mt-4 flex flex-col gap-2 text-sm">
             <div className="flex items-center justify-between">
               <dt className="text-muted-foreground">Subtotal</dt>
