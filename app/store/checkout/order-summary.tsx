@@ -1,9 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import { ChevronDown, ShoppingBag } from "lucide-react"
 import { cn } from "@/lib/utils"
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  type CarouselApi,
+} from "@/components/ui/carousel"
 import type { CartLine } from "@/providers/cart-provider"
 
 function formatPrice(cents: number): string {
@@ -28,46 +34,102 @@ interface OrderSummaryProps {
   className?: string
 }
 
-function LineItems({ lines }: { lines: CartLine[] }) {
+function LineCard({ line }: { line: CartLine }) {
   return (
-    <ul className="flex flex-col gap-3">
-      {lines.map((line) => (
-        <li key={line.variantId} className="flex items-start gap-3">
-          <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-muted">
-            {line.imageUrl ? (
-              <Image
-                src={line.imageUrl}
-                alt={line.productName}
-                fill
-                sizes="56px"
-                className="object-cover"
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <ShoppingBag className="h-5 w-5 text-muted-foreground/40" />
-              </div>
-            )}
-            <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground px-1 text-[10px] font-semibold text-background">
-              {line.quantity}
-            </span>
+    <div className="flex items-start gap-3">
+      <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-md border bg-muted">
+        {line.imageUrl ? (
+          <Image
+            src={line.imageUrl}
+            alt={line.productName}
+            fill
+            sizes="64px"
+            className="object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center">
+            <ShoppingBag className="h-5 w-5 text-muted-foreground/40" />
           </div>
-          <div className="min-w-0 flex-1 text-xs">
-            <p className="truncate text-sm font-medium leading-tight">
-              {line.productName}
-            </p>
-            {Object.keys(line.options).length > 0 ? (
-              <p className="mt-0.5 truncate text-muted-foreground">
-                {optionsLabel(line.options)}
-              </p>
-            ) : null}
-            <p className="mt-0.5 text-muted-foreground">SKU {line.variantSku}</p>
-          </div>
-          <p className="text-sm font-medium tabular-nums">
-            {formatPrice(line.priceCents * line.quantity)}
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium leading-tight">
+          {line.productName}
+        </p>
+        {Object.keys(line.options).length > 0 ? (
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {optionsLabel(line.options)}
           </p>
-        </li>
-      ))}
-    </ul>
+        ) : null}
+        <p className="mt-1 text-xs font-medium text-muted-foreground">
+          Quantity {line.quantity}
+        </p>
+      </div>
+      <p className="text-sm font-medium tabular-nums">
+        {formatPrice(line.priceCents * line.quantity)}
+      </p>
+    </div>
+  )
+}
+
+function LineItems({ lines }: { lines: CartLine[] }) {
+  const [api, setApi] = useState<CarouselApi | null>(null)
+  const [current, setCurrent] = useState(0)
+  const [count, setCount] = useState(lines.length)
+
+  useEffect(() => {
+    if (!api) return
+    setCount(api.scrollSnapList().length)
+    setCurrent(api.selectedScrollSnap())
+    const onSelect = () => setCurrent(api.selectedScrollSnap())
+    api.on("select", onSelect)
+    api.on("reInit", () => {
+      setCount(api.scrollSnapList().length)
+      setCurrent(api.selectedScrollSnap())
+    })
+    return () => {
+      api.off("select", onSelect)
+    }
+  }, [api])
+
+  // Single item: skip carousel chrome entirely.
+  if (lines.length <= 1) {
+    return lines[0] ? <LineCard line={lines[0]} /> : null
+  }
+
+  return (
+    <div>
+      <Carousel
+        setApi={setApi}
+        opts={{ align: "start", containScroll: "trimSnaps" }}
+        className="w-full"
+      >
+        <CarouselContent>
+          {lines.map((line) => (
+            <CarouselItem key={line.variantId}>
+              <LineCard line={line} />
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+      </Carousel>
+      <div className="mt-3 flex items-center justify-center gap-1.5">
+        {Array.from({ length: count }).map((_, i) => (
+          <button
+            key={i}
+            type="button"
+            aria-label={`Show item ${i + 1} of ${count}`}
+            aria-current={current === i}
+            onClick={() => api?.scrollTo(i)}
+            className={cn(
+              "h-1.5 rounded-full transition-all",
+              current === i
+                ? "w-4 bg-foreground"
+                : "w-1.5 bg-muted-foreground/30 hover:bg-muted-foreground/50",
+            )}
+          />
+        ))}
+      </div>
+    </div>
   )
 }
 
