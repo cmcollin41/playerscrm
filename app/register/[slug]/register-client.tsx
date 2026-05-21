@@ -217,11 +217,15 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
     if (!email) return
     setSending(true)
 
+    // Route through the server-side callback — browser-side PKCE exchange
+    // dies silently when Safari ITP or stale legacy cookies block the
+    // verifier, dumping the user back on the sign-in step.
+    const next = `/register/${event.slug}`
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/register/${event.slug}`,
+        emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(next)}`,
       },
     })
 
