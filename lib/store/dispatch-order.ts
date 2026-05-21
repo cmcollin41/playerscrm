@@ -12,8 +12,8 @@
 import "server-only"
 
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
-import { loadConnection } from "@/lib/fulfillment/connections"
-import type { FulfillmentLine } from "@/lib/fulfillment/types"
+import { loadConnection } from "@/lib/integrations/products/connections"
+import type { FulfillmentLine } from "@/lib/integrations/products/types"
 
 interface DispatchResult {
   dispatchId: string

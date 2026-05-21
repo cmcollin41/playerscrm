@@ -1,6 +1,7 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
+import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { getAccount } from "@/lib/fetchers/client"
@@ -28,8 +29,9 @@ import { toast } from "sonner"
 import { slugify } from "@/lib/slug"
 import LoadingDots from "@/components/icons/loading-dots"
 import { RRule, Frequency, Weekday } from "rrule"
-import { getEventApp, listSelectableEventApps } from "@/lib/event-apps"
-import { installApp } from "@/lib/event-apps/install"
+import { getIntegration } from "@/lib/integrations"
+import { listEnabledIntegrations, installIntegration } from "@/lib/integrations/install"
+import type { Integration } from "@/lib/integrations"
 
 type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly"
 
@@ -93,18 +95,18 @@ export default function NewEventPage() {
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
 
-  const selectableApps = useMemo(() => listSelectableEventApps(), [])
   const initialAppParam = searchParams.get("app")
   const parentEventId = searchParams.get("parent")
   const initialTeam = searchParams.get("team") || ""
 
+  const [selectableApps, setSelectableApps] = useState<Integration[]>([])
   const [appSlug, setAppSlug] = useState<string>(() => {
-    if (initialAppParam && getEventApp(initialAppParam).slug !== "unknown") {
+    if (initialAppParam && getIntegration(initialAppParam).slug !== "unknown") {
       return initialAppParam
     }
     return "camp"
   })
-  const app = getEventApp(appSlug)
+  const app = getIntegration(appSlug)
   const [teamId, setTeamId] = useState<string>(initialTeam)
   const [teams, setTeams] = useState<Team[]>([])
 
@@ -142,6 +144,34 @@ export default function NewEventPage() {
       .eq("is_active", true)
       .order("name")
       .then(({ data }) => setTeams(data || []))
+  }, [supabase])
+
+  // Pull the account's enabled event-picker integrations. The picker only
+  // shows integrations the account has turned on in Settings > Integrations.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const account = await getAccount()
+      if (!account?.id || cancelled) return
+      const enabled = await listEnabledIntegrations(account.id, supabase, {
+        placement: "event_type_picker",
+      })
+      if (cancelled) return
+      const integrations = enabled.map((e) => e.integration)
+      setSelectableApps(integrations)
+      // If the URL-requested integration is not enabled, fall back to the
+      // first enabled one so the form has something valid selected.
+      if (
+        integrations.length > 0 &&
+        !integrations.some((i) => i.slug === appSlug)
+      ) {
+        setAppSlug(integrations[0].slug)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase])
 
   // Apply the chosen app's defaults when the app changes.
@@ -226,6 +256,7 @@ export default function NewEventPage() {
         team_id: teamId || null,
         parent_event_id: parentEventId || null,
         event_type: app.slug,
+        event_primary_integration: app.slug,
         name: finalName,
         slug,
         description: description.trim() || null,
@@ -309,10 +340,10 @@ export default function NewEventPage() {
           .select("id")
         if (error) throw error
 
-        // Install the chosen app on every created occurrence so the new
-        // multi-app code path treats them consistently with single events.
+        // Install the chosen integration on every created occurrence so the
+        // multi-integration code path treats them consistently with single events.
         for (const row of created ?? []) {
-          await installApp(row.id as string, app.slug, supabase)
+          await installIntegration(row.id as string, app.slug, supabase)
         }
 
         toast.success(`Series created — ${rows.length} events`)
@@ -325,7 +356,7 @@ export default function NewEventPage() {
         if (error) throw error
 
         if (created?.id) {
-          await installApp(created.id as string, app.slug, supabase)
+          await installIntegration(created.id as string, app.slug, supabase)
         }
 
         toast.success(`${app.name} created`)
@@ -366,29 +397,47 @@ export default function NewEventPage() {
               <CardDescription>What kind of event are you creating?</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {selectableApps.map((a) => (
-                  <button
-                    key={a.slug}
-                    type="button"
-                    onClick={() => setAppSlug(a.slug)}
-                    className={`rounded-lg border p-3 text-left transition-colors ${
-                      appSlug === a.slug
-                        ? "border-gray-900 bg-gray-900 text-white"
-                        : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                    }`}
-                  >
-                    <p className="text-sm font-medium">{a.name}</p>
-                    <p
-                      className={`mt-0.5 text-xs ${
-                        appSlug === a.slug ? "text-gray-300" : "text-gray-500"
+              {selectableApps.length === 0 ? (
+                <div className="rounded-lg border border-dashed p-6 text-center">
+                  <p className="text-sm text-gray-700">
+                    No event integrations are enabled for this account.
+                  </p>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Turn one on in{" "}
+                    <Link
+                      href="/settings/integrations"
+                      className="font-medium text-gray-900 underline"
+                    >
+                      Settings &rsaquo; Integrations
+                    </Link>{" "}
+                    to start creating events.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {selectableApps.map((a) => (
+                    <button
+                      key={a.slug}
+                      type="button"
+                      onClick={() => setAppSlug(a.slug)}
+                      className={`rounded-lg border p-3 text-left transition-colors ${
+                        appSlug === a.slug
+                          ? "border-gray-900 bg-gray-900 text-white"
+                          : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                       }`}
                     >
-                      {a.description}
-                    </p>
-                  </button>
-                ))}
-              </div>
+                      <p className="text-sm font-medium">{a.name}</p>
+                      <p
+                        className={`mt-0.5 text-xs ${
+                          appSlug === a.slug ? "text-gray-300" : "text-gray-500"
+                        }`}
+                      >
+                        {a.description}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

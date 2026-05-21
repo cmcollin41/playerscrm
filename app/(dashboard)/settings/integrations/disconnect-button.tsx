@@ -15,28 +15,26 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { disconnectPartner } from "./actions"
+import { disconnectIntegration } from "./actions"
 
 interface DisconnectButtonProps {
-  connectionId: string
-  partnerName: string
+  accountId: string
+  slug: string
+  name: string
 }
 
-export function DisconnectButton({
-  connectionId,
-  partnerName,
-}: DisconnectButtonProps) {
+export function DisconnectButton({ accountId, slug, name }: DisconnectButtonProps) {
   const [open, setOpen] = useState(false)
   const [pending, startTransition] = useTransition()
 
   function handleConfirm() {
     startTransition(async () => {
-      const result = await disconnectPartner({ connectionId })
+      const result = await disconnectIntegration({ accountId, slug })
       if (!result.ok) {
         toast.error(result.error ?? "Could not disconnect.")
         return
       }
-      toast.success(`Disconnected ${partnerName}.`)
+      toast.success(`Disconnected ${name}.`)
       setOpen(false)
     })
   }
@@ -50,11 +48,10 @@ export function DisconnectButton({
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Disconnect {partnerName}?</AlertDialogTitle>
+          <AlertDialogTitle>Disconnect {name}?</AlertDialogTitle>
           <AlertDialogDescription>
-            Products synced from this partner will remain on your storefront,
-            but new orders won&apos;t dispatch to {partnerName} until you
-            reconnect.
+            Products synced from this integration will remain on your storefront,
+            but new orders won&apos;t dispatch to {name} until you reconnect.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

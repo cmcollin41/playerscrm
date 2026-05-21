@@ -1,9 +1,11 @@
-import type { EventApp } from "./types"
+import type { Integration } from "../types"
 
-export const otherApp: EventApp = {
+export const otherIntegration: Integration = {
   slug: "other",
   name: "Other",
   description: "Anything else — meetings, fundraisers, social events",
+  category: "events",
+  placement: "event_type_picker",
   capabilities: {},
   defaults: {
     is_published: false,

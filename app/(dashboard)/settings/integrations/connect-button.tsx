@@ -15,21 +15,19 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { connectPartner } from "./actions"
+import { connectIntegration } from "./actions"
 
 interface ConnectButtonProps {
   accountId: string
-  partnerId: string
-  partnerName: string
-  adapterKey: string
+  slug: string
+  name: string
   tokenSetupUrl?: string
 }
 
 export function ConnectButton({
   accountId,
-  partnerId,
-  partnerName,
-  adapterKey,
+  slug,
+  name,
   tokenSetupUrl,
 }: ConnectButtonProps) {
   const [open, setOpen] = useState(false)
@@ -43,16 +41,16 @@ export function ConnectButton({
       return
     }
     startTransition(async () => {
-      const result = await connectPartner({
+      const result = await connectIntegration({
         accountId,
-        partnerId,
+        slug,
         token: token.trim(),
       })
       if (!result.ok) {
-        toast.error(result.error ?? "Could not connect partner.")
+        toast.error(result.error ?? "Could not connect integration.")
         return
       }
-      toast.success(`Connected ${partnerName}.`)
+      toast.success(`Connected ${name}.`)
       setOpen(false)
       setToken("")
     })
@@ -65,9 +63,9 @@ export function ConnectButton({
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Connect {partnerName}</DialogTitle>
+          <DialogTitle>Connect {name}</DialogTitle>
           <DialogDescription>
-            Paste a personal access token from your {partnerName} account.
+            Paste a personal access token from your {name} account.
             We&apos;ll encrypt and store it; it&apos;s only used to sync
             products and push orders.
           </DialogDescription>
@@ -81,14 +79,14 @@ export function ConnectButton({
               rel="noopener noreferrer"
               className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground underline hover:text-foreground"
             >
-              Generate a token in {partnerName}
+              Generate a token in {name}
               <ExternalLink className="h-3 w-3" />
             </a>
           )}
           <div className="flex flex-col gap-2">
-            <Label htmlFor={`token-${adapterKey}`}>Personal access token</Label>
+            <Label htmlFor={`token-${slug}`}>Personal access token</Label>
             <Input
-              id={`token-${adapterKey}`}
+              id={`token-${slug}`}
               type="password"
               autoComplete="off"
               placeholder="paste your token"

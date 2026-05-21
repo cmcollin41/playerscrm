@@ -3,9 +3,9 @@
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import type { EventAppFormContext } from "./types"
+import type { IntegrationFormContext } from "../types"
 
-export function GameFormFields({ appData, setAppField }: EventAppFormContext) {
+export function GameFormFields({ appData, setAppField }: IntegrationFormContext) {
   const opponent = appData.opponent ?? ""
   const isHome = appData.is_home ?? true
 

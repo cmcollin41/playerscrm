@@ -266,7 +266,7 @@ export async function cancelRegistrationDispatchesOnRefund(args: {
   paymentIntentId: string
 }): Promise<void> {
   const supabase = createAdminClient()
-  const { loadConnection } = await import("@/lib/fulfillment/connections")
+  const { loadConnection } = await import("@/lib/integrations/products/connections")
 
   const { data: orders } = await supabase
     .from("store_orders")

@@ -17,11 +17,11 @@
 import { NextResponse } from "next/server"
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { getTenantAccount } from "@/lib/tenant"
-import { loadConnection } from "@/lib/fulfillment/connections"
+import { loadConnection } from "@/lib/integrations/products/connections"
 import type {
   FulfillmentLine,
   ShippingAddress,
-} from "@/lib/fulfillment/types"
+} from "@/lib/integrations/products/types"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"

@@ -3,9 +3,9 @@ import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { calculateApplicationFeeCents } from "@/lib/fees"
-import { getInstalledApps } from "@/lib/event-apps/install"
-import { getServerHooks } from "@/lib/event-apps/server"
-import type { EventAppValidateResult } from "@/lib/event-apps/types"
+import { getEventIntegrations } from "@/lib/integrations/install"
+import { getServerHooks } from "@/lib/integrations/server"
+import type { IntegrationValidateResult } from "@/lib/integrations"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20" as any,
@@ -87,14 +87,15 @@ export async function POST(req: Request) {
       }
     }
 
-    // Run validateRegistration on every installed app. Each app returns
-    // its own extraCents, Stripe line items, and an optional persist
-    // callback to insert app-specific rows after registrations exist.
-    const installedApps = await getInstalledApps(event_id, admin)
-    const validateResults: EventAppValidateResult[] = []
+    // Run validateRegistration on every installed integration. Each one
+    // contributes its own extraCents, Stripe line items, and an optional
+    // persist callback to insert per-integration rows after registrations
+    // exist.
+    const installedIntegrations = await getEventIntegrations(event_id, admin)
+    const validateResults: IntegrationValidateResult[] = []
     const payload = { items: incomingItems }
-    for (const installed of installedApps) {
-      const hooks = getServerHooks(installed.app.slug)
+    for (const installed of installedIntegrations) {
+      const hooks = getServerHooks(installed.integration.slug)
       if (!hooks.validateRegistration) continue
       const result = await hooks.validateRegistration(
         {

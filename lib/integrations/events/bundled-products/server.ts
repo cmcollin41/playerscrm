@@ -13,10 +13,10 @@
 import "server-only"
 
 import type {
-  EventAppValidateContext,
-  EventAppValidateResult,
-  EventAppConfirmedContext,
-} from "../types"
+  IntegrationValidateContext,
+  IntegrationValidateResult,
+  IntegrationConfirmedContext,
+} from "../../types"
 import { dispatchRegistrationProducts } from "@/lib/events/dispatch-registration-products"
 
 interface IncomingItem {
@@ -39,8 +39,8 @@ interface ValidatedItem {
 }
 
 export async function validateRegistration(
-  ctx: EventAppValidateContext,
-): Promise<EventAppValidateResult> {
+  ctx: IntegrationValidateContext,
+): Promise<IntegrationValidateResult> {
   const { admin, eventId, personIds, payload } = ctx
   const incomingItems: IncomingItem[] = Array.isArray(payload.items)
     ? payload.items
@@ -228,7 +228,7 @@ export async function validateRegistration(
 }
 
 export async function onRegistrationConfirmed(
-  ctx: EventAppConfirmedContext,
+  ctx: IntegrationConfirmedContext,
 ): Promise<void> {
   await dispatchRegistrationProducts({
     eventId: ctx.eventId,
