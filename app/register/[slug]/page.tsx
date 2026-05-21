@@ -12,7 +12,7 @@ const fetchEventForSlug = cache(async (slug: string) => {
   let query = supabase
     .from("events")
     .select(
-      "*, accounts!inner(id, name, stripe_id, application_fee, subdomain), event_sessions(id, title, description, location, starts_at, ends_at, ordering)"
+      "*, accounts!inner(id, name, stripe_id, application_fee, subdomain), event_sessions(id, title, description, location, starts_at, ends_at, ordering), event_products(id, product_id, is_required, price_cents, description_override, ordering, org_products(id, name, image_path, slug, org_product_variants(id, sku, options, price_cents, image_path, inventory_qty, is_active)))"
     )
     .eq("slug", slug)
     .eq("is_published", true)

@@ -9,6 +9,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Calendar, MapPin, DollarSign, Mail, Check, Plus, Loader2 } from "lucide-react"
 import { toast } from "sonner"
+import {
+  ProductSelectionStep,
+  selectionsAreComplete,
+  buildItemsPayload,
+  type SelectionsByPerson,
+  type AddressesByPerson,
+  type EventProductForRegister,
+  type Registrant,
+} from "./product-selection-step"
 
 function formatEventDateRange(starts: string | null, ends: string | null) {
   if (!starts) return null
@@ -63,7 +72,7 @@ interface RegisterClientProps {
   registrationOpen: boolean
 }
 
-type Step = "info" | "email" | "magic-link-sent" | "profile" | "registrant-kind" | "select-kids" | "success"
+type Step = "info" | "email" | "magic-link-sent" | "profile" | "registrant-kind" | "select-kids" | "select-products" | "success"
 type RegistrantKind = "self" | "dependent" | "both"
 
 export function RegisterClient({ event, account, registrationOpen }: RegisterClientProps) {
@@ -87,6 +96,22 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   const [savingProfile, setSavingProfile] = useState(false)
   const [hasSelfInList, setHasSelfInList] = useState(false)
   const [registrantKind, setRegistrantKind] = useState<RegistrantKind | null>(null)
+
+  const eventProducts: EventProductForRegister[] = Array.isArray(
+    event.event_products,
+  )
+    ? [...event.event_products].sort(
+        (a: any, b: any) => (a.ordering ?? 0) - (b.ordering ?? 0),
+      )
+    : []
+  const hasProducts = eventProducts.length > 0
+  const deliveryMode = event.product_delivery_mode ?? null
+
+  const [productSelections, setProductSelections] =
+    useState<SelectionsByPerson>({})
+  const [productAddresses, setProductAddresses] = useState<AddressesByPerson>(
+    {},
+  )
 
   // Load family via server API (avoids RLS timing issues with browser client)
   const loadFamily = async () => {
@@ -294,12 +319,58 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
     }
   }
 
-  const handleRegister = async () => {
+  const selectedRegistrants: Registrant[] = Array.from(selected)
+    .map((id) => family.find((p) => p.id === id))
+    .filter(Boolean)
+    .map((p: any) => ({
+      id: p.id,
+      first_name: p.first_name,
+      last_name: p.last_name,
+      dependent: !!p.dependent,
+    }))
+
+  const handleAdvanceFromPeople = () => {
     if (selected.size === 0) {
       toast.error("Select at least one person to register")
       return
     }
+    if (hasProducts) {
+      setStep("select-products")
+      return
+    }
+    submitRegistration([])
+  }
 
+  const handleSubmitProducts = () => {
+    const check = selectionsAreComplete({
+      registrants: selectedRegistrants,
+      eventProducts,
+      deliveryMode,
+      selections: productSelections,
+      addresses: productAddresses,
+    })
+    if (!check.complete) {
+      toast.error(check.reason ?? "Finish picking options")
+      return
+    }
+    const items = buildItemsPayload({
+      registrants: selectedRegistrants,
+      eventProducts,
+      deliveryMode,
+      selections: productSelections,
+      addresses: productAddresses,
+    })
+    submitRegistration(items)
+  }
+
+  const submitRegistration = async (
+    items: Array<{
+      person_id: string
+      event_product_id: string
+      variant_id: string
+      shipping_address?: any
+    }>,
+  ) => {
     setRegistering(true)
     try {
       const res = await fetch("/api/register", {
@@ -308,21 +379,18 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
         body: JSON.stringify({
           event_id: event.id,
           person_ids: Array.from(selected),
+          items,
         }),
       })
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
 
-      // Free event → in-page success
       if (!data.url) {
         setStep("success")
         setRegistering(false)
         return
       }
-
-      // Paid event → redirect to Stripe-hosted Checkout. Don't clear the
-      // loading state — we're navigating away.
       window.location.href = data.url
     } catch (err: any) {
       toast.error(err.message || "Registration failed")
@@ -330,7 +398,11 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
     }
   }
 
-  const totalAmount = ((event.fee_amount * selected.size) / 100).toFixed(2)
+  const productsExtraCents = Object.values(productSelections).reduce(
+    (sum, e) => sum + (e.variantId ? e.unitPriceCents : 0),
+    0,
+  )
+  const eventTotalCents = event.fee_amount * selected.size + productsExtraCents
 
   return (
     <>
@@ -852,11 +924,13 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
               <Button
                 className="w-full"
                 size="lg"
-                onClick={handleRegister}
+                onClick={handleAdvanceFromPeople}
                 disabled={registering || selected.size === 0}
               >
                 {registering ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : hasProducts ? (
+                  "Continue"
                 ) : event.is_paid ? (
                   "Continue to Payment"
                 ) : (
@@ -866,6 +940,64 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
             </div>
           </CardContent>
         </Card>
+        </>
+      )}
+
+      {/* Step: Select product variants per registrant */}
+      {step === "select-products" && (
+        <>
+          <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2.5 mb-4 text-sm">
+            <button
+              onClick={() => setStep("select-kids")}
+              className="text-xs font-medium text-gray-500 hover:text-gray-700"
+            >
+              ← Back
+            </button>
+            <span className="text-gray-500">
+              Signed in as{" "}
+              <span className="font-medium text-gray-900">{user?.email}</span>
+            </span>
+          </div>
+          <ProductSelectionStep
+            registrants={selectedRegistrants}
+            eventProducts={eventProducts}
+            deliveryMode={
+              (deliveryMode as "pickup_at_event" | "shipped_to_registrant") ??
+              "pickup_at_event"
+            }
+            selections={productSelections}
+            onSelectionsChange={setProductSelections}
+            addresses={productAddresses}
+            onAddressesChange={setProductAddresses}
+          />
+          <div className="mt-4">
+            {event.is_paid && (
+              <p className="mb-3 text-sm text-gray-600 text-center">
+                Total:{" "}
+                <strong>${(eventTotalCents / 100).toFixed(2)}</strong>
+                {productsExtraCents > 0 && (
+                  <span className="text-gray-400">
+                    {" "}
+                    (incl. ${(productsExtraCents / 100).toFixed(2)} add-ons)
+                  </span>
+                )}
+              </p>
+            )}
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={handleSubmitProducts}
+              disabled={registering}
+            >
+              {registering ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : event.is_paid ? (
+                "Continue to Payment"
+              ) : (
+                "Complete Registration"
+              )}
+            </Button>
+          </div>
         </>
       )}
 

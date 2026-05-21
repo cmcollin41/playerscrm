@@ -3,6 +3,7 @@ import { gameApp } from "./game"
 import { otherApp } from "./other"
 import { practiceApp } from "./practice"
 import { tournamentApp } from "./tournament"
+import { productsApp } from "./products"
 import type { EventApp } from "./types"
 
 export type { EventApp, EventAppCapabilities, EventAppDefaults, EventAppFormContext } from "./types"
@@ -13,6 +14,7 @@ export const eventApps: EventApp[] = [
   practiceApp,
   otherApp,
   tournamentApp,
+  productsApp,
 ]
 
 // Slug -> app lookup, with a generic fallback so unknown slugs (legacy data,

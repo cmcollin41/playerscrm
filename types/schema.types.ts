@@ -191,11 +191,25 @@ export interface Events {
   series_id?: string | null /* groups occurrences of a recurring event; null for one-off events */;
   series_index?: number | null /* 1-based position within the series */;
   parent_event_id?: string | null /* foreign key to events.id; lets events nest under a parent (tournament -> games) */;
+  /** How bundled products are delivered to registrants. NULL when the event has no products. */
+  product_delivery_mode?: 'pickup_at_event' | 'shipped_to_registrant' | null;
   metadata?: any;
   accounts?: Accounts;
   teams?: Teams;
   event_registrations?: EventRegistrations[];
   event_sessions?: EventSessions[];
+  event_products?: EventProducts[];
+  event_apps_installed?: EventAppsInstalled[];
+}
+
+export interface EventAppsInstalled {
+  id: string /* primary key */;
+  event_id: string /* foreign key to events.id */;
+  /** Soft pointer into lib/event-apps/ registry. Mirrors events.event_type during the back-compat window. */
+  app_slug: string;
+  config: Record<string, any>;
+  ordering: number;
+  installed_at: string;
 }
 
 export interface EventSessions {
@@ -224,6 +238,43 @@ export interface EventRegistrations {
   metadata?: any;
   events?: Events;
   people?: People;
+  event_registration_items?: EventRegistrationItems[];
+}
+
+export interface EventProducts {
+  id: string /* primary key */;
+  event_id: string /* foreign key to events.id */;
+  product_id: string /* foreign key to org_products.id */;
+  is_required: boolean;
+  /** Per-registrant upcharge in cents. 0 means comp (cost baked into events.fee_amount). */
+  price_cents: number;
+  description_override?: string | null;
+  ordering: number;
+  created_at: string;
+  updated_at: string;
+  events?: Events;
+  org_products?: OrgProducts;
+}
+
+export interface EventRegistrationItems {
+  id: string /* primary key */;
+  registration_id: string /* foreign key to event_registrations.id */;
+  event_product_id: string /* foreign key to event_products.id */;
+  variant_id: string /* foreign key to org_product_variants.id */;
+  /** Snapshot of event_products.price_cents at registration time. */
+  unit_price_cents: number;
+  options_snapshot: Record<string, string>;
+  product_name_snapshot?: string | null;
+  variant_sku_snapshot?: string | null;
+  image_url_snapshot?: string | null;
+  /** Per-registrant shipping address; populated when events.product_delivery_mode = shipped_to_registrant. */
+  shipping_address?: Record<string, any> | null;
+  /** Backfilled by the Stripe webhook after the store_order is created. */
+  store_order_item_id?: string | null;
+  created_at: string;
+  event_registrations?: EventRegistrations;
+  event_products?: EventProducts;
+  org_product_variants?: OrgProductVariants;
 }
 
 export interface Lists {

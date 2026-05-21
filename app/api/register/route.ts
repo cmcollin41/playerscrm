@@ -3,6 +3,9 @@ import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { calculateApplicationFeeCents } from "@/lib/fees"
+import { getInstalledApps } from "@/lib/event-apps/install"
+import { getServerHooks } from "@/lib/event-apps/server"
+import type { EventAppValidateResult } from "@/lib/event-apps/types"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20" as any,
@@ -20,11 +23,18 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { event_id, person_ids } = await req.json()
+    const { event_id, person_ids, items } = await req.json()
 
     if (!event_id || !person_ids?.length) {
       return NextResponse.json({ error: "Missing event_id or person_ids" }, { status: 400 })
     }
+
+    const incomingItems: Array<{
+      person_id: string
+      event_product_id: string
+      variant_id: string
+      shipping_address?: Record<string, any>
+    }> = Array.isArray(items) ? items : []
 
     // Use the admin client for tenant data ops — registrants aren't members
     // of the event's account, so RLS would hide the event under the
@@ -77,12 +87,52 @@ export async function POST(req: Request) {
       }
     }
 
+    // Run validateRegistration on every installed app. Each app returns
+    // its own extraCents, Stripe line items, and an optional persist
+    // callback to insert app-specific rows after registrations exist.
+    const installedApps = await getInstalledApps(event_id, admin)
+    const validateResults: EventAppValidateResult[] = []
+    const payload = { items: incomingItems }
+    for (const installed of installedApps) {
+      const hooks = getServerHooks(installed.app.slug)
+      if (!hooks.validateRegistration) continue
+      const result = await hooks.validateRegistration(
+        {
+          eventId: event_id,
+          accountId: event.account_id,
+          personIds: person_ids,
+          payload,
+          admin,
+        },
+        installed.config,
+      )
+      if (!result.ok) {
+        return NextResponse.json(
+          { error: result.error ?? "Validation failed" },
+          { status: 400 },
+        )
+      }
+      validateResults.push(result)
+    }
+
+    const itemsTotalCents = validateResults.reduce(
+      (s, r) => s + (r.extraCents ?? 0),
+      0,
+    )
+    const collectedStripeLines: Stripe.Checkout.SessionCreateParams.LineItem[] =
+      validateResults.flatMap(
+        (r) =>
+          (r.stripeLineItems ??
+            []) as Stripe.Checkout.SessionCreateParams.LineItem[],
+      )
+
     // Create registrations
     const registrations = person_ids.map((person_id: string) => ({
       event_id,
       person_id,
       registered_by: user.id,
-      status: event.fee_amount > 0 ? "pending" : "confirmed",
+      status:
+        event.fee_amount > 0 || itemsTotalCents > 0 ? "pending" : "confirmed",
     }))
 
     const { data: regs, error: regError } = await admin
@@ -104,34 +154,60 @@ export async function POST(req: Request) {
         )
     }
 
-    // If free event, we're done
-    if (event.fee_amount <= 0) {
+    // Run each app's persist callback so per-app rows that FK back to
+    // event_registrations can be inserted (e.g. event_registration_items).
+    const regByPerson = new Map<string, string>()
+    for (const r of regs ?? []) {
+      regByPerson.set(r.person_id as string, r.id as string)
+    }
+    for (const result of validateResults) {
+      if (!result.persist) continue
+      try {
+        await result.persist(regByPerson, admin)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        return NextResponse.json({ error: msg }, { status: 500 })
+      }
+    }
+
+    const grandTotalCents =
+      event.fee_amount * person_ids.length + itemsTotalCents
+
+    // If nothing to charge (free event + comp products only), we're done.
+    if (grandTotalCents <= 0) {
       return NextResponse.json({ success: true, registrations: regs })
     }
 
     // Create Stripe-hosted Checkout Session
     const account = event.accounts as any
-    const totalAmount = event.fee_amount * person_ids.length
+    const totalAmount = grandTotalCents
     const applicationFee = calculateApplicationFeeCents(totalAmount, account)
 
     const origin = req.headers.get("origin") || new URL(req.url).origin
     const registrationIdsCsv = regs!.map((r: any) => r.id).join(",")
 
+    const eventLineItems: Stripe.Checkout.SessionCreateParams.LineItem[] =
+      event.fee_amount > 0
+        ? [
+            {
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: event.name,
+                  ...(event.description
+                    ? { description: event.description }
+                    : {}),
+                },
+                unit_amount: event.fee_amount,
+              },
+              quantity: person_ids.length,
+            },
+          ]
+        : []
+
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
       mode: "payment",
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: event.name,
-              ...(event.description ? { description: event.description } : {}),
-            },
-            unit_amount: event.fee_amount,
-          },
-          quantity: person_ids.length,
-        },
-      ],
+      line_items: [...eventLineItems, ...collectedStripeLines],
       success_url: `${origin}/register/${event.slug}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/register/${event.slug}?canceled=1`,
       // Stripe minimum is 30 minutes; 1 hour gives a comfortable buffer.

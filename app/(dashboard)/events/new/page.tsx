@@ -29,6 +29,7 @@ import { slugify } from "@/lib/slug"
 import LoadingDots from "@/components/icons/loading-dots"
 import { RRule, Frequency, Weekday } from "rrule"
 import { getEventApp, listSelectableEventApps } from "@/lib/event-apps"
+import { installApp } from "@/lib/event-apps/install"
 
 type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly"
 
@@ -302,13 +303,30 @@ export default function NewEventPage() {
           }
         })
 
-        const { error } = await supabase.from("events").insert(rows)
+        const { data: created, error } = await supabase
+          .from("events")
+          .insert(rows)
+          .select("id")
         if (error) throw error
+
+        // Install the chosen app on every created occurrence so the new
+        // multi-app code path treats them consistently with single events.
+        for (const row of created ?? []) {
+          await installApp(row.id as string, app.slug, supabase)
+        }
 
         toast.success(`Series created — ${rows.length} events`)
       } else {
-        const { error } = await supabase.from("events").insert(insertRow)
+        const { data: created, error } = await supabase
+          .from("events")
+          .insert(insertRow)
+          .select("id")
+          .single()
         if (error) throw error
+
+        if (created?.id) {
+          await installApp(created.id as string, app.slug, supabase)
+        }
 
         toast.success(`${app.name} created`)
       }

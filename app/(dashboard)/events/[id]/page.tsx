@@ -20,6 +20,7 @@ import {
 import { EventDetailClient, DeleteEventButton, ShareLinkBanner } from "./event-detail-client"
 import { AddToCalendarButton } from "@/components/events/add-to-calendar-button"
 import { getEventApp } from "@/lib/event-apps"
+import { getInstalledApps } from "@/lib/event-apps/install"
 import { Plus } from "lucide-react"
 
 export default async function EventDetailPage({
@@ -86,7 +87,15 @@ export default async function EventDetailPage({
 
   const app = getEventApp(event.event_type)
 
-  const { data: children } = app.capabilities.supportsChildren
+  // Capability gating now reads installed apps. v1 only has one
+  // capability-bearing app per event so behavior matches today, but
+  // future events composed from multiple apps will gate correctly.
+  const installedApps = await getInstalledApps(event.id, supabase)
+  const supportsChildren = installedApps.some(
+    (i) => i.app.capabilities.supportsChildren,
+  ) || !!app.capabilities.supportsChildren
+
+  const { data: children } = supportsChildren
     ? await supabase
         .from("events")
         .select("id, name, slug, starts_at, location, event_type, is_published")
@@ -293,7 +302,7 @@ export default async function EventDetailPage({
         </Card>
       )}
 
-      {app.capabilities.supportsChildren && (
+      {supportsChildren && (
         <Card>
           <CardHeader className="flex flex-row items-start justify-between gap-2">
             <div>
