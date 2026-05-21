@@ -1,9 +1,11 @@
-import type { EventApp } from "./types"
+import type { Integration } from "../types"
 
-export const campApp: EventApp = {
+export const campIntegration: Integration = {
   slug: "camp",
   name: "Camp / Clinic",
   description: "Paid registration with capacity and registration window",
+  category: "events",
+  placement: "event_type_picker",
   capabilities: {},
   defaults: {
     is_published: false,

@@ -19,8 +19,8 @@ import {
 } from "@/components/ui/tooltip"
 import { EventDetailClient, DeleteEventButton, ShareLinkBanner } from "./event-detail-client"
 import { AddToCalendarButton } from "@/components/events/add-to-calendar-button"
-import { getEventApp } from "@/lib/event-apps"
-import { getInstalledApps } from "@/lib/event-apps/install"
+import { getIntegration } from "@/lib/integrations"
+import { getEventIntegrations } from "@/lib/integrations/install"
 import { Plus } from "lucide-react"
 
 export default async function EventDetailPage({
@@ -85,20 +85,21 @@ export default async function EventDetailPage({
         .order("series_index", { ascending: true })
     : { data: null }
 
-  const app = getEventApp(event.event_type)
+  const app = getIntegration(event.event_primary_integration ?? event.event_type)
 
-  // Capability gating now reads installed apps. v1 only has one
-  // capability-bearing app per event so behavior matches today, but
-  // future events composed from multiple apps will gate correctly.
-  const installedApps = await getInstalledApps(event.id, supabase)
-  const supportsChildren = installedApps.some(
-    (i) => i.app.capabilities.supportsChildren,
-  ) || !!app.capabilities.supportsChildren
+  // Capability gating reads the event's installed integrations. v1 typically
+  // only has one capability-bearing integration per event so behavior matches
+  // today, but events composed from multiple integrations gate correctly.
+  const installedIntegrations = await getEventIntegrations(event.id, supabase)
+  const supportsChildren =
+    installedIntegrations.some(
+      (i) => i.integration.capabilities.supportsChildren,
+    ) || !!app.capabilities.supportsChildren
 
   const { data: children } = supportsChildren
     ? await supabase
         .from("events")
-        .select("id, name, slug, starts_at, location, event_type, is_published")
+        .select("id, name, slug, starts_at, location, event_type, event_primary_integration, is_published")
         .eq("account_id", event.account_id)
         .eq("parent_event_id", event.id)
         .order("starts_at", { ascending: true, nullsFirst: false })
@@ -314,7 +315,7 @@ export default async function EventDetailPage({
               </CardDescription>
             </div>
             <Link
-              href={`/events/new?parent=${event.id}${app.capabilities.childAppSlug ? `&app=${app.capabilities.childAppSlug}` : ""}${event.team_id ? `&team=${event.team_id}` : ""}`}
+              href={`/events/new?parent=${event.id}${app.capabilities.childIntegrationSlug ? `&app=${app.capabilities.childIntegrationSlug}` : ""}${event.team_id ? `&team=${event.team_id}` : ""}`}
             >
               <Button size="sm">
                 <Plus className="mr-1.5 h-4 w-4" />
@@ -326,7 +327,7 @@ export default async function EventDetailPage({
             <CardContent>
               <ul className="divide-y divide-gray-100">
                 {children.map((c) => {
-                  const childApp = getEventApp(c.event_type)
+                  const childApp = getIntegration(c.event_primary_integration ?? c.event_type)
                   return (
                     <li key={c.id} className="py-2">
                       <Link

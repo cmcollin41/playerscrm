@@ -13,8 +13,12 @@ import { ImageDropzone } from "@/components/ui/image-dropzone"
 import { Trash2, Plus } from "lucide-react"
 import { toast } from "sonner"
 import LoadingDots from "@/components/icons/loading-dots"
-import { getEventApp } from "@/lib/event-apps"
-import { getInstalledApps, type InstalledApp } from "@/lib/event-apps/install"
+import { getIntegration } from "@/lib/integrations"
+import {
+  getEventIntegrations,
+  isIntegrationEnabled,
+  type InstalledIntegration,
+} from "@/lib/integrations/install"
 import { EventProductsManager } from "@/components/events/event-products-manager"
 
 function toLocalInput(value: string | null): string {
@@ -64,7 +68,7 @@ export function EventEditClient({
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
 
-  const app = getEventApp(event.event_type)
+  const app = getIntegration(event.event_primary_integration ?? event.event_type)
   const [appData, setAppData] = useState<Record<string, any>>(
     () => app.columnsToAppData?.(event) ?? {},
   )
@@ -96,17 +100,23 @@ export function EventEditClient({
   const [sessions, setSessions] = useState<SessionDraft[]>(initialSessions.map(sessionFromRow))
   const [removedSessionIds, setRemovedSessionIds] = useState<string[]>([])
 
-  const [installedApps, setInstalledApps] = useState<InstalledApp[]>([])
+  const [installedIntegrations, setInstalledIntegrations] = useState<
+    InstalledIntegration[]
+  >([])
+  const [bundledProductsEnabled, setBundledProductsEnabled] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    getInstalledApps(event.id, supabase).then((apps) => {
-      if (!cancelled) setInstalledApps(apps)
+    getEventIntegrations(event.id, supabase).then((items) => {
+      if (!cancelled) setInstalledIntegrations(items)
+    })
+    isIntegrationEnabled(event.account_id, "products", supabase).then((ok) => {
+      if (!cancelled) setBundledProductsEnabled(ok)
     })
     return () => {
       cancelled = true
     }
-  }, [event.id, supabase])
+  }, [event.id, event.account_id, supabase])
 
   const updateSession = (idx: number, patch: Partial<SessionDraft>) => {
     setSessions((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
@@ -517,21 +527,24 @@ export function EventEditClient({
 
         {isRegisterable && (
           <>
-            {/* Products manager is rendered unconditionally so admins can
-                attach the first product. Once a product is attached the
-                products app auto-installs (handled inside the manager).
-                Future installer UI will let admins add other apps from a
-                picker; for v1 only the products app contributes an
-                AdminAttachmentCard. */}
-            <EventProductsManager
-              eventId={event.id}
-              accountId={event.account_id}
-              initialDeliveryMode={event.product_delivery_mode ?? null}
-            />
-            {installedApps
-              .filter((i) => i.app.slug !== "products")
+            {/* Bundled Products is rendered when the account has the
+                integration enabled in Settings > Integrations. Attaching the
+                first product auto-installs the integration on this event
+                (handled inside the manager). Disabling the integration at the
+                account level hides the manager going forward — existing
+                attached products keep dispatching, but admins can no longer
+                add more. */}
+            {bundledProductsEnabled && (
+              <EventProductsManager
+                eventId={event.id}
+                accountId={event.account_id}
+                initialDeliveryMode={event.product_delivery_mode ?? null}
+              />
+            )}
+            {installedIntegrations
+              .filter((i) => i.integration.slug !== "products")
               .map((installed) => {
-                const Card = installed.app.AdminAttachmentCard
+                const Card = installed.integration.AdminAttachmentCard
                 if (!Card) return null
                 return (
                   <Card

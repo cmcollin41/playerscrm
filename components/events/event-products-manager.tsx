@@ -23,7 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { installApp, uninstallApp } from "@/lib/event-apps/install"
+import { installIntegration, uninstallIntegration } from "@/lib/integrations/install"
 
 type DeliveryMode = "pickup_at_event" | "shipped_to_registrant" | null
 
@@ -208,9 +208,9 @@ export function EventProductsManager({
         await persistDeliveryMode("pickup_at_event")
       }
       try {
-        await installApp(eventId, "products", supabase)
+        await installIntegration(eventId, "products", supabase)
       } catch (err) {
-        console.error("[products] installApp failed", err)
+        console.error("[products] installIntegration failed", err)
       }
     }
   }
@@ -232,9 +232,9 @@ export function EventProductsManager({
     // no longer runs the products contract.
     if (next.length === 0) {
       try {
-        await uninstallApp(eventId, "products", supabase)
+        await uninstallIntegration(eventId, "products", supabase)
       } catch (err) {
-        console.error("[products] uninstallApp failed", err)
+        console.error("[products] uninstallIntegration failed", err)
       }
     }
   }

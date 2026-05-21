@@ -169,8 +169,10 @@ export interface Events {
   updated_at?: string;
   name: string;
   slug: string;
-  /** Soft pointer to an entry in the code-defined event-apps registry (lib/event-apps). Built-ins: camp, practice, game, other, tournament. Free text so partners/integrations can add their own apps without a schema change. */
+  /** Legacy column kept for one release. New code reads event_primary_integration. */
   event_type: string;
+  /** Slug of the type-picker integration this event was created with (camp/game/practice/tournament/other/...). Soft pointer into lib/integrations/. Replaces event_type. */
+  event_primary_integration?: string | null;
   description?: string | null;
   location?: string | null;
   starts_at?: string | null;
@@ -199,17 +201,30 @@ export interface Events {
   event_registrations?: EventRegistrations[];
   event_sessions?: EventSessions[];
   event_products?: EventProducts[];
-  event_apps_installed?: EventAppsInstalled[];
+  event_integrations?: EventIntegrations[];
 }
 
-export interface EventAppsInstalled {
+export interface EventIntegrations {
   id: string /* primary key */;
   event_id: string /* foreign key to events.id */;
-  /** Soft pointer into lib/event-apps/ registry. Mirrors events.event_type during the back-compat window. */
-  app_slug: string;
+  /** Soft pointer into lib/integrations/ registry. */
+  integration_slug: string;
   config: Record<string, any>;
   ordering: number;
   installed_at: string;
+}
+
+export interface AccountIntegrations {
+  account_id: string /* foreign key to accounts.id (composite primary key with integration_slug) */;
+  /** Soft pointer into lib/integrations/ registry. */
+  integration_slug: string;
+  is_enabled: boolean;
+  /** AES-256-GCM ciphertext from lib/integrations/products/crypto. Only set for integrations whose registry entry has requiresCredentials=true. */
+  credentials_encrypted?: Buffer | null;
+  /** Typed sidecar fields like external_shop_id, external_account_label, last_synced_at, auth_type. */
+  connection_state: Record<string, any>;
+  enabled_at: string;
+  updated_at: string;
 }
 
 export interface EventSessions {

@@ -1,11 +1,13 @@
-import type { EventApp } from "./types"
+import type { Integration } from "../types"
 import { GameFormFields } from "./game-form-fields"
 import { slugify } from "@/lib/slug"
 
-export const gameApp: EventApp = {
+export const gameIntegration: Integration = {
   slug: "game",
   name: "Game",
   description: "Team game with opponent and home/away",
+  category: "events",
+  placement: "event_type_picker",
   capabilities: {
     hideCoverImage: true,
     hideRecurrence: true,

@@ -3,8 +3,8 @@ import { createClient as createAdminClient } from "@/lib/supabase/admin";
 import { sendEventConfirmations } from "@/lib/events/event-confirmation";
 import { dispatchPaidOrder } from "@/lib/store/dispatch-order";
 import { cancelRegistrationDispatchesOnRefund } from "@/lib/events/dispatch-registration-products";
-import { getInstalledApps } from "@/lib/event-apps/install";
-import { getServerHooks } from "@/lib/event-apps/server";
+import { getEventIntegrations } from "@/lib/integrations/install";
+import { getServerHooks } from "@/lib/integrations/server";
 import { NextResponse } from "next/server";
 
 
@@ -408,16 +408,16 @@ const updateSupabase = async (event: any, supabase: any) => {
             console.error("Event confirmation email failed:", emailErr);
           }
 
-          // Fan out post-payment hooks to every app installed on this
-          // event. Each app handles its own follow-on work (e.g. the
-          // products app dispatches to Printify/Printful).
+          // Fan out post-payment hooks to every integration installed on
+          // this event. Each one handles its own follow-on work (e.g. the
+          // bundled-products integration dispatches to Printify/Printful).
           try {
-            const installedApps = await getInstalledApps(
+            const installedIntegrations = await getEventIntegrations(
               piMetadata.event_id,
               supabase,
             );
-            for (const installed of installedApps) {
-              const hooks = getServerHooks(installed.app.slug);
+            for (const installed of installedIntegrations) {
+              const hooks = getServerHooks(installed.integration.slug);
               if (!hooks.onRegistrationConfirmed) continue;
               try {
                 await hooks.onRegistrationConfirmed(
@@ -431,7 +431,7 @@ const updateSupabase = async (event: any, supabase: any) => {
                 );
               } catch (hookErr) {
                 console.error(
-                  `[event-apps] ${installed.app.slug}.onRegistrationConfirmed failed:`,
+                  `[integrations] ${installed.integration.slug}.onRegistrationConfirmed failed:`,
                   hookErr,
                 );
               }

@@ -2,12 +2,21 @@ import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
 import type { SupabaseClient } from "@supabase/supabase-js"
 
-function authCookieDomain(): string | undefined {
+function authCookieDomain(requestHost: string | null): string | undefined {
   const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN
   if (!root) return undefined
-  const host = root.split(":")[0]
-  if (host === "localhost" || host === "127.0.0.1") return undefined
-  return `.${host}`
+  const rootHost = root.split(":")[0]
+  if (rootHost === "localhost" || rootHost === "127.0.0.1") return undefined
+  if (!requestHost) return undefined
+  const reqHost = requestHost.split(":")[0]
+  // Span across subdomains only when the request is actually under the root
+  // domain. Custom domains (e.g. app.provobasketball.com) get host-only
+  // cookies — the browser drops a `Domain=.athletes.app` cookie when the
+  // request came in on a different domain, killing the session.
+  if (reqHost === rootHost || reqHost.endsWith(`.${rootHost}`)) {
+    return `.${rootHost}`
+  }
+  return undefined
 }
 
 export const config = {
@@ -48,6 +57,8 @@ export async function proxy(request: NextRequest) {
     request: { headers: request.headers },
   })
 
+  const requestHost = request.headers.get("host")
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -61,7 +72,7 @@ export async function proxy(request: NextRequest) {
             request.cookies.set(name, value),
           )
           response = NextResponse.next({ request })
-          const domain = authCookieDomain()
+          const domain = authCookieDomain(requestHost)
           cookiesToSet.forEach(({ name, value, options }) =>
             response.cookies.set(name, value, {
               ...options,
@@ -74,7 +85,7 @@ export async function proxy(request: NextRequest) {
   )
 
   const url = request.nextUrl
-  const hostname = request.headers.get("host") || ""
+  const hostname = requestHost || ""
   const path = url.pathname
 
   // Determine root domain (e.g. "athletes.app" or "localhost:3000")
@@ -290,8 +301,12 @@ export async function proxy(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
+          const domain = authCookieDomain(requestHost)
           cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
+            response.cookies.set(name, value, {
+              ...options,
+              domain: options?.domain ?? domain,
+            }),
           )
         },
       },

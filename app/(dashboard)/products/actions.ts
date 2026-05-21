@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { requireAdmin } from "@/lib/auth"
-import { loadConnection } from "@/lib/fulfillment/connections"
+import { loadConnection } from "@/lib/integrations/products/connections"
 import { slugify, slugWithSuffix } from "@/lib/slugify"
 import type { OrgProductStatus } from "@/types/schema.types"
 

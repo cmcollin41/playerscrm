@@ -22,8 +22,8 @@
 
 import { NextResponse } from "next/server"
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
-import { loadConnection } from "@/lib/fulfillment/connections"
-import type { DispatchStatus } from "@/lib/fulfillment/types"
+import { loadConnection } from "@/lib/integrations/products/connections"
+import type { DispatchStatus } from "@/lib/integrations/products/types"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
