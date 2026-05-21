@@ -118,7 +118,14 @@ async function printifyFetch<T>(
       `Printify ${method} ${path} responded ${res.status}: ${body.slice(0, 200)}`,
     )
   }
-  return (await res.json()) as T
+  // Printify's cancel endpoint returns 200 with empty body on success.
+  const text = await res.text()
+  if (!text) return undefined as T
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    return undefined as T
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -416,6 +423,26 @@ async function createOrder(
 }
 
 // ---------------------------------------------------------------------------
+// cancelOrder — used by the refund path
+// ---------------------------------------------------------------------------
+
+async function cancelOrder(
+  ctx: ConnectionContext,
+  externalOrderId: string,
+): Promise<void> {
+  const shopId = requireShopId(ctx)
+  // Printify only allows cancellation while the order is still "on-hold".
+  // Once it's been sent to production they return 400 and an admin has to
+  // handle it manually — bubble that up as a thrown error so the dispatch
+  // row gets marked needs_review.
+  await printifyFetch(
+    ctx.credentials.token,
+    `/shops/${shopId}/orders/${externalOrderId}/cancel.json`,
+    { method: "POST", body: {} },
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Slice 5: webhooks (verify + handle)
 // ---------------------------------------------------------------------------
 
@@ -512,6 +539,7 @@ export const printifyAdapter: FulfillmentAdapter = {
   syncProduct,
   calculateShipping,
   createOrder,
+  cancelOrder,
   verifyWebhook,
   handleWebhook,
 }

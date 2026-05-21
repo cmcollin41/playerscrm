@@ -2,6 +2,9 @@ import { stripe } from "@/lib/stripe";
 import { createClient as createAdminClient } from "@/lib/supabase/admin";
 import { sendEventConfirmations } from "@/lib/events/event-confirmation";
 import { dispatchPaidOrder } from "@/lib/store/dispatch-order";
+import { cancelRegistrationDispatchesOnRefund } from "@/lib/events/dispatch-registration-products";
+import { getInstalledApps } from "@/lib/event-apps/install";
+import { getServerHooks } from "@/lib/event-apps/server";
 import { NextResponse } from "next/server";
 
 
@@ -171,6 +174,25 @@ const updateSupabase = async (event: any, supabase: any) => {
       .eq("id", pay.id)
       .eq("status", "pending");
 
+    return;
+  }
+
+  // Refund of an event registration that bundled products → cancel any
+  // unfulfilled partner orders we created so the org doesn't get stuck with
+  // print costs for a cancelled registrant.
+  if (event.type === "charge.refunded") {
+    const charge = event.data.object;
+    const paymentIntentId =
+      typeof charge.payment_intent === "string"
+        ? charge.payment_intent
+        : charge.payment_intent?.id;
+    if (paymentIntentId) {
+      try {
+        await cancelRegistrationDispatchesOnRefund({ paymentIntentId });
+      } catch (err) {
+        console.error("Registration refund cancellation failed:", err);
+      }
+    }
     return;
   }
 
@@ -384,6 +406,41 @@ const updateSupabase = async (event: any, supabase: any) => {
             });
           } catch (emailErr) {
             console.error("Event confirmation email failed:", emailErr);
+          }
+
+          // Fan out post-payment hooks to every app installed on this
+          // event. Each app handles its own follow-on work (e.g. the
+          // products app dispatches to Printify/Printful).
+          try {
+            const installedApps = await getInstalledApps(
+              piMetadata.event_id,
+              supabase,
+            );
+            for (const installed of installedApps) {
+              const hooks = getServerHooks(installed.app.slug);
+              if (!hooks.onRegistrationConfirmed) continue;
+              try {
+                await hooks.onRegistrationConfirmed(
+                  {
+                    eventId: piMetadata.event_id,
+                    registrationIds,
+                    stripePaymentIntentId: paymentIntent.id,
+                    admin: supabase,
+                  },
+                  installed.config,
+                );
+              } catch (hookErr) {
+                console.error(
+                  `[event-apps] ${installed.app.slug}.onRegistrationConfirmed failed:`,
+                  hookErr,
+                );
+              }
+            }
+          } catch (dispatchErr) {
+            console.error(
+              "Event onRegistrationConfirmed dispatch failed:",
+              dispatchErr,
+            );
           }
         }
       } else if (event.type === "payment_intent.canceled" && paymentIds.length) {

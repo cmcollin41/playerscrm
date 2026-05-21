@@ -175,4 +175,23 @@ export interface FulfillmentAdapter {
     body: unknown,
     ctx: ConnectionContext,
   ): Promise<WebhookEvent | null>
+
+  /**
+   * Cancel an order at the partner. Used by the refund flow so an
+   * event-registration refund also stops the print/ship pipeline when the
+   * order hasn't been fulfilled yet. Implementations should be a no-op when
+   * the partner has already shipped — throw `NotSupportedError` when the
+   * partner provides no programmatic cancel.
+   */
+  cancelOrder?(
+    ctx: ConnectionContext,
+    externalOrderId: string,
+  ): Promise<void>
+}
+
+export class NotSupportedError extends Error {
+  constructor(capability: string) {
+    super(`${capability} is not supported by this partner adapter`)
+    this.name = "NotSupportedError"
+  }
 }

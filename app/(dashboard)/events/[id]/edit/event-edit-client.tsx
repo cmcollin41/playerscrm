@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,8 @@ import { Trash2, Plus } from "lucide-react"
 import { toast } from "sonner"
 import LoadingDots from "@/components/icons/loading-dots"
 import { getEventApp } from "@/lib/event-apps"
+import { getInstalledApps, type InstalledApp } from "@/lib/event-apps/install"
+import { EventProductsManager } from "@/components/events/event-products-manager"
 
 function toLocalInput(value: string | null): string {
   if (!value) return ""
@@ -93,6 +95,18 @@ export function EventEditClient({
 
   const [sessions, setSessions] = useState<SessionDraft[]>(initialSessions.map(sessionFromRow))
   const [removedSessionIds, setRemovedSessionIds] = useState<string[]>([])
+
+  const [installedApps, setInstalledApps] = useState<InstalledApp[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    getInstalledApps(event.id, supabase).then((apps) => {
+      if (!cancelled) setInstalledApps(apps)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [event.id, supabase])
 
   const updateSession = (idx: number, patch: Partial<SessionDraft>) => {
     setSessions((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
@@ -500,6 +514,35 @@ export function EventEditClient({
             </div>
           </CardContent>
         </Card>
+
+        {isRegisterable && (
+          <>
+            {/* Products manager is rendered unconditionally so admins can
+                attach the first product. Once a product is attached the
+                products app auto-installs (handled inside the manager).
+                Future installer UI will let admins add other apps from a
+                picker; for v1 only the products app contributes an
+                AdminAttachmentCard. */}
+            <EventProductsManager
+              eventId={event.id}
+              accountId={event.account_id}
+              initialDeliveryMode={event.product_delivery_mode ?? null}
+            />
+            {installedApps
+              .filter((i) => i.app.slug !== "products")
+              .map((installed) => {
+                const Card = installed.app.AdminAttachmentCard
+                if (!Card) return null
+                return (
+                  <Card
+                    key={installed.installedId}
+                    eventId={event.id}
+                    accountId={event.account_id}
+                  />
+                )
+              })}
+          </>
+        )}
 
         <div className="flex justify-end gap-3">
           <Button type="button" variant="outline" onClick={() => router.back()}>
