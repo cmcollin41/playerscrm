@@ -12,6 +12,7 @@ import {
   DollarSign,
   Globe,
   Mail,
+  Plug,
   RefreshCw,
   Trophy,
   Users,
@@ -246,6 +247,13 @@ export default function AccountSettingsPage() {
       icon: Globe,
       title: "Custom domain",
       description: "Use your own domain for public-facing pages",
+    },
+    {
+      href: "/settings/integrations",
+      icon: Plug,
+      title: "Integrations",
+      description:
+        "Enable event types, connect fulfillment partners, and turn integrations on or off for this workspace",
     },
   ]
 
