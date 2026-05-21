@@ -93,6 +93,8 @@ export interface ShippingAddress {
 
 /** Cart line for shipping calc / order push (Slices 4–5). */
 export interface FulfillmentLine {
+  /** Partner-side product id. Printify needs both product_id + variant_id; Printful needs only sync_variant_id (ignore this field). */
+  externalProductId: string
   externalVariantId: string
   quantity: number
 }

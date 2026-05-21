@@ -5,6 +5,7 @@
  */
 
 import "server-only"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
 import { decryptCredentials } from "./crypto"
 import { getAdapter } from "./registry"
@@ -41,12 +42,19 @@ export interface LoadedConnection {
  * accounts the caller isn't a member of, but we double-bind in the query for
  * defense-in-depth (a leaked connection_id should not let an attacker hit a
  * partner API on someone else's behalf).
+ *
+ * Pass an explicit `supabase` client (e.g. the service-role admin client) when
+ * called from public-facing routes like guest checkout / shipping-quote where
+ * the buyer is not authenticated and RLS would block the read. The route is
+ * responsible for verifying the caller is allowed to act for `accountId`
+ * (the tenant subdomain in our case).
  */
 export async function loadConnection(
   connectionId: string,
   accountId: string,
+  supabaseOverride?: SupabaseClient,
 ): Promise<LoadedConnection> {
-  const supabase = await createClient()
+  const supabase = supabaseOverride ?? (await createClient())
   const { data, error } = await supabase
     .from("account_partner_connections")
     .select(

@@ -19,13 +19,24 @@ async function loadProduct(productSlug: string, accountId: string) {
   const { data } = await supabase
     .from("org_products")
     .select(
-      "id, slug, name, description, image_path, org_product_variants(id, sku, options, price_cents, image_path, inventory_qty, is_active, ordering)",
+      "id, slug, name, description, image_path, connection_id, org_product_variants(id, sku, options, price_cents, image_path, inventory_qty, is_active, ordering, external_variant_id)",
     )
     .eq("account_id", accountId)
     .eq("slug", productSlug)
     .eq("status", "active")
     .maybeSingle()
   return data
+}
+
+async function loadPartnerSlug(connectionId: string): Promise<string | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from("account_partner_connections")
+    .select("fulfillment_partners(slug)")
+    .eq("id", connectionId)
+    .maybeSingle()
+  const partner = (data as any)?.fulfillment_partners
+  return partner?.slug ?? null
 }
 
 export async function generateMetadata({
@@ -82,6 +93,9 @@ export default async function PublicProductPage({ params }: PageProps) {
 
   const supabase = await createClient()
   const productImageUrl = getStoreImagePublicUrl(supabase, product.image_path)
+  const partnerSlug = product.connection_id
+    ? (await loadPartnerSlug(product.connection_id)) ?? "manual"
+    : "manual"
 
   const activeVariants = (product.org_product_variants ?? [])
     .filter((v: any) => v.is_active)
@@ -114,11 +128,15 @@ export default async function PublicProductPage({ params }: PageProps) {
       </Link>
 
       <ProductView
+        productId={product.id}
+        productSlug={product.slug}
         productName={product.name}
         descriptionHtml={sanitizeProductDescription(product.description)}
         options={productOptions}
         variants={variantsForClient}
         fallbackImageUrl={productImageUrl ?? null}
+        connectionId={product.connection_id}
+        partnerSlug={partnerSlug}
       />
     </div>
   )

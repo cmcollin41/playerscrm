@@ -1,6 +1,7 @@
 import { stripe } from "@/lib/stripe";
 import { createClient as createAdminClient } from "@/lib/supabase/admin";
 import { sendEventConfirmations } from "@/lib/events/event-confirmation";
+import { dispatchPaidOrder } from "@/lib/store/dispatch-order";
 import { NextResponse } from "next/server";
 
 
@@ -268,6 +269,13 @@ const updateSupabase = async (event: any, supabase: any) => {
   if (event.type.startsWith('payment_intent.')) {
     const paymentIntent = event.data.object;
     const piMetadata = paymentIntent.metadata || {};
+
+    // Storefront order flow — identified by store_order_id in metadata
+    // (set in app/api/checkout/store/route.ts).
+    if (piMetadata.store_order_id) {
+      await handleStoreOrderPaymentIntent(event, paymentIntent, supabase);
+      return;
+    }
 
     // Event registration flow — identified by registration_ids + event_id in metadata
     if (piMetadata.registration_ids && piMetadata.event_id) {
@@ -569,6 +577,75 @@ async function handlePlatformCheckoutCompleted(
 
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   await applySubscriptionToAccount(supabase, accountId, subscription);
+}
+
+// =============================================================================
+// Storefront order helpers (store model b)
+// =============================================================================
+
+async function handleStoreOrderPaymentIntent(
+  event: any,
+  paymentIntent: any,
+  supabase: any,
+): Promise<void> {
+  const orderId = paymentIntent.metadata.store_order_id as string;
+
+  // Backfill the PI id on the order row in case it wasn't written at create
+  // time (defensive — the checkout route does write it).
+  if (event.type === "payment_intent.succeeded") {
+    const { error: updateErr } = await supabase
+      .from("store_orders")
+      .update({
+        status: "paid",
+        paid_at: new Date().toISOString(),
+        stripe_payment_intent_id: paymentIntent.id,
+      })
+      .eq("id", orderId)
+      .neq("status", "paid");
+
+    if (updateErr) {
+      console.error("[stripe-webhook] store_orders paid update failed", updateErr.message);
+      throw new Error(`store_orders update failed: ${updateErr.message}`);
+    }
+
+    // Push to fulfillment partners. Synchronous on purpose — Printify
+    // createOrder is fast (sub-second) and partner-side errors should land
+    // on the dispatch row so the dashboard can surface them. Failures here
+    // do NOT bubble up; the order is paid regardless of partner outcome.
+    try {
+      const results = await dispatchPaidOrder(orderId);
+      console.log("[stripe-webhook] store order dispatched", {
+        orderId,
+        results,
+      });
+    } catch (err) {
+      console.error("[stripe-webhook] store order dispatch failed", {
+        orderId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+    return;
+  }
+
+  if (event.type === "payment_intent.payment_failed") {
+    await supabase
+      .from("store_orders")
+      .update({ status: "failed" })
+      .eq("id", orderId)
+      .eq("status", "pending");
+    return;
+  }
+
+  if (event.type === "payment_intent.canceled") {
+    await supabase
+      .from("store_orders")
+      .update({ status: "cancelled", cancelled_at: new Date().toISOString() })
+      .eq("id", orderId)
+      .eq("status", "pending");
+    return;
+  }
+
+  // payment_intent.created / .processing — nothing to do.
 }
 
 // =============================================================================
