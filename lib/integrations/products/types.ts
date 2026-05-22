@@ -116,7 +116,8 @@ export interface CreateOrderResult {
   externalOrderUrl?: string
 }
 
-export interface WebhookEvent {
+export interface OrderWebhookEvent {
+  kind: "order"
   externalOrderId: string
   status: DispatchStatus
   tracking?: {
@@ -125,6 +126,19 @@ export interface WebhookEvent {
     carrier?: string
   }
 }
+
+/**
+ * Fires when a partner (e.g. Printify) initiates a publish from their side
+ * — the merchant clicked "Publish" in the Printify dashboard, with our
+ * storefront wired up as the sales channel. Our route needs to ack with
+ * markPublishSucceeded or the product stays locked.
+ */
+export interface ProductPublishStartedEvent {
+  kind: "product_publish_started"
+  externalProductId: string
+}
+
+export type WebhookEvent = OrderWebhookEvent | ProductPublishStartedEvent
 
 /**
  * The contract every partner adapter implements. Optional methods are
@@ -150,6 +164,36 @@ export interface FulfillmentAdapter {
     variants: PartnerSyncVariant[]
     images: string[]
   }>
+
+  /**
+   * Confirm to the partner that we've finished publishing a product. Required
+   * for Printify — without this call the product stays locked in their
+   * "Publishing..." state and the merchant can't edit it.
+   */
+  markPublishSucceeded?(
+    ctx: ConnectionContext,
+    externalProductId: string,
+    publication: { externalId: string; handle: string },
+  ): Promise<void>
+
+  /** Counterpart to markPublishSucceeded for failed publish attempts. */
+  markPublishFailed?(
+    ctx: ConnectionContext,
+    externalProductId: string,
+    reason: string,
+  ): Promise<void>
+
+  /**
+   * Register inbound webhook delivery with the partner so events
+   * (product:publish:started, order updates, ...) reach our /api/webhooks
+   * endpoint. Idempotent: callers can re-run on existing connections to
+   * heal a missing or partial registration. Implementations should rotate
+   * the supplied secret onto every topic they own at the partner.
+   */
+  registerWebhooks?(
+    ctx: ConnectionContext,
+    opts: { url: string; secret: string },
+  ): Promise<void>
 
   /** Slice 4: live shipping quote for cart + destination. */
   calculateShipping?(

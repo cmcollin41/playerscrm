@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getTenantAccount } from "@/lib/tenant"
 import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
+import { productDescriptionToPlainText } from "@/lib/store/sanitize"
 import { Card, CardContent } from "@/components/ui/card"
 import { ShoppingBag } from "lucide-react"
 
@@ -77,6 +78,7 @@ export default async function PublicStorePage() {
             .filter((v: any) => v.is_active)
             .map((v: any) => v.price_cents)
           const price = priceLabel(activePrices)
+          const descriptionPreview = productDescriptionToPlainText(p.description)
           return (
             <Link key={p.id} href={`/store/${p.slug}`} className="group">
               <Card className="h-full overflow-hidden transition-shadow hover:shadow-md">
@@ -96,9 +98,9 @@ export default async function PublicStorePage() {
                 </div>
                 <CardContent className="flex flex-col gap-2 p-4">
                   <p className="font-medium leading-tight">{p.name}</p>
-                  {p.description && (
+                  {descriptionPreview && (
                     <p className="line-clamp-2 text-xs text-muted-foreground">
-                      {p.description}
+                      {descriptionPreview}
                     </p>
                   )}
                   <div className="mt-1">

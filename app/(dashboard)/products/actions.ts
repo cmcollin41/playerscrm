@@ -1,11 +1,19 @@
 "use server"
 
+import { randomBytes } from "node:crypto"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
-import { requireAdmin } from "@/lib/auth"
+import { requireAdmin, type AuthProfile } from "@/lib/auth"
 import { loadConnection } from "@/lib/integrations/products/connections"
+import { encryptCredentialsForBytea } from "@/lib/integrations/products/crypto"
 import { slugify, slugWithSuffix } from "@/lib/slugify"
+import { productStorefrontUrl } from "@/lib/store/links"
+import { getAuthSiteUrl } from "@/lib/auth-site"
 import type { OrgProductStatus } from "@/types/schema.types"
+
+function partnerWebhookUrl(connectionId: string): string {
+  return `${getAuthSiteUrl()}/api/webhooks/partners/${connectionId}`
+}
 
 /**
  * Flip a product's status. Publishing requires at least one active variant;
@@ -76,7 +84,7 @@ export async function publishFromPartner(input: {
   | { ok: true; productId: string }
   | { ok: false; error: string }
 > {
-  let profile
+  let profile: AuthProfile
   try {
     profile = await requireAdmin()
   } catch (err) {
@@ -88,9 +96,10 @@ export async function publishFromPartner(input: {
 
   const supabase = await createClient()
 
+  let connection
   let synced
   try {
-    const connection = await loadConnection(
+    connection = await loadConnection(
       input.connectionId,
       profile.account_id,
     )
@@ -195,10 +204,205 @@ export async function publishFromPartner(input: {
       .not("external_variant_id", "in", `(${externalIds.map((id) => `"${id}"`).join(",")})`)
   }
 
+  // Ack the publish to the partner so the product isn't stuck in their
+  // "Publishing..." state. Best-effort: failures here don't block the import,
+  // since the product is already live on our storefront.
+  if (connection.adapter.markPublishSucceeded) {
+    const { data: account } = await supabase
+      .from("accounts")
+      .select("subdomain, custom_domain")
+      .eq("id", profile.account_id)
+      .maybeSingle()
+    const handle = account ? productStorefrontUrl(account, slug) : null
+    if (handle) {
+      try {
+        await connection.adapter.markPublishSucceeded(
+          connection.ctx,
+          input.externalProductId,
+          { externalId: productId, handle },
+        )
+      } catch (err) {
+        console.error(
+          "[publishFromPartner] markPublishSucceeded failed",
+          input.externalProductId,
+          err instanceof Error ? err.message : err,
+        )
+      }
+    }
+  }
+
   revalidatePath("/products")
   revalidatePath(`/products/browse/${input.connectionId}`)
 
   return { ok: true, productId }
+}
+
+/**
+ * Re-fire markPublishSucceeded for every imported partner product on the
+ * account and (re)register inbound webhooks on each connection. Used to
+ * unstick products that were imported before we started acking publishes,
+ * and to backfill webhook registrations on connections that pre-date the
+ * auto-registration in connectIntegration.
+ */
+export async function ackAllPublishedToPartners(): Promise<
+  | {
+      ok: true
+      succeeded: number
+      failed: number
+      skipped: number
+      webhooksRegistered: number
+    }
+  | { ok: false; error: string }
+> {
+  let profile: AuthProfile
+  try {
+    profile = await requireAdmin()
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Unauthorized.",
+    }
+  }
+
+  const supabase = await createClient()
+
+  const [{ data: products, error: productsErr }, { data: account }] =
+    await Promise.all([
+      supabase
+        .from("org_products")
+        .select("id, slug, connection_id, external_product_id")
+        .eq("account_id", profile.account_id)
+        .not("connection_id", "is", null)
+        .not("external_product_id", "is", null),
+      supabase
+        .from("accounts")
+        .select("subdomain, custom_domain")
+        .eq("id", profile.account_id)
+        .maybeSingle(),
+    ])
+
+  if (productsErr) return { ok: false, error: productsErr.message }
+
+  const adapterByConnection = new Map<
+    string,
+    Awaited<ReturnType<typeof loadConnection>>
+  >()
+  let webhooksRegistered = 0
+
+  async function ensureWebhooks(
+    conn: Awaited<ReturnType<typeof loadConnection>>,
+  ): Promise<void> {
+    if (!conn.adapter.registerWebhooks) return
+    let secret = conn.ctx.credentials.webhook_secret as string | undefined
+    const isNewSecret = !secret
+    if (!secret) {
+      secret = randomBytes(32).toString("hex")
+      conn.ctx.credentials.webhook_secret = secret
+    }
+    try {
+      await conn.adapter.registerWebhooks(conn.ctx, {
+        url: partnerWebhookUrl(conn.ctx.connectionId),
+        secret,
+      })
+      webhooksRegistered++
+    } catch (err) {
+      console.error(
+        "[ackAllPublishedToPartners] registerWebhooks failed",
+        conn.ctx.connectionId,
+        err instanceof Error ? err.message : err,
+      )
+      return
+    }
+    if (isNewSecret) {
+      // Persist the new secret onto BOTH backing tables so verifyWebhook can
+      // HMAC inbound deliveries. We re-encrypt because credentials_encrypted
+      // is a single AES-GCM blob, not field-addressable.
+      const ciphertext = encryptCredentialsForBytea(conn.ctx.credentials)
+      await Promise.all([
+        supabase
+          .from("account_partner_connections")
+          .update({ credentials_encrypted: ciphertext })
+          .eq("id", conn.ctx.connectionId),
+        supabase
+          .from("account_integrations")
+          .update({ credentials_encrypted: ciphertext })
+          .eq("account_id", profile.account_id)
+          .eq("integration_slug", conn.partnerSlug),
+      ])
+    }
+  }
+
+  // Register webhooks for every connection on this account, even those that
+  // haven't published any products yet.
+  const { data: allConnections } = await supabase
+    .from("account_partner_connections")
+    .select("id")
+    .eq("account_id", profile.account_id)
+    .eq("is_active", true)
+
+  for (const c of (allConnections ?? []) as Array<{ id: string }>) {
+    try {
+      const conn = await loadConnection(c.id, profile.account_id)
+      adapterByConnection.set(c.id, conn)
+      await ensureWebhooks(conn)
+    } catch (err) {
+      console.error(
+        "[ackAllPublishedToPartners] loadConnection failed",
+        c.id,
+        err instanceof Error ? err.message : err,
+      )
+    }
+  }
+
+  if (!products || products.length === 0) {
+    return { ok: true, succeeded: 0, failed: 0, skipped: 0, webhooksRegistered }
+  }
+
+  let succeeded = 0
+  let failed = 0
+  let skipped = 0
+
+  for (const p of products as Array<{
+    id: string
+    slug: string
+    connection_id: string
+    external_product_id: string
+  }>) {
+    const conn = adapterByConnection.get(p.connection_id)
+    if (!conn) {
+      failed++
+      continue
+    }
+
+    if (!conn.adapter.markPublishSucceeded) {
+      skipped++
+      continue
+    }
+
+    const handle = account ? productStorefrontUrl(account, p.slug) : null
+    if (!handle) {
+      skipped++
+      continue
+    }
+
+    try {
+      await conn.adapter.markPublishSucceeded(conn.ctx, p.external_product_id, {
+        externalId: p.id,
+        handle,
+      })
+      succeeded++
+    } catch (err) {
+      console.error(
+        "[ackAllPublishedToPartners] markPublishSucceeded failed",
+        p.external_product_id,
+        err instanceof Error ? err.message : err,
+      )
+      failed++
+    }
+  }
+
+  revalidatePath("/products")
+  return { ok: true, succeeded, failed, skipped, webhooksRegistered }
 }
 
 async function uniqueSlug(

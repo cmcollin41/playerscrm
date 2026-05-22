@@ -48,3 +48,11 @@ export function sanitizeProductDescription(html: string | null | undefined): str
     },
   })
 }
+
+export function productDescriptionToPlainText(
+  html: string | null | undefined,
+): string {
+  if (!html) return ""
+  const stripped = sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} })
+  return stripped.replace(/\s+/g, " ").trim()
+}
