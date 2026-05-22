@@ -5,7 +5,10 @@ import { ArrowLeft } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { getTenantAccount } from "@/lib/tenant"
 import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
-import { sanitizeProductDescription } from "@/lib/store/sanitize"
+import {
+  productDescriptionToPlainText,
+  sanitizeProductDescription,
+} from "@/lib/store/sanitize"
 import { ProductView } from "./product-view"
 
 export const dynamic = "force-dynamic"
@@ -51,13 +54,15 @@ export async function generateMetadata({
   const accountName = account.name ?? "Team store"
   const supabase = await createClient()
   const image = getStoreImagePublicUrl(supabase, product.image_path)
+  const descriptionText = productDescriptionToPlainText(product.description)
+  const fallbackDescription = `${product.name} from ${accountName}.`
   return {
     title: `${product.name} · ${accountName}`,
-    description: product.description ?? `${product.name} from ${accountName}.`,
+    description: descriptionText || fallbackDescription,
     openGraph: {
       type: "website",
       title: product.name,
-      description: product.description ?? undefined,
+      description: descriptionText || undefined,
       images: image ? [{ url: image, alt: product.name }] : undefined,
       siteName: accountName,
     },
