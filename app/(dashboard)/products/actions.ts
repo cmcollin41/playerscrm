@@ -332,12 +332,15 @@ export async function ackAllPublishedToPartners(): Promise<
     conn: Awaited<ReturnType<typeof loadConnection>>,
   ): Promise<void> {
     if (!conn.adapter.registerWebhooks) return
-    let secret = conn.ctx.credentials.webhook_secret as string | undefined
-    const isNewSecret = !secret
-    if (!secret) {
-      secret = randomBytes(32).toString("hex")
-      conn.ctx.credentials.webhook_secret = secret
-    }
+    const existingSecret = conn.ctx.credentials.webhook_secret as
+      | string
+      | undefined
+    // Fast path: secret already on file → assume webhooks are registered.
+    // The merchant can use the explicit Refresh button on /settings/integrations
+    // if they ever need to force a re-registration.
+    if (existingSecret) return
+    const secret = randomBytes(32).toString("hex")
+    conn.ctx.credentials.webhook_secret = secret
     try {
       await conn.adapter.registerWebhooks(conn.ctx, {
         url: partnerWebhookUrl(conn.ctx.connectionId),
@@ -352,23 +355,21 @@ export async function ackAllPublishedToPartners(): Promise<
       )
       return
     }
-    if (isNewSecret) {
-      // Persist the new secret onto BOTH backing tables so verifyWebhook can
-      // HMAC inbound deliveries. We re-encrypt because credentials_encrypted
-      // is a single AES-GCM blob, not field-addressable.
-      const ciphertext = encryptCredentialsForBytea(conn.ctx.credentials)
-      await Promise.all([
-        supabase
-          .from("account_partner_connections")
-          .update({ credentials_encrypted: ciphertext })
-          .eq("id", conn.ctx.connectionId),
-        supabase
-          .from("account_integrations")
-          .update({ credentials_encrypted: ciphertext })
-          .eq("account_id", profile.account_id)
-          .eq("integration_slug", conn.partnerSlug),
-      ])
-    }
+    // Persist the new secret onto BOTH backing tables so verifyWebhook can
+    // HMAC inbound deliveries. We re-encrypt because credentials_encrypted
+    // is a single AES-GCM blob, not field-addressable.
+    const ciphertext = encryptCredentialsForBytea(conn.ctx.credentials)
+    await Promise.all([
+      supabase
+        .from("account_partner_connections")
+        .update({ credentials_encrypted: ciphertext })
+        .eq("id", conn.ctx.connectionId),
+      supabase
+        .from("account_integrations")
+        .update({ credentials_encrypted: ciphertext })
+        .eq("account_id", profile.account_id)
+        .eq("integration_slug", conn.partnerSlug),
+    ])
   }
 
   // Register webhooks for every connection on this account, even those that
@@ -404,27 +405,24 @@ export async function ackAllPublishedToPartners(): Promise<
     }
   }
 
-  let succeeded = 0
-  let failed = 0
-  let skipped = 0
-  let resynced = 0
-
-  for (const p of products as Array<{
+  type ProductRow = {
     id: string
     slug: string
     connection_id: string
     external_product_id: string
-  }>) {
-    const conn = adapterByConnection.get(p.connection_id)
-    if (!conn) {
-      failed++
-      continue
-    }
+  }
 
-    // Re-pull from the partner so new/edited variants on their side land in
-    // our mirror tables. Best-effort: if the partner fetch fails we still
-    // try to ack so the product isn't stuck in their publishing state.
+  type PerProductResult = {
+    ackOutcome: "succeeded" | "failed" | "skipped"
+    didResync: boolean
+  }
+
+  async function processProduct(p: ProductRow): Promise<PerProductResult> {
+    const conn = adapterByConnection.get(p.connection_id)
+    if (!conn) return { ackOutcome: "failed", didResync: false }
+
     let resolvedSlug = p.slug
+    let didResync = false
     if (conn.adapter.syncProduct) {
       try {
         const synced = await conn.adapter.syncProduct(
@@ -441,7 +439,7 @@ export async function ackAllPublishedToPartners(): Promise<
           )
           if (upsertResult.ok) {
             resolvedSlug = upsertResult.slug
-            resynced++
+            didResync = true
           } else {
             console.error(
               "[ackAllPublishedToPartners] upsert failed",
@@ -460,33 +458,51 @@ export async function ackAllPublishedToPartners(): Promise<
     }
 
     if (!conn.adapter.markPublishSucceeded) {
-      skipped++
-      continue
+      return { ackOutcome: "skipped", didResync }
     }
-
-    const handle = account
-      ? productStorefrontUrl(account, resolvedSlug)
-      : null
-    if (!handle) {
-      skipped++
-      continue
-    }
+    const handle = account ? productStorefrontUrl(account, resolvedSlug) : null
+    if (!handle) return { ackOutcome: "skipped", didResync }
 
     try {
       await conn.adapter.markPublishSucceeded(conn.ctx, p.external_product_id, {
         externalId: p.id,
         handle,
       })
-      succeeded++
+      return { ackOutcome: "succeeded", didResync }
     } catch (err) {
       console.error(
         "[ackAllPublishedToPartners] markPublishSucceeded failed",
         p.external_product_id,
         err instanceof Error ? err.message : err,
       )
-      failed++
+      return { ackOutcome: "failed", didResync }
     }
   }
+
+  // Bounded concurrency: process up to 4 products at a time so we stay inside
+  // Printify's per-shop rate limit and keep the function well under timeout.
+  const CONCURRENCY = 4
+  const queue = [...(products as ProductRow[])]
+  let succeeded = 0
+  let failed = 0
+  let skipped = 0
+  let resynced = 0
+
+  async function worker(): Promise<void> {
+    while (queue.length > 0) {
+      const next = queue.shift()
+      if (!next) return
+      const result = await processProduct(next)
+      if (result.didResync) resynced++
+      if (result.ackOutcome === "succeeded") succeeded++
+      else if (result.ackOutcome === "failed") failed++
+      else skipped++
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, queue.length) }, () => worker()),
+  )
 
   revalidatePath("/products")
   return { ok: true, succeeded, failed, skipped, resynced, webhooksRegistered }
