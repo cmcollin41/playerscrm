@@ -213,9 +213,10 @@ function resolveVariantOptions(
   variant: PrintifyVariant,
 ): Record<string, string> {
   const out: Record<string, string> = {}
-  for (let i = 0; i < product.options.length; i++) {
-    const opt = product.options[i]
-    const valueId = variant.options[i]
+  const productOptions = product.options ?? []
+  for (let i = 0; i < productOptions.length; i++) {
+    const opt = productOptions[i]
+    const valueId = (variant.options ?? [])[i]
     if (valueId == null) continue
     const value = opt.values.find((v) => v.id === valueId)
     if (!value) continue
@@ -224,6 +225,31 @@ function resolveVariantOptions(
     const name = normalizeOptionName(opt.name)
     out[name] = value.title
   }
+  return out
+}
+
+/**
+ * Some Printify products (older blueprints, certain manual setups) come
+ * back without a product.options array, so resolveVariantOptions can't
+ * map IDs → labels and returns {}. Variant.title in that case is still
+ * populated as a human-readable string like "S / Black" or "Royal Blue".
+ * Split it into axes so the storefront has at least one picker to render.
+ */
+function fallbackOptionsFromTitle(
+  title: string | null | undefined,
+): Record<string, string> {
+  if (!title) return {}
+  const parts = title
+    .split(/\s*\/\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (parts.length === 0) return {}
+  if (parts.length === 1) return { Variant: parts[0] }
+  if (parts.length === 2) return { Size: parts[0], Color: parts[1] }
+  const out: Record<string, string> = {}
+  parts.forEach((p, i) => {
+    out[`Option ${i + 1}`] = p
+  })
   return out
 }
 
@@ -263,16 +289,23 @@ async function syncProduct(
   const images = (detail.images ?? []).map((i) => i.src)
   const thumbnail = pickThumbnail(detail.images)
 
-  const variants: PartnerSyncVariant[] = enabled.map((v) => ({
-    externalId: String(v.id),
-    sku: v.sku ?? null,
-    title: v.title ?? null,
-    options: resolveVariantOptions(detail, v),
-    retailPriceCents: v.price,
-    partnerCostCents: v.cost,
-    imageUrl: variantImageUrl(detail, v.id) ?? thumbnail,
-    isActive: v.is_available !== false,
-  }))
+  const variants: PartnerSyncVariant[] = enabled.map((v) => {
+    const resolved = resolveVariantOptions(detail, v)
+    const options =
+      Object.keys(resolved).length > 0
+        ? resolved
+        : fallbackOptionsFromTitle(v.title)
+    return {
+      externalId: String(v.id),
+      sku: v.sku ?? null,
+      title: v.title ?? null,
+      options,
+      retailPriceCents: v.price,
+      partnerCostCents: v.cost,
+      imageUrl: variantImageUrl(detail, v.id) ?? thumbnail,
+      isActive: v.is_available !== false,
+    }
+  })
 
   const product: PartnerSyncProduct = {
     externalId: String(detail.id),
