@@ -1,10 +1,38 @@
 "use server"
 
+import { randomBytes } from "node:crypto"
 import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { requireAuth } from "@/lib/auth"
 import { encryptCredentialsForBytea } from "@/lib/integrations/products/crypto"
 import { getIntegration } from "@/lib/integrations"
+import { getAuthSiteUrl } from "@/lib/auth-site"
+import type {
+  ConnectionContext,
+  FulfillmentAdapter,
+} from "@/lib/integrations/products/types"
+
+function partnerWebhookUrl(connectionId: string): string {
+  return `${getAuthSiteUrl()}/api/webhooks/partners/${connectionId}`
+}
+
+async function tryRegisterWebhooks(
+  adapter: FulfillmentAdapter,
+  ctx: ConnectionContext,
+  webhookUrl: string,
+  secret: string,
+): Promise<void> {
+  if (!adapter.registerWebhooks) return
+  try {
+    await adapter.registerWebhooks(ctx, { url: webhookUrl, secret })
+  } catch (err) {
+    console.error(
+      "[connectIntegration] registerWebhooks failed",
+      adapter.key,
+      err instanceof Error ? err.message : err,
+    )
+  }
+}
 
 export interface ConnectResult {
   ok: boolean
@@ -91,7 +119,16 @@ export async function connectIntegration(input: {
     }
   }
 
-  const ciphertext = encryptCredentialsForBytea({ token: trimmed })
+  // Generate the webhook secret up front so the same value lands in the
+  // encrypted credentials blob AND the partner's webhook registration.
+  // verifyWebhook later HMACs inbound deliveries against this secret.
+  const webhookSecret = randomBytes(32).toString("hex")
+
+  const credentialsPayload = {
+    token: trimmed,
+    webhook_secret: webhookSecret,
+  }
+  const ciphertext = encryptCredentialsForBytea(credentialsPayload)
 
   const connectionState: Record<string, unknown> = { auth_type: "personal_token" }
   if (validation.externalShopId) connectionState.external_shop_id = validation.externalShopId
@@ -121,8 +158,9 @@ export async function connectIntegration(input: {
     .eq("slug", input.slug)
     .maybeSingle()
   if (partnerErr) return { ok: false, error: partnerErr.message }
+  let connectionId: string | null = null
   if (partner?.id) {
-    const { error: partnerUpsertErr } = await supabase
+    const { data: upserted, error: partnerUpsertErr } = await supabase
       .from("account_partner_connections")
       .upsert(
         {
@@ -136,7 +174,30 @@ export async function connectIntegration(input: {
         },
         { onConflict: "account_id,partner_id" },
       )
+      .select("id")
+      .maybeSingle()
     if (partnerUpsertErr) return { ok: false, error: partnerUpsertErr.message }
+    connectionId = (upserted as { id: string } | null)?.id ?? null
+  }
+
+  // Best-effort: register inbound webhooks with the partner so events flow
+  // back to our /api/webhooks endpoint. Skipped if no adapter, no connection
+  // id, or no shop id; logged-and-swallowed on partner errors so the user
+  // still sees the connection succeed.
+  if (connectionId && integration.adapter && validation.externalShopId) {
+    const ctx: ConnectionContext = {
+      connectionId,
+      accountId: input.accountId,
+      partnerSlug: input.slug,
+      externalShopId: validation.externalShopId,
+      credentials: credentialsPayload,
+    }
+    await tryRegisterWebhooks(
+      integration.adapter,
+      ctx,
+      partnerWebhookUrl(connectionId),
+      webhookSecret,
+    )
   }
 
   revalidatePath("/settings/integrations")

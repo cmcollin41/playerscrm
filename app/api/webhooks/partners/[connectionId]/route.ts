@@ -5,24 +5,20 @@
  * URLs keep webhook secrets isolated per merchant integration:
  *   https://{tenant}.athletes.app/api/webhooks/partners/{connectionId}
  *
- * The route:
- *   1. Loads the connection (decrypted credentials) via the service-role admin
- *      client — anon RLS would block this read since partner webhooks have no
- *      Supabase auth cookies.
- *   2. Asks the partner adapter to verify the signature (HMAC) against the
- *      raw body before parsing.
- *   3. Delegates parsing/normalization to adapter.handleWebhook → a tidy
- *      WebhookEvent with { externalOrderId, status, tracking? }.
- *   4. Updates the matching store_order_dispatches row.
+ * Routes two event families based on the adapter-normalized WebhookEvent.kind:
+ *   - "order"                    → update store_order_dispatches
+ *   - "product_publish_started"  → ack publishing_succeeded so the partner
+ *                                  unlocks the product (Printify locks them
+ *                                  in "Publishing..." otherwise)
  *
- * Each Printify event delivery is acked with 200 even when our internal
- * matching fails — otherwise Printify retries indefinitely for events we
- * can't act on (e.g. an order id we don't know about).
+ * Each delivery is acked with 200 even when our internal matching fails —
+ * otherwise the partner retries indefinitely for events we can't act on.
  */
 
 import { NextResponse } from "next/server"
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { loadConnection } from "@/lib/integrations/products/connections"
+import { productStorefrontUrl } from "@/lib/store/links"
 import type { DispatchStatus } from "@/lib/integrations/products/types"
 
 export const runtime = "nodejs"
@@ -102,6 +98,61 @@ export async function POST(req: Request, { params }: RouteContext) {
     return NextResponse.json({ ok: true, ignored: true }, { status: 200 })
   }
 
+  if (event.kind === "product_publish_started") {
+    // Partner started a publish from their dashboard. Look up the mirror
+    // product (if any) on our side and ack the publish so the partner unlocks
+    // the product. If we don't know about the product yet, ack-fail so the
+    // merchant can keep editing.
+    if (!conn.adapter.markPublishSucceeded || !conn.adapter.markPublishFailed) {
+      return NextResponse.json({ ok: true, ignored: true }, { status: 200 })
+    }
+
+    const { data: productRow } = await supabase
+      .from("org_products")
+      .select("id, slug")
+      .eq("connection_id", connectionId)
+      .eq("external_product_id", event.externalProductId)
+      .maybeSingle()
+
+    if (!productRow) {
+      try {
+        await conn.adapter.markPublishFailed(
+          conn.ctx,
+          event.externalProductId,
+          "Product not imported to storefront yet.",
+        )
+      } catch (err) {
+        console.error("[partner-webhook] markPublishFailed error", err)
+      }
+      return NextResponse.json({ ok: true, ignored: true }, { status: 200 })
+    }
+
+    const { data: account } = await supabase
+      .from("accounts")
+      .select("subdomain, custom_domain")
+      .eq("id", connRow.account_id as string)
+      .maybeSingle()
+    const handle = account
+      ? productStorefrontUrl(account, (productRow as { slug: string }).slug)
+      : null
+    if (!handle) {
+      return NextResponse.json({ ok: true, ignored: true }, { status: 200 })
+    }
+
+    try {
+      await conn.adapter.markPublishSucceeded(
+        conn.ctx,
+        event.externalProductId,
+        { externalId: (productRow as { id: string }).id, handle },
+      )
+    } catch (err) {
+      console.error("[partner-webhook] markPublishSucceeded error", err)
+      // Still 200 — the partner will retry on its own schedule.
+    }
+    return NextResponse.json({ ok: true }, { status: 200 })
+  }
+
+  // Order event from here on.
   // Find the dispatch row this event refers to. Scope by connection so
   // collisions across merchants are impossible.
   const { data: dispatchRow, error: dispatchErr } = await supabase

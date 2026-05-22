@@ -17,6 +17,7 @@ import { ExternalLink, ShoppingBag } from "lucide-react"
 import { productStorefrontUrl, storefrontUrl } from "@/lib/store/links"
 import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
 import { PublishButton } from "./publish-button"
+import { AckPublishButton } from "./ack-publish-button"
 import { PartnerCard } from "./partner-card"
 import { listIntegrations } from "@/lib/integrations"
 
@@ -211,13 +212,16 @@ export default async function OrgProductsListPage() {
       </section>
 
       <section>
-        <div className="mb-3 flex items-baseline justify-between">
+        <div className="mb-3 flex items-baseline justify-between gap-3">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
             Published products
           </h2>
-          <p className="text-xs text-muted-foreground">
-            {products?.length ?? 0} total
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-muted-foreground">
+              {products?.length ?? 0} total
+            </p>
+            {products && products.length > 0 ? <AckPublishButton /> : null}
+          </div>
         </div>
 
         {!products || products.length === 0 ? (

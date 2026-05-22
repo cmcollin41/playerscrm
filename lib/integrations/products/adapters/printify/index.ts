@@ -90,7 +90,7 @@ interface PrintifyListResponse<T> {
 }
 
 interface PrintifyFetchOptions {
-  method?: "GET" | "POST"
+  method?: "GET" | "POST" | "PUT" | "DELETE"
   body?: unknown
 }
 
@@ -284,6 +284,132 @@ async function syncProduct(
   }
 
   return { product, variants, images }
+}
+
+// ---------------------------------------------------------------------------
+// Publish acknowledgement
+//
+// Printify locks a product in "Publishing..." state any time publishing is
+// initiated (either by us calling syncProduct or by the merchant clicking
+// "Publish" in the Printify dashboard). The product stays locked — and the
+// merchant cannot edit it — until our storefront posts back to one of these
+// two endpoints. Without this call every imported product is stuck.
+// ---------------------------------------------------------------------------
+
+async function markPublishSucceeded(
+  ctx: ConnectionContext,
+  externalProductId: string,
+  publication: { externalId: string; handle: string },
+): Promise<void> {
+  const shopId = requireShopId(ctx)
+  await printifyFetch(
+    ctx.credentials.token,
+    `/shops/${shopId}/products/${externalProductId}/publishing_succeeded.json`,
+    {
+      method: "POST",
+      body: {
+        external: {
+          id: publication.externalId,
+          handle: publication.handle,
+        },
+      },
+    },
+  )
+}
+
+async function markPublishFailed(
+  ctx: ConnectionContext,
+  externalProductId: string,
+  reason: string,
+): Promise<void> {
+  const shopId = requireShopId(ctx)
+  await printifyFetch(
+    ctx.credentials.token,
+    `/shops/${shopId}/products/${externalProductId}/publishing_failed.json`,
+    {
+      method: "POST",
+      body: { reason },
+    },
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Webhook registration
+//
+// Printify registers webhooks per-topic. We subscribe to every topic we care
+// about and store the resulting secret on the connection so verifyWebhook can
+// HMAC-check inbound deliveries. Idempotent: existing registrations for the
+// same {shop, topic, url} tuple get their secret rotated rather than duped.
+// ---------------------------------------------------------------------------
+
+const PRINTIFY_WEBHOOK_TOPICS = [
+  "product:publish:started",
+  "order:created",
+  "order:updated",
+  "order:sent-to-production",
+  "order:shipment:created",
+  "order:shipment:delivered",
+  "order:canceled",
+]
+
+interface PrintifyWebhookRow {
+  id: string
+  topic: string
+  url: string
+}
+
+async function registerWebhooks(
+  ctx: ConnectionContext,
+  opts: { url: string; secret: string },
+): Promise<void> {
+  const shopId = requireShopId(ctx)
+  const token = ctx.credentials.token
+
+  const existing = await printifyFetch<PrintifyWebhookRow[]>(
+    token,
+    `/shops/${shopId}/webhooks.json`,
+  ).catch(() => [] as PrintifyWebhookRow[])
+
+  for (const topic of PRINTIFY_WEBHOOK_TOPICS) {
+    const matching = existing.filter((w) => w.topic === topic)
+    const ours = matching.find((w) => w.url === opts.url)
+
+    // Delete any same-topic webhooks pointing at stale URLs (e.g. an old
+    // tenant subdomain) so we don't double-deliver.
+    for (const stale of matching) {
+      if (stale.url === opts.url) continue
+      await printifyFetch(
+        token,
+        `/shops/${shopId}/webhooks/${stale.id}.json`,
+        { method: "DELETE" },
+      ).catch(() => undefined)
+    }
+
+    if (ours) {
+      // Rotate secret + url on the existing webhook.
+      await printifyFetch(
+        token,
+        `/shops/${shopId}/webhooks/${ours.id}.json`,
+        {
+          method: "PUT",
+          body: { url: opts.url, secret: opts.secret },
+        },
+      ).catch((err) => {
+        console.error("[printify] webhook update failed", topic, err)
+      })
+    } else {
+      await printifyFetch(
+        token,
+        `/shops/${shopId}/webhooks.json`,
+        {
+          method: "POST",
+          body: { topic, url: opts.url, secret: opts.secret },
+        },
+      ).catch((err) => {
+        console.error("[printify] webhook create failed", topic, err)
+      })
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -512,6 +638,13 @@ async function handleWebhook(
   _ctx: ConnectionContext,
 ): Promise<WebhookEvent | null> {
   const payload = (body ?? {}) as PrintifyWebhookPayload
+
+  if (payload.type === "product:publish:started") {
+    const externalProductId = payload.resource?.id
+    if (!externalProductId) return null
+    return { kind: "product_publish_started", externalProductId }
+  }
+
   const externalOrderId = payload.resource?.id
   const status = mapPrintifyEventType(payload.type)
   if (!externalOrderId || !status) return null
@@ -526,6 +659,7 @@ async function handleWebhook(
     : undefined
 
   return {
+    kind: "order",
     externalOrderId,
     status,
     tracking,
@@ -537,6 +671,9 @@ export const printifyAdapter: FulfillmentAdapter = {
   validateCredentials,
   listSyncProducts,
   syncProduct,
+  markPublishSucceeded,
+  markPublishFailed,
+  registerWebhooks,
   calculateShipping,
   createOrder,
   cancelOrder,
