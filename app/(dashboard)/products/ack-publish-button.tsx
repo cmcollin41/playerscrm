@@ -16,17 +16,19 @@ export function AckPublishButton() {
         toast.error(res.error)
         return
       }
-      const { succeeded, failed, skipped, webhooksRegistered } = res
+      const { succeeded, failed, skipped, resynced, webhooksRegistered } = res
       if (
         succeeded === 0 &&
         failed === 0 &&
         skipped === 0 &&
+        resynced === 0 &&
         webhooksRegistered === 0
       ) {
         toast.success("Nothing to sync")
         return
       }
       const parts: string[] = []
+      if (resynced > 0) parts.push(`${resynced} resynced`)
       if (succeeded > 0) parts.push(`${succeeded} acked`)
       if (webhooksRegistered > 0)
         parts.push(`${webhooksRegistered} webhook${webhooksRegistered === 1 ? "" : "s"}`)

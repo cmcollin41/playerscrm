@@ -15,6 +15,110 @@ function partnerWebhookUrl(connectionId: string): string {
   return `${getAuthSiteUrl()}/api/webhooks/partners/${connectionId}`
 }
 
+interface SyncedProductPayload {
+  product: {
+    title: string
+    description?: string | null
+    thumbnailUrl?: string | null
+  }
+  variants: Array<{
+    externalId: string
+    sku?: string | null
+    options: Record<string, string>
+    retailPriceCents: number
+    partnerCostCents?: number | null
+    imageUrl?: string | null
+    isActive: boolean
+  }>
+}
+
+/**
+ * Persist a partner's product + variant payload into our mirror tables.
+ * Re-runnable: matched on (connection_id, external_product_id). Variants
+ * are upserted on (product_id, external_variant_id); variants that have
+ * disappeared on the partner side are marked inactive rather than deleted
+ * so historical orders keep resolving.
+ */
+async function upsertSyncedProduct(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  accountId: string,
+  connectionId: string,
+  externalProductId: string,
+  synced: SyncedProductPayload,
+): Promise<{ ok: true; productId: string; slug: string } | { ok: false; error: string }> {
+  const { data: existing } = await supabase
+    .from("org_products")
+    .select("id, slug, published_at")
+    .eq("connection_id", connectionId)
+    .eq("external_product_id", externalProductId)
+    .maybeSingle()
+
+  const slug =
+    existing?.slug ?? (await uniqueSlug(supabase, accountId, synced.product.title))
+  const publishedAt = existing?.published_at ?? new Date().toISOString()
+  const now = new Date().toISOString()
+
+  const productRow = {
+    account_id: accountId,
+    connection_id: connectionId,
+    external_product_id: externalProductId,
+    slug,
+    name: synced.product.title,
+    description: synced.product.description ?? null,
+    image_path: synced.product.thumbnailUrl ?? null,
+    status: "active" as OrgProductStatus,
+    sync_status: "synced" as const,
+    last_synced_at: now,
+    published_at: publishedAt,
+    updated_at: now,
+  }
+
+  const { data: upserted, error: upsertErr } = await supabase
+    .from("org_products")
+    .upsert(productRow, { onConflict: "connection_id,external_product_id" })
+    .select("id")
+    .single()
+  if (upsertErr || !upserted) {
+    return { ok: false, error: upsertErr?.message ?? "Could not write product row." }
+  }
+  const productId = (upserted as { id: string }).id
+
+  const externalIds = synced.variants.map((v) => v.externalId)
+  const variantRows = synced.variants.map((v, idx) => ({
+    product_id: productId,
+    sku: v.sku ?? `${externalProductId}-${v.externalId}`,
+    external_variant_id: v.externalId,
+    external_options: v.options,
+    options: v.options,
+    price_cents: v.retailPriceCents,
+    partner_cost_cents: v.partnerCostCents ?? null,
+    image_path: v.imageUrl ?? null,
+    is_active: v.isActive,
+    ordering: idx,
+  }))
+
+  if (variantRows.length > 0) {
+    const { error: variantErr } = await supabase
+      .from("org_product_variants")
+      .upsert(variantRows, { onConflict: "product_id,external_variant_id" })
+    if (variantErr) return { ok: false, error: variantErr.message }
+  }
+
+  if (externalIds.length > 0) {
+    await supabase
+      .from("org_product_variants")
+      .update({ is_active: false })
+      .eq("product_id", productId)
+      .not(
+        "external_variant_id",
+        "in",
+        `(${externalIds.map((id) => `"${id}"`).join(",")})`,
+      )
+  }
+
+  return { ok: true, productId, slug }
+}
+
 /**
  * Flip a product's status. Publishing requires at least one active variant;
  * the storefront 404s without one. published_at is preserved across
@@ -128,81 +232,15 @@ export async function publishFromPartner(input: {
     }
   }
 
-  // Reuse an existing slug if we've published this product before; otherwise
-  // generate one from the title and append a short suffix if it collides
-  // inside the account.
-  const { data: existing } = await supabase
-    .from("org_products")
-    .select("id, slug, published_at")
-    .eq("connection_id", input.connectionId)
-    .eq("external_product_id", input.externalProductId)
-    .maybeSingle()
-
-  const slug = existing?.slug ?? (await uniqueSlug(supabase, profile.account_id, synced.product.title))
-  const publishedAt = existing?.published_at ?? new Date().toISOString()
-  const now = new Date().toISOString()
-
-  const productRow = {
-    account_id: profile.account_id,
-    connection_id: input.connectionId,
-    external_product_id: input.externalProductId,
-    slug,
-    name: synced.product.title,
-    description: synced.product.description ?? null,
-    image_path: synced.product.thumbnailUrl ?? null,
-    status: "active" as OrgProductStatus,
-    sync_status: "synced" as const,
-    last_synced_at: now,
-    published_at: publishedAt,
-    updated_at: now,
-  }
-
-  const { data: upserted, error: upsertErr } = await supabase
-    .from("org_products")
-    .upsert(productRow, { onConflict: "connection_id,external_product_id" })
-    .select("id")
-    .single()
-  if (upsertErr || !upserted) {
-    return {
-      ok: false,
-      error: upsertErr?.message ?? "Could not write product row.",
-    }
-  }
-  const productId = (upserted as { id: string }).id
-
-  // Variants: mirror the partner's enabled set. Anything previously synced
-  // but no longer present on the partner side is marked inactive (not
-  // deleted, because past orders may reference it).
-  const externalIds = synced.variants.map((v) => v.externalId)
-
-  const variantRows = synced.variants.map((v, idx) => ({
-    product_id: productId,
-    sku: v.sku ?? `${input.externalProductId}-${v.externalId}`,
-    external_variant_id: v.externalId,
-    external_options: v.options,
-    options: v.options, // legacy mirror — storefront buy panel reads this
-    price_cents: v.retailPriceCents,
-    partner_cost_cents: v.partnerCostCents ?? null,
-    image_path: v.imageUrl ?? null,
-    is_active: v.isActive,
-    ordering: idx,
-  }))
-
-  const { error: variantErr } = await supabase
-    .from("org_product_variants")
-    .upsert(variantRows, { onConflict: "product_id,external_variant_id" })
-  if (variantErr) {
-    return { ok: false, error: variantErr.message }
-  }
-
-  // Deactivate variants that disappeared on the partner side.
-  if (externalIds.length > 0) {
-    await supabase
-      .from("org_product_variants")
-      .update({ is_active: false })
-      .eq("product_id", productId)
-      .not("external_variant_id", "in", `(${externalIds.map((id) => `"${id}"`).join(",")})`)
-  }
+  const upsertResult = await upsertSyncedProduct(
+    supabase,
+    profile.account_id,
+    input.connectionId,
+    input.externalProductId,
+    synced,
+  )
+  if (!upsertResult.ok) return { ok: false, error: upsertResult.error }
+  const { productId, slug } = upsertResult
 
   // Ack the publish to the partner so the product isn't stuck in their
   // "Publishing..." state. Best-effort: failures here don't block the import,
@@ -250,6 +288,7 @@ export async function ackAllPublishedToPartners(): Promise<
       succeeded: number
       failed: number
       skipped: number
+      resynced: number
       webhooksRegistered: number
     }
   | { ok: false; error: string }
@@ -355,12 +394,20 @@ export async function ackAllPublishedToPartners(): Promise<
   }
 
   if (!products || products.length === 0) {
-    return { ok: true, succeeded: 0, failed: 0, skipped: 0, webhooksRegistered }
+    return {
+      ok: true,
+      succeeded: 0,
+      failed: 0,
+      skipped: 0,
+      resynced: 0,
+      webhooksRegistered,
+    }
   }
 
   let succeeded = 0
   let failed = 0
   let skipped = 0
+  let resynced = 0
 
   for (const p of products as Array<{
     id: string
@@ -374,12 +421,52 @@ export async function ackAllPublishedToPartners(): Promise<
       continue
     }
 
+    // Re-pull from the partner so new/edited variants on their side land in
+    // our mirror tables. Best-effort: if the partner fetch fails we still
+    // try to ack so the product isn't stuck in their publishing state.
+    let resolvedSlug = p.slug
+    if (conn.adapter.syncProduct) {
+      try {
+        const synced = await conn.adapter.syncProduct(
+          conn.ctx,
+          p.external_product_id,
+        )
+        if (synced.variants.length > 0) {
+          const upsertResult = await upsertSyncedProduct(
+            supabase,
+            profile.account_id,
+            p.connection_id,
+            p.external_product_id,
+            synced,
+          )
+          if (upsertResult.ok) {
+            resolvedSlug = upsertResult.slug
+            resynced++
+          } else {
+            console.error(
+              "[ackAllPublishedToPartners] upsert failed",
+              p.external_product_id,
+              upsertResult.error,
+            )
+          }
+        }
+      } catch (err) {
+        console.error(
+          "[ackAllPublishedToPartners] syncProduct failed",
+          p.external_product_id,
+          err instanceof Error ? err.message : err,
+        )
+      }
+    }
+
     if (!conn.adapter.markPublishSucceeded) {
       skipped++
       continue
     }
 
-    const handle = account ? productStorefrontUrl(account, p.slug) : null
+    const handle = account
+      ? productStorefrontUrl(account, resolvedSlug)
+      : null
     if (!handle) {
       skipped++
       continue
@@ -402,7 +489,7 @@ export async function ackAllPublishedToPartners(): Promise<
   }
 
   revalidatePath("/products")
-  return { ok: true, succeeded, failed, skipped, webhooksRegistered }
+  return { ok: true, succeeded, failed, skipped, resynced, webhooksRegistered }
 }
 
 async function uniqueSlug(
