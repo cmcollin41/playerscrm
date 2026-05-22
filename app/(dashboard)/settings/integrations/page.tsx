@@ -9,6 +9,7 @@ import type { Integration, IntegrationCategory } from "@/lib/integrations"
 import { ConnectButton } from "./connect-button"
 import { DisconnectButton } from "./disconnect-button"
 import { EnableToggle } from "./enable-toggle"
+import { RefreshWebhooksButton } from "./refresh-webhooks-button"
 
 export const dynamic = "force-dynamic"
 
@@ -144,11 +145,18 @@ export default async function IntegrationsSettingsPage() {
                     <div className="flex shrink-0 items-center gap-2">
                       {integration.requiresCredentials ? (
                         isConnected ? (
-                          <DisconnectButton
-                            accountId={profile.account_id}
-                            slug={integration.slug}
-                            name={integration.name}
-                          />
+                          <>
+                            <RefreshWebhooksButton
+                              accountId={profile.account_id}
+                              slug={integration.slug}
+                              name={integration.name}
+                            />
+                            <DisconnectButton
+                              accountId={profile.account_id}
+                              slug={integration.slug}
+                              name={integration.name}
+                            />
+                          </>
                         ) : (
                           <ConnectButton
                             accountId={profile.account_id}

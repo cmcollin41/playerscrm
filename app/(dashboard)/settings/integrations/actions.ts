@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache"
 import { createClient } from "@/lib/supabase/server"
 import { requireAuth } from "@/lib/auth"
 import { encryptCredentialsForBytea } from "@/lib/integrations/products/crypto"
+import { loadConnection } from "@/lib/integrations/products/connections"
 import { getIntegration } from "@/lib/integrations"
 import { getAuthSiteUrl } from "@/lib/auth-site"
 import type {
@@ -198,6 +199,103 @@ export async function connectIntegration(input: {
       partnerWebhookUrl(connectionId),
       webhookSecret,
     )
+  }
+
+  revalidatePath("/settings/integrations")
+  return { ok: true }
+}
+
+/**
+ * Re-register inbound webhooks for a single connected integration without
+ * touching credentials or imported products. Used when a connection
+ * pre-dates webhook auto-registration, or when the merchant has rotated
+ * their app at the partner side and we need to point a fresh URL/secret.
+ */
+export async function refreshIntegrationWebhooks(input: {
+  accountId: string
+  slug: string
+}): Promise<ConnectResult> {
+  await requireAuth()
+  const supabase = await createClient()
+
+  const integration = getIntegration(input.slug)
+  if (integration.slug === "unknown" || !integration.adapter) {
+    return { ok: false, error: "Unknown integration." }
+  }
+  if (!integration.adapter.registerWebhooks) {
+    return {
+      ok: false,
+      error: `${integration.name} does not support webhook registration.`,
+    }
+  }
+
+  const { data: partner } = await supabase
+    .from("fulfillment_partners")
+    .select("id")
+    .eq("slug", input.slug)
+    .maybeSingle()
+  if (!partner?.id) {
+    return { ok: false, error: "Partner not found." }
+  }
+
+  const { data: connRow } = await supabase
+    .from("account_partner_connections")
+    .select("id")
+    .eq("account_id", input.accountId)
+    .eq("partner_id", partner.id)
+    .eq("is_active", true)
+    .maybeSingle()
+  if (!connRow?.id) {
+    return { ok: false, error: "Connection not found." }
+  }
+
+  let conn
+  try {
+    conn = await loadConnection(connRow.id as string, input.accountId)
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not load connection.",
+    }
+  }
+
+  let secret = conn.ctx.credentials.webhook_secret as string | undefined
+  const isNewSecret = !secret
+  if (!secret) {
+    secret = randomBytes(32).toString("hex")
+    conn.ctx.credentials.webhook_secret = secret
+  }
+
+  try {
+    await conn.adapter.registerWebhooks!(conn.ctx, {
+      url: partnerWebhookUrl(conn.ctx.connectionId),
+      secret,
+    })
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : `${integration.name} rejected the webhook registration.`,
+    }
+  }
+
+  if (isNewSecret) {
+    // Persist the rotated secret in both backing tables so verifyWebhook
+    // accepts deliveries signed with the new HMAC.
+    const ciphertext = encryptCredentialsForBytea(conn.ctx.credentials)
+    await Promise.all([
+      supabase
+        .from("account_partner_connections")
+        .update({ credentials_encrypted: ciphertext })
+        .eq("id", conn.ctx.connectionId),
+      supabase
+        .from("account_integrations")
+        .update({ credentials_encrypted: ciphertext })
+        .eq("account_id", input.accountId)
+        .eq("integration_slug", input.slug),
+    ])
   }
 
   revalidatePath("/settings/integrations")

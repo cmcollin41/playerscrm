@@ -62,7 +62,7 @@ export function DisconnectButton({ accountId, slug, name }: DisconnectButtonProp
               handleConfirm()
             }}
             disabled={pending}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className="!bg-red-500 text-zinc-50 hover:!bg-red-500/90"
           >
             {pending ? (
               <>
