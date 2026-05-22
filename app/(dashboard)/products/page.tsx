@@ -21,6 +21,10 @@ import { AckPublishButton } from "./ack-publish-button"
 import { PartnerCard } from "./partner-card"
 import { listIntegrations } from "@/lib/integrations"
 
+// Resync to partners can fan out to N Printify roundtrips per product;
+// give the route enough wall time to finish a healthy resync.
+export const maxDuration = 300
+
 function formatPrice(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`
 }

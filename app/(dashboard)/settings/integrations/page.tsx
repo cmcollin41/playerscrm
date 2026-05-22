@@ -12,6 +12,9 @@ import { EnableToggle } from "./enable-toggle"
 import { RefreshWebhooksButton } from "./refresh-webhooks-button"
 
 export const dynamic = "force-dynamic"
+// Connect / Refresh actions fan out to partner webhook APIs; give them
+// headroom past the default 60s function timeout.
+export const maxDuration = 300
 
 interface AccountIntegrationRow {
   integration_slug: string
