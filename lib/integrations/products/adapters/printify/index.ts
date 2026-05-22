@@ -229,11 +229,35 @@ function resolveVariantOptions(
 }
 
 /**
+ * Heuristic: does this token look like a clothing size? Used to decide
+ * which half of "X / Y" variant titles is the size axis, since Printify
+ * isn't consistent about the order across blueprints.
+ */
+function isSizeToken(s: string): boolean {
+  const t = s.trim().toLowerCase()
+  if (!t) return false
+  // S, M, L, XL and Y-prefixed youth equivalents.
+  if (/^(?:y|youth\s+)?(?:xxs|xs|s|sm|m|md|l|lg|xl|xxl|xxxl|xxxxl)$/.test(t))
+    return true
+  // 2XL, 3XL, ... 8XL.
+  if (/^\d+xl$/.test(t)) return true
+  // One Size / OS / Free Size.
+  if (/^(?:one\s*size|os|free\s*size)$/.test(t)) return true
+  // Pure numeric sizes (kids' apparel, shoes, hat sizes).
+  if (/^\d{1,3}$/.test(t)) return true
+  return false
+}
+
+/**
  * Some Printify products (older blueprints, certain manual setups) come
  * back without a product.options array, so resolveVariantOptions can't
  * map IDs → labels and returns {}. Variant.title in that case is still
  * populated as a human-readable string like "S / Black" or "Royal Blue".
  * Split it into axes so the storefront has at least one picker to render.
+ *
+ * Order is detected: Printify uses both "Size / Color" and "Color / Size"
+ * depending on the blueprint, so we sniff which side matches a known
+ * size token and assign axes accordingly.
  */
 function fallbackOptionsFromTitle(
   title: string | null | undefined,
@@ -245,7 +269,17 @@ function fallbackOptionsFromTitle(
     .filter(Boolean)
   if (parts.length === 0) return {}
   if (parts.length === 1) return { Variant: parts[0] }
-  if (parts.length === 2) return { Size: parts[0], Color: parts[1] }
+  if (parts.length === 2) {
+    const firstLooksLikeSize = isSizeToken(parts[0])
+    const secondLooksLikeSize = isSizeToken(parts[1])
+    if (firstLooksLikeSize && !secondLooksLikeSize)
+      return { Size: parts[0], Color: parts[1] }
+    if (secondLooksLikeSize && !firstLooksLikeSize)
+      return { Color: parts[0], Size: parts[1] }
+    // Ambiguous (neither or both match) — fall through to generic axes
+    // so the labels don't lie about which token means what.
+    return { "Option 1": parts[0], "Option 2": parts[1] }
+  }
   const out: Record<string, string> = {}
   parts.forEach((p, i) => {
     out[`Option ${i + 1}`] = p
