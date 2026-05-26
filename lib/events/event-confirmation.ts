@@ -1,6 +1,6 @@
 import { sendTransactionalEmail } from "@/lib/email-service"
 import { resolveSender } from "@/lib/sender"
-import { buildEventIcs, icsFilename } from "@/lib/events/ics"
+import { storefrontBaseUrl } from "@/lib/store/links"
 
 interface Recipient {
   email: string
@@ -17,7 +17,7 @@ export async function sendEventConfirmations(opts: {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, name, description, location, starts_at, ends_at, fee_amount, account_id, account:accounts(id, name, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email))")
+    .select("id, name, slug, starts_at, account_id, account:accounts(id, name, subdomain, custom_domain, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email))")
     .eq("id", eventId)
     .single()
 
@@ -30,19 +30,6 @@ export async function sendEventConfirmations(opts: {
 
   if (!registrations?.length) return
 
-  const { data: sessions } = await supabase
-    .from("event_sessions")
-    .select("id, title, description, location, starts_at, ends_at")
-    .eq("event_id", eventId)
-    .order("ordering", { ascending: true })
-    .order("starts_at", { ascending: true })
-
-  const icsString = event.starts_at || (sessions && sessions.length > 0)
-    ? buildEventIcs({ event, sessions: sessions || [] })
-    : null
-
-  const sender = resolveSender(event.account, "default")
-
   const registeredNames = registrations
     .map((r: any) => {
       const p = r.person
@@ -51,6 +38,8 @@ export async function sendEventConfirmations(opts: {
     })
     .filter(Boolean)
     .join(", ")
+
+  const sender = resolveSender(event.account, "default")
 
   const recipientsByEmail = new Map<string, Recipient>()
 
@@ -98,72 +87,53 @@ export async function sendEventConfirmations(opts: {
     return
   }
 
-  const formattedAmount = event.fee_amount
-    ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
-        (event.fee_amount * registrations.length) / 100
-      )
-    : null
-
+  // No per-event timezone stored; default to Mountain so dates render in
+  // local wall-clock terms rather than UTC.
   const formattedDate = event.starts_at
-    ? new Date(event.starts_at).toLocaleString("en-US", {
+    ? new Date(event.starts_at).toLocaleDateString("en-US", {
         weekday: "long",
         month: "long",
         day: "numeric",
         year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
+        timeZone: "America/Denver",
       })
     : null
+
+  const baseUrl = storefrontBaseUrl(event.account)
+  const eventUrl = baseUrl && event.slug ? `${baseUrl}/register/${event.slug}` : null
 
   const subject = `You're registered for ${event.name}`
 
   for (const recipient of Array.from(recipientsByEmail.values())) {
+    const who = registeredNames ? `${registeredNames} ` : ""
+    const opening = formattedDate
+      ? `Thanks for registering ${who}for <strong>${event.name}</strong>, which starts on ${formattedDate}.`
+      : `Thanks for registering ${who}for <strong>${event.name}</strong>.`
+
     const html = `
 <!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
     <title>${subject}</title>
-    <style>
-      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-      .header { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-      .details { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; }
-      .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 14px; color: #6c757d; }
-    </style>
   </head>
-  <body>
-    <div class="header">
-      <h1 style="margin: 0; font-size: 24px;">${event.account.name}</h1>
-      <p style="margin: 10px 0 0 0; color: #6c757d;">Registration confirmed</p>
-    </div>
+  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
     <p>Hi ${recipient.name},</p>
-    <p>You're all set for <strong>${event.name}</strong>.</p>
-    <div class="details">
-      <p style="margin: 5px 0;"><strong>Registered:</strong> ${registeredNames}</p>
-      ${formattedDate ? `<p style="margin: 5px 0;"><strong>When:</strong> ${formattedDate}</p>` : ""}
-      ${event.location ? `<p style="margin: 5px 0;"><strong>Where:</strong> ${event.location}</p>` : ""}
-      ${formattedAmount ? `<p style="margin: 5px 0;"><strong>Amount paid:</strong> ${formattedAmount}</p>` : ""}
-      ${event.description ? `<p style="margin: 15px 0 5px 0;">${event.description}</p>` : ""}
-    </div>
+    <p>${opening}</p>
+    ${eventUrl ? `<p><a href="${eventUrl}">View event details →</a></p>` : ""}
     <p>If you have any questions, just reply to this email.</p>
-    <div class="footer">
-      <p>This is an automated confirmation from ${event.account.name}.</p>
-    </div>
   </body>
 </html>`.trim()
 
-    const text = `
-Registration confirmed — ${event.name}
+    const textOpening = formattedDate
+      ? `Thanks for registering ${who}for ${event.name}, which starts on ${formattedDate}.`
+      : `Thanks for registering ${who}for ${event.name}.`
 
+    const text = `
 Hi ${recipient.name},
 
-You're all set for ${event.name}.
-
-Registered: ${registeredNames}
-${formattedDate ? `When: ${formattedDate}` : ""}
-${event.location ? `Where: ${event.location}` : ""}
-${formattedAmount ? `Amount paid: ${formattedAmount}` : ""}
-${event.description ? `\n${event.description}` : ""}
+${textOpening}
+${eventUrl ? `\nView event details: ${eventUrl}` : ""}
 
 If you have any questions, just reply to this email.
 `.trim()
@@ -181,17 +151,6 @@ If you have any questions, just reply to this email.
         event_id: event.id,
         registration_ids: registrationIds,
       },
-      ...(icsString
-        ? {
-            attachments: [
-              {
-                filename: icsFilename(event.name),
-                content: Buffer.from(icsString).toString("base64"),
-                contentType: "text/calendar; charset=utf-8",
-              },
-            ],
-          }
-        : {}),
     })
 
     if (!result.success) {
