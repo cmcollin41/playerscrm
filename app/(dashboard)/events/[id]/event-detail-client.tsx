@@ -237,9 +237,8 @@ function renderInvoiceLink(reg: Registration) {
   const receiptUrl = reg.payments?.data?.receipt_url || null
   const stripePaid = reg.payments?.status === "succeeded"
 
-  // Paid via invoice → "Receipt" button to the Stripe-hosted invoice (still
-  // works after payment).
-  if (invoice && invoicePaid && invoiceUrl)
+  // Paid via invoice → "Receipt" to the Stripe-hosted invoice (has line items).
+  if (invoicePaid && invoiceUrl)
     return (
       <Button asChild variant="outline" size="sm" className="h-7 text-xs">
         <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">
@@ -248,22 +247,24 @@ function renderInvoiceLink(reg: Registration) {
       </Button>
     )
 
-  // Outstanding invoice → "Invoice" button
-  if (invoice && !invoicePaid && invoiceUrl)
-    return (
-      <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-        <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">
-          <FileText className="mr-1 h-3 w-3" /> Invoice
-        </a>
-      </Button>
-    )
-
-  // Stripe Checkout paid (no invoice was ever created) → Receipt button
+  // Paid via Checkout (with or without a stale unpaid invoice on file) →
+  // "Receipt" to the Stripe charge receipt. Must beat the unpaid-invoice case
+  // below, otherwise a leftover "sent" invoice hides a real payment.
   if (stripePaid && receiptUrl)
     return (
       <Button asChild variant="outline" size="sm" className="h-7 text-xs">
         <a href={receiptUrl} target="_blank" rel="noopener noreferrer">
           <Receipt className="mr-1 h-3 w-3" /> Receipt
+        </a>
+      </Button>
+    )
+
+  // Outstanding invoice and no recorded successful payment.
+  if (invoice && invoiceUrl)
+    return (
+      <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+        <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">
+          <FileText className="mr-1 h-3 w-3" /> Invoice
         </a>
       </Button>
     )

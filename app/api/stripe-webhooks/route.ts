@@ -251,6 +251,18 @@ const updateSupabase = async (event: any, supabase: any) => {
 
     console.log(`Invoice ${invoiceId} updated to status: ${mappedStatus}`);
 
+    // If payment was successful, mark any linked event registration as paid.
+    if (mappedStatus === 'paid') {
+      const linkedRegId = existingMetadata?.event_registration_id
+      if (linkedRegId) {
+        await supabase
+          .from("event_registrations")
+          .update({ payment_status: "paid" })
+          .eq("id", linkedRegId)
+          .is("payment_status", null)
+      }
+    }
+
     // If payment was successful, create a payment record (avoid duplicates)
     if (status === 'succeeded') {
       const { data: existingPayment } = await supabase
@@ -275,7 +287,11 @@ const updateSupabase = async (event: any, supabase: any) => {
               : stripeInvoice.payment_intent?.id || null,
           });
 
-        if (paymentError) {
+        // 23505 = unique_violation. Stripe sometimes re-delivers
+        // invoice.payment_succeeded within milliseconds; the partial unique
+        // index payments_invoice_succeeded_uniq absorbs the race even when
+        // both deliveries pass the check above.
+        if (paymentError && paymentError.code !== "23505") {
           console.log("Error creating payment record:", paymentError);
           throw new Error(`payment row write failed: ${paymentError.message}`);
         }
@@ -382,7 +398,16 @@ const updateSupabase = async (event: any, supabase: any) => {
           }
         }
 
-        // Idempotency guard: only flip + email if at least one reg is still pending
+        // Always backfill payment_status — replays should heal rows whose
+        // status was confirmed but never got payment_status set.
+        await supabase
+          .from("event_registrations")
+          .update({ payment_status: "paid" })
+          .in("id", registrationIds)
+          .is("payment_status", null);
+
+        // Idempotency guard: only flip status + email if at least one reg is
+        // still pending — avoids re-sending confirmation emails on replay.
         const { data: existingRegs } = await supabase
           .from("event_registrations")
           .select("id, status")
