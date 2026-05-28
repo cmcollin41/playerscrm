@@ -2,6 +2,7 @@ import Stripe from "stripe"
 import { sendTransactionalEmail } from "@/lib/email-service"
 import { resolveSender } from "@/lib/sender"
 import { createClient } from "@/lib/supabase/server"
+import { formatCurrency } from "@/lib/utils"
 
 export interface SendInvoiceEmailResult {
   success: boolean
@@ -167,10 +168,7 @@ export async function sendInvoiceEmail(
     }
   }
 
-  const formattedAmount = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(invoice.amount || 0)
+  const formattedAmount = formatCurrency(invoice.amount || 0)
 
   const emailSubject = `Invoice ${invoice.invoice_number || invoice.id.slice(0, 8)} from ${invoice.account.name}`
 
