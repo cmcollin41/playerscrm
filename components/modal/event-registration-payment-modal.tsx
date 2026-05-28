@@ -12,15 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { PaymentOverrideFields } from "@/components/payments/payment-override-fields"
 
 export interface EventRegistrationPaymentModalProps {
   open: boolean
@@ -102,53 +94,13 @@ export function EventRegistrationPaymentModal({
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="payment-status">Status</Label>
-            <Select
-              value={paymentStatus}
-              onValueChange={(v) => setPaymentStatus(v as "paid" | "waived")}
-            >
-              <SelectTrigger id="payment-status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="paid">Paid</SelectItem>
-                <SelectItem value="waived">Waived</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {paymentStatus === "paid" && (
-            <div className="space-y-2">
-              <Label htmlFor="payment-method">Payment method</Label>
-              <Select
-                value={paymentStatusNote || "cash"}
-                onValueChange={setPaymentStatusNote}
-              >
-                <SelectTrigger id="payment-method">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="venmo">Venmo</SelectItem>
-                  <SelectItem value="cashapp">Cash App</SelectItem>
-                  <SelectItem value="cash">Cash / Check</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {paymentStatus === "waived" && (
-            <div className="space-y-2">
-              <Label htmlFor="waived-reason">Reason (optional)</Label>
-              <Input
-                id="waived-reason"
-                placeholder="e.g. scholarship, coach's family"
-                value={paymentStatusNote}
-                onChange={(e) => setPaymentStatusNote(e.target.value)}
-              />
-            </div>
-          )}
+          <PaymentOverrideFields
+            status={paymentStatus}
+            onStatusChange={setPaymentStatus}
+            note={paymentStatusNote}
+            onNoteChange={setPaymentStatusNote}
+            idPrefix="event-payment"
+          />
         </div>
 
         <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">

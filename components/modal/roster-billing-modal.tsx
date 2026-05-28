@@ -32,6 +32,7 @@ import {
 import { DocumentIcon, ChevronDownIcon } from "@heroicons/react/24/outline"
 import { postInvoice } from "@/lib/post-invoice"
 import { rosterTemplateDollars } from "@/lib/roster-pricing"
+import { PaymentOverrideFields } from "@/components/payments/payment-override-fields"
 
 type BillingTab = "fee" | "invoice" | "status"
 
@@ -100,7 +101,7 @@ export function RosterBillingModal({
   const [sendingInvoice, setSendingInvoice] = useState(false)
 
   // Status tab
-  const [paymentStatus, setPaymentStatus] = useState<string>("paid")
+  const [paymentStatus, setPaymentStatus] = useState<"paid" | "waived">("paid")
   const [paymentStatusNote, setPaymentStatusNote] = useState("")
   const [savingStatus, setSavingStatus] = useState(false)
 
@@ -145,7 +146,7 @@ export function RosterBillingModal({
 
       if (roster?.payment_status === "paid" || roster?.payment_status === "waived") {
         setBillingTab("status")
-        setPaymentStatus(roster.payment_status)
+        setPaymentStatus(roster.payment_status as "paid" | "waived")
         setPaymentStatusNote(roster.payment_status_note ?? (roster.payment_status === "paid" ? "cash" : ""))
       } else {
         setBillingTab("fee")
@@ -554,53 +555,13 @@ export function RosterBillingModal({
                 Mark this roster spot as settled outside the invoicing flow.
               </p>
 
-              <div className="space-y-2">
-                <Label htmlFor="payment-status">Status</Label>
-                <Select
-                  value={paymentStatus}
-                  onValueChange={setPaymentStatus}
-                >
-                  <SelectTrigger id="payment-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="paid">Paid</SelectItem>
-                    <SelectItem value="waived">Waived</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {paymentStatus === "paid" && (
-                <div className="space-y-2">
-                  <Label htmlFor="payment-method">Payment method</Label>
-                  <Select
-                    value={paymentStatusNote || "cash"}
-                    onValueChange={setPaymentStatusNote}
-                  >
-                    <SelectTrigger id="payment-method">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="venmo">Venmo</SelectItem>
-                      <SelectItem value="cashapp">Cash App</SelectItem>
-                      <SelectItem value="cash">Cash / Check</SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {paymentStatus === "waived" && (
-                <div className="space-y-2">
-                  <Label htmlFor="waived-reason">Reason (optional)</Label>
-                  <Input
-                    id="waived-reason"
-                    placeholder="e.g. scholarship, coach's family"
-                    value={paymentStatusNote}
-                    onChange={(e) => setPaymentStatusNote(e.target.value)}
-                  />
-                </div>
-              )}
+              <PaymentOverrideFields
+                status={paymentStatus}
+                onStatusChange={setPaymentStatus}
+                note={paymentStatusNote}
+                onNoteChange={setPaymentStatusNote}
+                idPrefix="roster-payment"
+              />
 
               <Button
                 type="button"

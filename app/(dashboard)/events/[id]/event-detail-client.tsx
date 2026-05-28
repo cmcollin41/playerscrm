@@ -64,7 +64,8 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { postInvoice } from "@/lib/post-invoice"
-import { isPaid as isEntityPaid, getPaymentEvidenceUrl } from "@/lib/payments/status"
+import { isPaid as isEntityPaid } from "@/lib/payments/status"
+import { InvoiceReceiptButton } from "@/components/payments/invoice-receipt-button"
 import { EventRegistrationPaymentModal } from "@/components/modal/event-registration-payment-modal"
 
 interface Registration {
@@ -232,19 +233,7 @@ function renderPayment(reg: Registration, feeAmount: number) {
 }
 
 function renderInvoiceLink(reg: Registration) {
-  const evidence = getPaymentEvidenceUrl(reg)
-  if (!evidence) return <span className="text-xs text-gray-400">—</span>
-
-  const Icon = evidence.kind === "receipt" ? Receipt : FileText
-  const label = evidence.kind === "receipt" ? "Receipt" : "Invoice"
-
-  return (
-    <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-      <a href={evidence.url} target="_blank" rel="noopener noreferrer">
-        <Icon className="mr-1 h-3 w-3" /> {label}
-      </a>
-    </Button>
-  )
+  return <InvoiceReceiptButton entity={reg} />
 }
 
 export function EventDetailClient({ event, registrations }: EventDetailClientProps) {
