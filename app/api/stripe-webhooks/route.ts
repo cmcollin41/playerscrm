@@ -287,7 +287,11 @@ const updateSupabase = async (event: any, supabase: any) => {
               : stripeInvoice.payment_intent?.id || null,
           });
 
-        if (paymentError) {
+        // 23505 = unique_violation. Stripe sometimes re-delivers
+        // invoice.payment_succeeded within milliseconds; the partial unique
+        // index payments_invoice_succeeded_uniq absorbs the race even when
+        // both deliveries pass the check above.
+        if (paymentError && paymentError.code !== "23505") {
           console.log("Error creating payment record:", paymentError);
           throw new Error(`payment row write failed: ${paymentError.message}`);
         }
