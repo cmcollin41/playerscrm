@@ -506,40 +506,6 @@ const updateSupabase = async (event: any, supabase: any) => {
     }
   }
 
-  // Handle metadata updates (existing code)
-  const metadata = event.data.object.metadata;
-  if (metadata && metadata.rsvp && event.data.object.status === "succeeded") {
-    console.log("Updating rsvp for single entry", JSON.stringify(metadata));
-    const { error: rsvpError } = await supabase
-      .from("rsvp")
-      .update({
-        status: "paid",
-      })
-      .eq("id", metadata.rsvp);
-
-    if (rsvpError) console.log(rsvpError, "----- RSVP webhook update error");
-
-    console.log("Multi RSVP Updated successfully", JSON.stringify(metadata));
-  } else if (
-    metadata &&
-    metadata.rsvp_ids &&
-    event.data.object.status === "succeeded"
-  ) {
-    console.log("Updating rsvp for multiple entry", JSON.stringify(metadata));
-    const rsvpIds = metadata.rsvp_ids.split(",");
-    const { error: rsvpError } = await supabase
-      .from("rsvp")
-      .update({
-        status: "paid",
-      })
-      .in("id", rsvpIds)
-      .single();
-
-    if (rsvpError)
-      console.log(rsvpError, "----- Multiple RSVP webhook update error");
-
-    console.log("Multi RSVP Updated successfully", JSON.stringify(metadata));
-  }
 };
 
 // =============================================================================
