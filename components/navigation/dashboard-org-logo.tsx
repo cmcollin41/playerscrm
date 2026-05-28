@@ -29,25 +29,3 @@ export function DashboardHeaderLogo({ orgLogoUrl, orgName }: DashboardHeaderLogo
   )
 }
 
-interface DashboardFooterOrgLogoProps {
-  orgLogoUrl?: string
-}
-
-export function DashboardFooterOrgLogo({ orgLogoUrl }: DashboardFooterOrgLogoProps) {
-  const [hidden, setHidden] = useState(false)
-  const onError = useCallback(() => setHidden(true), [])
-
-  if (!orgLogoUrl || hidden) return null
-
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={orgLogoUrl}
-      width={44}
-      height={44}
-      alt=""
-      className="object-contain opacity-90"
-      onError={onError}
-    />
-  )
-}

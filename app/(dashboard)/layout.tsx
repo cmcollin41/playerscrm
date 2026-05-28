@@ -7,7 +7,8 @@ import { AccountSwitcher } from "@/components/navigation/account-switcher";
 import Link from "next/link";
 import type { UserRole } from "@/types/schema.types";
 import { getOrganizationLogoPublicUrl } from "@/lib/storage/organization-logo";
-import { DashboardFooterOrgLogo, DashboardHeaderLogo } from "@/components/navigation/dashboard-org-logo";
+import { DashboardHeaderLogo } from "@/components/navigation/dashboard-org-logo";
+import { AppFooter } from "@/components/navigation/app-footer";
 import { DashboardAccessDenied } from "./access-denied";
 import { accountHasActiveSubscription } from "@/lib/billing";
 
@@ -49,6 +50,7 @@ export default async function DashboardLayout({
   let userPhoto: string | undefined
   let currentAccountId: string | undefined
   let currentAccountName: string | undefined
+  let currentAccountLogo: string | undefined
   let orgName: string | undefined
   let orgLogoUrl: string | undefined
 
@@ -74,7 +76,7 @@ export default async function DashboardLayout({
     if (currentAccountId) {
       const { data: account } = await supabase
         .from("accounts")
-        .select("name, organization_id, subscription_status")
+        .select("name, organization_id, subscription_status, logo")
         .eq("id", currentAccountId)
         .single()
 
@@ -86,6 +88,7 @@ export default async function DashboardLayout({
       }
 
       currentAccountName = account?.name || undefined
+      currentAccountLogo = account?.logo || undefined
 
       if (account?.organization_id) {
         const { data: org } = await supabase
@@ -131,12 +134,16 @@ export default async function DashboardLayout({
       <div className="mx-auto my-10 min-h-screen w-full max-w-screen-2xl px-4">
         {children}
       </div>
-      <div className="flex flex-col items-center space-y-4 bg-black py-8 text-white">
-        <DashboardFooterOrgLogo orgLogoUrl={orgLogoUrl} />
-        <p className="font-cal text-center text-sm font-mono">
-          © {new Date().getFullYear()} Athletes App
-        </p>
-      </div>
+      <AppFooter
+        accountLogoUrl={currentAccountLogo}
+        accountName={currentAccountName}
+        links={[
+          { href: "/", label: "Dashboard" },
+          { href: "/events", label: "Events" },
+          { href: "/teams", label: "Teams" },
+          { href: "/invoices", label: "Invoices" },
+        ]}
+      />
     </>
   );
 }
