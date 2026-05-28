@@ -64,6 +64,7 @@ import {
 } from "lucide-react"
 import { toast } from "sonner"
 import { postInvoice } from "@/lib/post-invoice"
+import { isPaid as isEntityPaid, getPaymentEvidenceUrl } from "@/lib/payments/status"
 import { EventRegistrationPaymentModal } from "@/components/modal/event-registration-payment-modal"
 
 interface Registration {
@@ -231,45 +232,19 @@ function renderPayment(reg: Registration, feeAmount: number) {
 }
 
 function renderInvoiceLink(reg: Registration) {
-  const invoice = reg.invoice
-  const invoiceUrl = invoice?.metadata?.hosted_invoice_url || null
-  const invoicePaid = invoice?.status === "paid" || invoice?.status === "succeeded"
-  const receiptUrl = reg.payments?.data?.receipt_url || null
-  const stripePaid = reg.payments?.status === "succeeded"
+  const evidence = getPaymentEvidenceUrl(reg)
+  if (!evidence) return <span className="text-xs text-gray-400">—</span>
 
-  // Paid via invoice → "Receipt" to the Stripe-hosted invoice (has line items).
-  if (invoicePaid && invoiceUrl)
-    return (
-      <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-        <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">
-          <Receipt className="mr-1 h-3 w-3" /> Receipt
-        </a>
-      </Button>
-    )
+  const Icon = evidence.kind === "receipt" ? Receipt : FileText
+  const label = evidence.kind === "receipt" ? "Receipt" : "Invoice"
 
-  // Paid via Checkout (with or without a stale unpaid invoice on file) →
-  // "Receipt" to the Stripe charge receipt. Must beat the unpaid-invoice case
-  // below, otherwise a leftover "sent" invoice hides a real payment.
-  if (stripePaid && receiptUrl)
-    return (
-      <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-        <a href={receiptUrl} target="_blank" rel="noopener noreferrer">
-          <Receipt className="mr-1 h-3 w-3" /> Receipt
-        </a>
-      </Button>
-    )
-
-  // Outstanding invoice and no recorded successful payment.
-  if (invoice && invoiceUrl)
-    return (
-      <Button asChild variant="outline" size="sm" className="h-7 text-xs">
-        <a href={invoiceUrl} target="_blank" rel="noopener noreferrer">
-          <FileText className="mr-1 h-3 w-3" /> Invoice
-        </a>
-      </Button>
-    )
-
-  return <span className="text-xs text-gray-400">—</span>
+  return (
+    <Button asChild variant="outline" size="sm" className="h-7 text-xs">
+      <a href={evidence.url} target="_blank" rel="noopener noreferrer">
+        <Icon className="mr-1 h-3 w-3" /> {label}
+      </a>
+    </Button>
+  )
 }
 
 export function EventDetailClient({ event, registrations }: EventDetailClientProps) {
@@ -287,11 +262,8 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
   const stripeAccountId: string | null = event.accounts?.stripe_id ?? null
   const accountId: string = event.account_id
 
-  const isPaid = (reg: Registration) =>
-    reg.payment_status === "paid" || reg.payments?.status === "succeeded"
-
   const eligibleForInvoice = (reg: Registration) =>
-    reg.status === "pending" && !isPaid(reg) && reg.payment_status !== "waived"
+    reg.status === "pending" && !isEntityPaid(reg) && reg.payment_status !== "waived"
 
   const pendingForBulk = registrations.filter((r) => {
     if (!eligibleForInvoice(r)) return false

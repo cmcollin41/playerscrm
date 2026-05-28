@@ -6,6 +6,7 @@ import {
   sumPaidInvoiceAmounts,
   sumPaymentAmounts,
 } from "./invoice-aggregates"
+import { isPaid, isWaived } from "./payments/status"
 
 /**
  * The roster's fee: custom override or catalog amount.
@@ -121,8 +122,7 @@ export function rosterPaidViaFeePayment(roster: any): boolean {
  * total collected (fee payments + paid invoices) covers the fee amount.
  */
 export function rosterIsPaid(roster: any): boolean {
-  if (roster?.payment_status === "paid" || roster?.payment_status === "waived")
-    return true
+  if (isPaid(roster) || isWaived(roster)) return true
   const fee = rosterTemplateDollars(roster)
   if (fee == null || fee <= 0) return false
   return (
@@ -183,8 +183,7 @@ export function amountsDifferCents(a: number, b: number) {
 export function hasPaidFee(person: any, roster: any): boolean {
   if (!person?.id || !roster) return false
   if (roster.person_id !== person.id) return false
-  if (roster.payment_status === "paid" || roster.payment_status === "waived")
-    return true
+  if (isPaid(roster) || isWaived(roster)) return true
   const fee = rosterTemplateDollars(roster)
   if (fee == null || fee <= 0) return true
   return rosterIsPaid(roster)

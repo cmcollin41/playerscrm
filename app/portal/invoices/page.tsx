@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { requirePortalContext } from "@/lib/portal-auth"
+import { isInvoicePaid } from "@/lib/payments/status"
 
 export const dynamic = "force-dynamic"
 
@@ -74,7 +75,7 @@ function InvoiceRowView({ row }: { row: InvoiceRow }) {
     typeof row.metadata?.hosted_invoice_url === "string"
       ? (row.metadata.hosted_invoice_url as string)
       : null
-  const isPaid = row.status === "paid"
+  const isPaid = isInvoicePaid({ status: row.status })
   const personName = [row.people?.first_name, row.people?.last_name]
     .filter(Boolean)
     .join(" ")

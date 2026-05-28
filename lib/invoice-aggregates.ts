@@ -2,6 +2,7 @@
  * DRY invoice $ math for dashboards, roster logic, and list UIs.
  * Status values match DB: draft | sent | paid | void | overdue
  */
+import { isInvoicePaid } from "./payments/status"
 
 export interface InvoiceLike {
   status?: string | null;
@@ -35,7 +36,7 @@ export function sumAllInvoiceAmounts(
 export function sumPaidInvoiceAmounts(
   invoices: readonly InvoiceLike[] | null | undefined,
 ): number {
-  return sumInvoiceAmounts(invoices, (inv) => inv.status === "paid");
+  return sumInvoiceAmounts(invoices, (inv) => isInvoicePaid(inv));
 }
 
 export function sumSentInvoiceAmounts(
@@ -49,7 +50,7 @@ export function filterInvoicesSentOrPaid(
 ): InvoiceLike[] {
   if (!invoices?.length) return [];
   return invoices.filter(
-    (inv) => inv.status === "sent" || inv.status === "paid",
+    (inv) => inv.status === "sent" || isInvoicePaid(inv),
   );
 }
 
