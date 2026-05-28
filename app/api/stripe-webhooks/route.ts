@@ -251,6 +251,18 @@ const updateSupabase = async (event: any, supabase: any) => {
 
     console.log(`Invoice ${invoiceId} updated to status: ${mappedStatus}`);
 
+    // If payment was successful, mark any linked event registration as paid.
+    if (mappedStatus === 'paid') {
+      const linkedRegId = existingMetadata?.event_registration_id
+      if (linkedRegId) {
+        await supabase
+          .from("event_registrations")
+          .update({ payment_status: "paid" })
+          .eq("id", linkedRegId)
+          .is("payment_status", null)
+      }
+    }
+
     // If payment was successful, create a payment record (avoid duplicates)
     if (status === 'succeeded') {
       const { data: existingPayment } = await supabase
@@ -382,7 +394,16 @@ const updateSupabase = async (event: any, supabase: any) => {
           }
         }
 
-        // Idempotency guard: only flip + email if at least one reg is still pending
+        // Always backfill payment_status — replays should heal rows whose
+        // status was confirmed but never got payment_status set.
+        await supabase
+          .from("event_registrations")
+          .update({ payment_status: "paid" })
+          .in("id", registrationIds)
+          .is("payment_status", null);
+
+        // Idempotency guard: only flip status + email if at least one reg is
+        // still pending — avoids re-sending confirmation emails on replay.
         const { data: existingRegs } = await supabase
           .from("event_registrations")
           .select("id, status")
