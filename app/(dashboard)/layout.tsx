@@ -137,6 +137,7 @@ export default async function DashboardLayout({
       <AppFooter
         accountLogoUrl={currentAccountLogo}
         accountName={currentAccountName}
+        maxWidthClass="max-w-screen-2xl"
         links={[
           { href: "/", label: "Dashboard" },
           { href: "/events", label: "Events" },

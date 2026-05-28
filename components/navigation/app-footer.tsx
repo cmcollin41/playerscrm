@@ -10,12 +10,18 @@ interface AppFooterProps {
   accountLogoUrl?: string | null
   accountName?: string | null
   links: FooterLink[]
+  maxWidthClass?: string
 }
 
-export function AppFooter({ accountLogoUrl, accountName, links }: AppFooterProps) {
+export function AppFooter({
+  accountLogoUrl,
+  accountName,
+  links,
+  maxWidthClass = "max-w-5xl",
+}: AppFooterProps) {
   return (
     <footer className="border-t border-gray-200 bg-white">
-      <div className="mx-auto flex max-w-5xl flex-col items-center gap-6 px-4 py-8 sm:flex-row sm:items-start sm:justify-between">
+      <div className={`mx-auto flex ${maxWidthClass} flex-col items-center gap-6 px-4 py-8 sm:flex-row sm:items-start sm:justify-between`}>
         <div className="flex items-center gap-3">
           <Image
             src="/athletes-logo.png"
