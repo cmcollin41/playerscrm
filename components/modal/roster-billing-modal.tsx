@@ -30,7 +30,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { DocumentIcon, ChevronDownIcon } from "@heroicons/react/24/outline"
-import { postRosterInvoice } from "@/lib/post-roster-invoice"
+import { postInvoice } from "@/lib/post-invoice"
 import { rosterTemplateDollars } from "@/lib/roster-pricing"
 
 type BillingTab = "fee" | "invoice" | "status"
@@ -286,12 +286,13 @@ export function RosterBillingModal({
     }
     setSendingInvoice(true)
     try {
-      await postRosterInvoice({
+      await postInvoice({
+        kind: "roster_fee",
         rosterId,
         athleteName: personName,
         teamName,
         amount: rawAmt,
-        guardianEmail,
+        recipientEmail: guardianEmail,
         payerPersonId: person.primary_contacts?.[0]?.id,
         description: invoiceMemo.trim() || undefined,
         accountId: team.account_id,

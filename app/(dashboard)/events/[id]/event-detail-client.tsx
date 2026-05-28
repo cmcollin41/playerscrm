@@ -63,7 +63,7 @@ import {
   UserMinus,
 } from "lucide-react"
 import { toast } from "sonner"
-import { postEventInvoice } from "@/lib/post-event-invoice"
+import { postInvoice } from "@/lib/post-invoice"
 import { EventRegistrationPaymentModal } from "@/components/modal/event-registration-payment-modal"
 
 interface Registration {
@@ -627,7 +627,8 @@ function SendEventInvoiceModal({
     // registrant pays for themselves.
     const payerPersonId = reg.guardian_person_id || reg.people.id
 
-    return await postEventInvoice({
+    return await postInvoice({
+      kind: "event_registration",
       eventRegistrationId: reg.id,
       eventId: event.id,
       eventName: event.name,

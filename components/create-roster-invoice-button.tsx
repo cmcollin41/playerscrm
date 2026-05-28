@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { useRouter } from 'next/navigation';
 import { DocumentIcon } from "@heroicons/react/24/outline";
 import { cn } from "@/lib/utils";
-import { postRosterInvoice } from "@/lib/post-roster-invoice";
+import { postInvoice } from "@/lib/post-invoice";
 
 interface CreateRosterInvoiceButtonProps {
   rosterId: string;
@@ -37,12 +37,13 @@ export function CreateRosterInvoiceButton({
   const handleCreateInvoice = async () => {
     try {
       setLoading(true);
-      await postRosterInvoice({
+      await postInvoice({
+        kind: "roster_fee",
         rosterId,
         athleteName,
         teamName,
         amount,
-        guardianEmail,
+        recipientEmail: guardianEmail,
         accountId,
         stripeAccountId,
         person_id,
