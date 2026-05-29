@@ -287,6 +287,37 @@ function fallbackOptionsFromTitle(
   return out
 }
 
+/**
+ * Mutate the variants list to swap Size/Color labels when Printify reports
+ * them inverted at the source. Triggered only when *every* "Size" value
+ * fails the size-token heuristic AND *every* "Color" value matches it — a
+ * narrow signal that avoids accidental swaps on products with one oddball
+ * value (e.g. a "One Size" item with a numeric color name).
+ */
+function swapMisnamedSizeColorAxes(
+  variants: { options: Record<string, string> }[],
+): void {
+  const sizeValues = new Set<string>()
+  const colorValues = new Set<string>()
+  for (const v of variants) {
+    if (typeof v.options.Size === "string") sizeValues.add(v.options.Size)
+    if (typeof v.options.Color === "string") colorValues.add(v.options.Color)
+  }
+  if (sizeValues.size === 0 || colorValues.size === 0) return
+
+  const sizeAxisLooksLikeColors = !Array.from(sizeValues).some(isSizeToken)
+  const colorAxisLooksLikeSizes = Array.from(colorValues).every(isSizeToken)
+  if (!sizeAxisLooksLikeColors || !colorAxisLooksLikeSizes) return
+
+  for (const v of variants) {
+    const size = v.options.Size
+    const color = v.options.Color
+    if (size === undefined || color === undefined) continue
+    v.options.Size = color
+    v.options.Color = size
+  }
+}
+
 function normalizeOptionName(raw: string): string {
   const lower = raw.toLowerCase()
   if (lower === "colors" || lower === "color") return "Color"
@@ -340,6 +371,13 @@ async function syncProduct(
       isActive: v.is_available !== false,
     }
   })
+
+  // Defensive axis correction: some Printify blueprints (or merchant-edited
+  // products) come back with Size/Color labels reversed — the "Size" axis
+  // holds color names and "Color" holds size tokens. Inspect aggregate
+  // values and swap on every variant when we're confident the labels are
+  // inverted.
+  swapMisnamedSizeColorAxes(variants)
 
   const product: PartnerSyncProduct = {
     externalId: String(detail.id),
