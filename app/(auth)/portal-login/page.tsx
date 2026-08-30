@@ -36,10 +36,11 @@ export default function PortalLoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-12">
       <Link href="/" className="flex items-center gap-2">
         <Image
-          src="/athletes-logo.png"
+          src="/vh.svg"
           width={48}
           height={48}
           alt="Varsity Habits"
+          unoptimized
         />
         <span className="font-display text-xl text-gray-900">Varsity Habits</span>
       </Link>

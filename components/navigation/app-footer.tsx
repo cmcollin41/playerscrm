@@ -24,10 +24,11 @@ export function AppFooter({
       <div className={`mx-auto flex ${maxWidthClass} flex-col items-center gap-6 px-4 py-8 sm:flex-row sm:items-start sm:justify-between`}>
         <div className="flex items-center gap-3">
           <Image
-            src="/athletes-logo.png"
+            src="/vh.svg"
             width={32}
             height={32}
             alt="Varsity Habits"
+            unoptimized
           />
           {accountLogoUrl ? (
             <>

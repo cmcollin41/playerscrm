@@ -32,8 +32,8 @@ export const metadata: Metadata = {
     "roster management",
   ],
   icons: {
-    icon: "/athletes-logo.png",
-    apple: "/athletes-logo.png",
+    icon: "/vh.svg",
+    apple: "/apple-icon.png",
   },
   openGraph: {
     type: "website",
