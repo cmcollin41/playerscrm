@@ -85,7 +85,7 @@ export const StripeElements = ({ modal, fee, person }) => {
       elements,
       redirect: "if_required",
       confirmParams: {
-        return_url: "https://app.athletes.app",
+        return_url: "https://app.varsityhabits.com",
       },
     });
 

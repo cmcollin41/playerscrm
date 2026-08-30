@@ -9,18 +9,18 @@ import { ModalProvider } from "@/components/modal/provider";
 import { inter, cal } from "@/styles/fonts";
 
 const defaultTitle =
-  "Athletes App — the operating system for your sports program";
+  "Varsity Habits — the operating system for your sports program";
 const description =
   "The all-in-one platform for sports programs: rosters, events, payments, public profiles, and parent communications. Built for clubs and schools.";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://athletes.app"),
+  metadataBase: new URL("https://varsityhabits.com"),
   title: {
     default: defaultTitle,
-    template: "%s · Athletes App",
+    template: "%s · Varsity Habits",
   },
   description,
-  applicationName: "Athletes App",
+  applicationName: "Varsity Habits",
   keywords: [
     "sports CRM",
     "team management",
@@ -38,8 +38,8 @@ export const metadata: Metadata = {
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://athletes.app",
-    siteName: "Athletes App",
+    url: "https://varsityhabits.com",
+    siteName: "Varsity Habits",
     title: defaultTitle,
     description,
   },

@@ -1,4 +1,4 @@
-const PLATFORM_DOMAIN = "e.athletes.app"
+const PLATFORM_DOMAIN = "e.varsityhabits.com"
 const PLATFORM_INVOICE_LOCALPART = "invoices"
 const PLATFORM_DEFAULT_LOCALPART = "noreply"
 
@@ -36,7 +36,7 @@ export function resolveSender(
   account: AccountForSender | null | undefined,
   purpose: SenderPurpose = "default",
 ): string {
-  const accountName = account?.name?.trim() || "Athletes"
+  const accountName = account?.name?.trim() || "Varsity Habits"
   const senders = (account?.senders || []).filter(
     (s): s is SenderRow & { email: string } => !!s.email,
   )

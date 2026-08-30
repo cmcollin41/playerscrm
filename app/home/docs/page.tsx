@@ -2,7 +2,7 @@ import Link from "next/link"
 import { ArrowRight, ExternalLink } from "lucide-react"
 
 export const metadata = {
-  title: "API Documentation · Athletes App",
+  title: "API Documentation · Varsity Habits",
   description:
     "Public REST API for embedding rosters, teams, and event registration on third-party websites.",
 }
@@ -16,7 +16,7 @@ export default function DocsPage() {
             Developer documentation
           </span>
           <h1 className="mt-4 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-            Athletes App Public API
+            Varsity Habits Public API
           </h1>
           <p className="mt-4 max-w-2xl text-lg text-gray-600">
             A read-only JSON API for embedding your roster, teams, and event
@@ -68,7 +68,7 @@ export default function DocsPage() {
         <Section id="getting-started" title="Getting started">
           <p>
             All endpoints live under{" "}
-            <Code>https://athletes.app/api/public/*</Code> and return JSON.
+            <Code>https://varsityhabits.com/api/public/*</Code> and return JSON.
             They&apos;re designed for read-only embedding — list your events on
             a school site, render a roster on a club page, link straight to a
             hosted registration checkout — without ever needing to authenticate
@@ -88,7 +88,7 @@ export default function DocsPage() {
             as a tenant identifier, not a secret.
           </p>
           <h3 className="mt-6 text-lg font-semibold text-gray-900">Base URL</h3>
-          <CodeBlock>https://athletes.app/api/public</CodeBlock>
+          <CodeBlock>https://varsityhabits.com/api/public</CodeBlock>
         </Section>
 
         <Section id="authentication" title="Authentication">
@@ -311,7 +311,7 @@ export default function DocsPage() {
       "fee_amount": 15000,
       "fee_description": "Per camper",
       "registration_open": true,
-      "register_url": "https://yourname.athletes.app/register/summer-camp-2026",
+      "register_url": "https://yourname.varsityhabits.com/register/summer-camp-2026",
       "sessions": [
         {
           "id": "uuid",
@@ -444,7 +444,7 @@ export default function DocsPage() {
             <li>
               <Code>register_url</Code> resolves to the account&apos;s custom
               domain when one is configured, falling back to{" "}
-              <Code>{"{subdomain}.athletes.app"}</Code>. Always link to it
+              <Code>{"{subdomain}.varsityhabits.com"}</Code>. Always link to it
               as-is — don&apos;t reconstruct the URL yourself.
             </li>
             <li>
@@ -462,13 +462,13 @@ export default function DocsPage() {
 
           <h3 className="mt-6 text-lg font-semibold text-gray-900">Examples</h3>
           <CodeBlock>{`# All upcoming events for an account
-curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID'
+curl 'https://varsityhabits.com/api/public/events?account_id=YOUR_ACCOUNT_ID'
 
 # A specific team's full schedule (practices + games)
-curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID&team_slug=boys-varsity&event_type=practice,game'
+curl 'https://varsityhabits.com/api/public/events?account_id=YOUR_ACCOUNT_ID&team_slug=boys-varsity&event_type=practice,game'
 
 # Just upcoming games in a date window
-curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID&event_type=game&starts_after=2026-09-01&starts_before=2026-12-01'`}</CodeBlock>
+curl 'https://varsityhabits.com/api/public/events?account_id=YOUR_ACCOUNT_ID&event_type=game&starts_after=2026-09-01&starts_before=2026-12-01'`}</CodeBlock>
         </EndpointSection>
 
         <EndpointSection
@@ -582,7 +582,7 @@ curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID&event_ty
           </FieldNotes>
 
           <h3 className="mt-6 text-lg font-semibold text-gray-900">Example</h3>
-          <CodeBlock>{`curl 'https://athletes.app/api/public/players?account_id=YOUR_ACCOUNT_ID&award=all-conference'`}</CodeBlock>
+          <CodeBlock>{`curl 'https://varsityhabits.com/api/public/players?account_id=YOUR_ACCOUNT_ID&award=all-conference'`}</CodeBlock>
         </EndpointSection>
 
         <EndpointSection
@@ -673,7 +673,7 @@ curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID&event_ty
           </FieldNotes>
 
           <h3 className="mt-6 text-lg font-semibold text-gray-900">Example</h3>
-          <CodeBlock>{`curl 'https://athletes.app/api/public/teams?account_id=YOUR_ACCOUNT_ID'`}</CodeBlock>
+          <CodeBlock>{`curl 'https://varsityhabits.com/api/public/teams?account_id=YOUR_ACCOUNT_ID'`}</CodeBlock>
         </EndpointSection>
 
         <Section id="examples" title="Code examples">
@@ -683,7 +683,7 @@ curl 'https://athletes.app/api/public/events?account_id=YOUR_ACCOUNT_ID&event_ty
           <CodeBlock>{`const ACCOUNT_ID = "00000000-0000-0000-0000-000000000000"
 
 const res = await fetch(
-  \`https://athletes.app/api/public/events?account_id=\${ACCOUNT_ID}\`
+  \`https://varsityhabits.com/api/public/events?account_id=\${ACCOUNT_ID}\`
 )
 const { events } = await res.json()
 
@@ -702,7 +702,7 @@ export function UpcomingEvents() {
   const [events, setEvents] = useState([])
 
   useEffect(() => {
-    fetch(\`https://athletes.app/api/public/events?account_id=\${ACCOUNT_ID}\`)
+    fetch(\`https://varsityhabits.com/api/public/events?account_id=\${ACCOUNT_ID}\`)
       .then((r) => r.json())
       .then((data) => setEvents(data.events))
   }, [])
@@ -724,10 +724,10 @@ export function UpcomingEvents() {
           <h3 className="mt-6 text-lg font-semibold text-gray-900">
             Server-side (Node)
           </h3>
-          <CodeBlock>{`const ACCOUNT_ID = process.env.ATHLETES_APP_ACCOUNT_ID
+          <CodeBlock>{`const ACCOUNT_ID = process.env.VARSITY_HABITS_ACCOUNT_ID
 
 const res = await fetch(
-  \`https://athletes.app/api/public/players?account_id=\${ACCOUNT_ID}\`,
+  \`https://varsityhabits.com/api/public/players?account_id=\${ACCOUNT_ID}\`,
   { next: { revalidate: 60 } } // Next.js ISR
 )
 const { players } = await res.json()`}</CodeBlock>
@@ -739,7 +739,7 @@ const { players } = await res.json()`}</CodeBlock>
             For the simplest case — linking to a single event from a static
             site — skip the API entirely. Use the registration URL directly:
           </p>
-          <CodeBlock>{`<a href="https://yourname.athletes.app/register/summer-camp-2026">
+          <CodeBlock>{`<a href="https://yourname.varsityhabits.com/register/summer-camp-2026">
   Register for Summer Camp →
 </a>`}</CodeBlock>
           <p>

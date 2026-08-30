@@ -130,9 +130,9 @@ function LoginContent() {
           src="/athletes-logo.png"
           width={48}
           height={48}
-          alt="Athletes App"
+          alt="Varsity Habits"
         />
-        <span className="font-display text-xl text-gray-900">Athletes App</span>
+        <span className="font-display text-xl text-gray-900">Varsity Habits</span>
       </Link>
 
       <div className="mt-8 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-xl ring-1 ring-black/5">
@@ -156,7 +156,7 @@ function LoginContent() {
               {signUp ? "Get started" : "Welcome back"}
             </p>
             <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight text-gray-900">
-              {signUp ? "Create your account." : "Sign in to Athletes App."}
+              {signUp ? "Create your account." : "Sign in to Varsity Habits."}
             </h1>
           </>
         )}

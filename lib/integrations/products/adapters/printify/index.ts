@@ -28,7 +28,7 @@ import type {
 } from "../../types"
 
 const PRINTIFY_BASE = "https://api.printify.com/v1"
-const UA = "athletes.app/store-model-b"
+const UA = "varsityhabits.com/store-model-b"
 
 interface PrintifyShop {
   id: number
@@ -206,7 +206,7 @@ async function listSyncProducts(
  *
  * Printify's variant.options is an array of option *value* IDs; the human
  * labels live in product.options[].values[]. We resolve here so the rest of
- * Athletes.app sees a tidy {"Size":"M","Color":"Red"} shape.
+ * Varsity Habits sees a tidy {"Size":"M","Color":"Red"} shape.
  */
 function resolveVariantOptions(
   product: PrintifyProductDetail,
@@ -614,7 +614,7 @@ async function createOrder(
 
   const body = {
     external_id: input.externalOrderRef,
-    label: `athletes.app · ${input.externalOrderRef}`,
+    label: `varsityhabits.com · ${input.externalOrderRef}`,
     line_items: input.lines.map((l) => ({
       product_id: l.externalProductId,
       variant_id: Number(l.externalVariantId),

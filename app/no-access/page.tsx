@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { DashboardAccessDenied } from "../(dashboard)/access-denied"
 
 export const metadata = {
-  title: "No access · Athletes App",
+  title: "No access · Varsity Habits",
 }
 
 export default async function NoAccessPage() {

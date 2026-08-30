@@ -14,12 +14,12 @@ import { resolvePersonInviteRecipientEmail } from "@/lib/person-invite-email"
 
 const appOrigin =
   process.env.NODE_ENV === "production"
-    ? "https://app.athletes.app"
+    ? "https://app.varsityhabits.com"
     : "http://app.localhost:3000"
 
 const signInOrigin =
   process.env.NODE_ENV === "production"
-    ? "https://app.athletes.app"
+    ? "https://app.varsityhabits.com"
     : "http://app.localhost:3000"
 
 export async function POST(req: Request) {
@@ -140,7 +140,7 @@ export async function POST(req: Request) {
 
     const sign_in = `${signInOrigin}/login`
 
-    const message = `You've been invited to join ${account.name} on Athletes App. If you already have an account, sign in at ${sign_in}. If not, use the link below to create one and connect your profile. ${signupUrl.toString()}`
+    const message = `You've been invited to join ${account.name} on Varsity Habits. If you already have an account, sign in at ${sign_in}. If not, use the link below to create one and connect your profile. ${signupUrl.toString()}`
 
     const emailHtml = await render(
       BasicTemplate({

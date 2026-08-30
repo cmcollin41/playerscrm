@@ -10,7 +10,7 @@ function authCookieDomain(requestHost: string | null): string | undefined {
   const reqHost = requestHost.split(":")[0]
   // Span across subdomains only when the request is actually under the root
   // domain. Custom domains (e.g. app.provobasketball.com) get host-only
-  // cookies — the browser drops a `Domain=.athletes.app` cookie when the
+  // cookies — the browser drops a `Domain=.varsityhabits.com` cookie when the
   // request came in on a different domain, killing the session.
   if (reqHost === rootHost || reqHost.endsWith(`.${rootHost}`)) {
     return `.${rootHost}`

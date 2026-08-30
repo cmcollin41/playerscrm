@@ -11,7 +11,7 @@ function authCookieDomain(requestHost: string | null): string | undefined {
   const reqHost = requestHost.split(":")[0]
   // Span across subdomains only when the request is actually under the root
   // domain. Custom domains (e.g. app.provobasketball.com) get host-only
-  // cookies — the browser drops a `Domain=.athletes.app` cookie when the
+  // cookies — the browser drops a `Domain=.varsityhabits.com` cookie when the
   // request came in on a different domain, killing the session.
   if (reqHost === rootHost || reqHost.endsWith(`.${rootHost}`)) {
     return `.${rootHost}`
@@ -88,12 +88,12 @@ export async function proxy(request: NextRequest) {
   const hostname = requestHost || ""
   const path = url.pathname
 
-  // Determine root domain (e.g. "athletes.app" or "localhost:3000")
+  // Determine root domain (e.g. "varsityhabits.com" or "localhost:3000")
   const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "localhost:3000"
 
   // Extract subdomain or detect custom domain
-  // hostname: "provobasketball.athletes.app" → subdomain: "provobasketball"
-  // hostname: "athletes.app" → subdomain: null
+  // hostname: "provobasketball.varsityhabits.com" → subdomain: "provobasketball"
+  // hostname: "varsityhabits.com" → subdomain: null
   // hostname: "app.provobasketball.com" → customDomain: "app.provobasketball.com"
   let subdomain: string | null = null
   let customDomain: string | null = null

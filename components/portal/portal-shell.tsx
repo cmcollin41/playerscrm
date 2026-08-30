@@ -47,7 +47,7 @@ export function PortalShell({
               src="/athletes-logo.png"
               width={32}
               height={32}
-              alt="Athletes App"
+              alt="Varsity Habits"
             />
             <span className="text-sm font-semibold text-gray-900">
               My portal

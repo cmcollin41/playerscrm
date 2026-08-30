@@ -176,7 +176,7 @@ export async function POST(req: Request) {
     const customer = await stripe.customers.create({
       email,
       metadata: {
-        source: "athletes.app",
+        source: "varsityhabits.com",
         person_id: person.id,
       },
     })

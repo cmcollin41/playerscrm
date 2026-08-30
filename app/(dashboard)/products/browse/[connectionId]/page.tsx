@@ -107,7 +107,7 @@ export default async function BrowsePartnerCatalogPage({ params }: PageProps) {
         <p className="mt-1 text-sm text-muted-foreground">
           {catalog.length} product{catalog.length === 1 ? "" : "s"} on your{" "}
           {connection.partnerSlug} shop. Click publish to add one to your
-          Athletes.app storefront.
+          Varsity Habits storefront.
         </p>
       </div>
 

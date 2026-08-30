@@ -27,7 +27,7 @@ export function AppFooter({
             src="/athletes-logo.png"
             width={32}
             height={32}
-            alt="Athletes App"
+            alt="Varsity Habits"
           />
           {accountLogoUrl ? (
             <>
@@ -59,7 +59,7 @@ export function AppFooter({
         </nav>
       </div>
       <p className="border-t border-gray-100 py-4 text-center text-xs text-gray-400">
-        © {new Date().getFullYear()} Athletes App
+        © {new Date().getFullYear()} Varsity Habits
       </p>
     </footer>
   )

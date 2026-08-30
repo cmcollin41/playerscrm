@@ -13,7 +13,7 @@ export function Footer() {
           <div>
             <div className="flex items-center text-gray-900">
               <div className="ml-0">
-                <img src="/athletes-logo.png" className="w-16" alt="Athletes App" />
+                <img src="/athletes-logo.png" className="w-16" alt="Varsity Habits" />
               </div>
             </div>
             <nav className="mt-11 flex gap-8">

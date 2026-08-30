@@ -13,7 +13,7 @@ export function DashboardHeaderLogo({ orgLogoUrl, orgName }: DashboardHeaderLogo
   const onError = useCallback(() => setUseDefault(true), [])
 
   if (!orgLogoUrl || useDefault) {
-    return <Image src="/logo.svg" width={50} height={50} alt="Athletes App" />
+    return <Image src="/logo.svg" width={50} height={50} alt="Varsity Habits" />
   }
 
   return (

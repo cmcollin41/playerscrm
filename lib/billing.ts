@@ -5,7 +5,7 @@ import { stripe } from "@/lib/stripe"
  * Per-account platform billing. Each public.accounts row has its own
  * platform-side Stripe customer (different from accounts.stripe_id, which
  * is the Connect account a tenant uses to collect from parents) and its
- * own subscription to the $99/year Athletes App plan.
+ * own subscription to the $99/year Varsity Habits plan.
  */
 
 export type SubscriptionStatus =
@@ -85,7 +85,7 @@ function getBillingBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "")
   if (explicit) return explicit
   return process.env.NODE_ENV === "production"
-    ? "https://app.athletes.app"
+    ? "https://app.varsityhabits.com"
     : "http://app.localhost:3000"
 }
 
@@ -141,7 +141,7 @@ interface CheckoutSessionOptions {
 }
 
 /**
- * Create a Stripe Checkout session for the Athletes App subscription.
+ * Create a Stripe Checkout session for the Varsity Habits subscription.
  * Returns the redirect URL. Either customerId or customerEmail must be
  * provided.
  */

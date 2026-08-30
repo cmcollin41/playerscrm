@@ -31,9 +31,9 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           src="/athletes-logo.png"
           width={48}
           height={48}
-          alt="Athletes App"
+          alt="Varsity Habits"
         />
-        <span className="font-display text-xl text-gray-900">Athletes App</span>
+        <span className="font-display text-xl text-gray-900">Varsity Habits</span>
       </Link>
 
       <div className="mt-8 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-xl ring-1 ring-black/5">
@@ -41,7 +41,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           Get started
         </p>
         <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight text-gray-900">
-          Run your program with Athletes App.
+          Run your program with Varsity Habits.
         </h1>
         <p className="mt-2 text-sm text-gray-600">
           Create your account, then continue to checkout.
