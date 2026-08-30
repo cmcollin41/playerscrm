@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { StatTile } from "@/components/ui/sports-ui"
 import { Plus } from "lucide-react"
 import { EventTable, type EventRow } from "./table"
+import { CalendarRange } from "lucide-react"
 
 export default async function EventsPage() {
   const supabase = await createClient()
@@ -26,9 +27,7 @@ export default async function EventsPage() {
 
   const { data: rawEvents } = await supabase
     .from("events")
-    .select(
-      "*, event_registrations(id, status), teams(id, name, slug)",
-    )
+    .select("*, event_registrations(id, status), teams(id, name, slug)")
     .eq("account_id", account.id)
     .order("created_at", { ascending: false })
 
@@ -84,7 +83,9 @@ export default async function EventsPage() {
         <StatTile
           label="Camps"
           value={camps}
-          hint={`${totalEvents > 0 ? Math.round((camps / totalEvents) * 100) : 0}% of events`}
+          hint={`${
+            totalEvents > 0 ? Math.round((camps / totalEvents) * 100) : 0
+          }% of events`}
         />
         <StatTile
           label="Registrations"
@@ -93,17 +94,40 @@ export default async function EventsPage() {
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>All Events ({totalEvents})</CardTitle>
-          <CardDescription>
-            Complete list of events in your organization
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <EventTable data={events} />
-        </CardContent>
-      </Card>
+      {totalEvents === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-orange-50">
+              <CalendarRange className="h-6 w-6 text-orange-600" />
+            </div>
+            <h2 className="text-lg font-semibold text-gray-900">
+              Create your first event
+            </h2>
+            <p className="text-muted-foreground mt-1 max-w-md text-sm">
+              Camps, clinics, tournaments, or single sessions — no team or
+              roster setup required. Add waivers and Stripe payments in a few
+              clicks.
+            </p>
+            <Link href="/events/new" className="mt-5">
+              <Button>
+                <Plus className="mr-2 h-4 w-4" /> New Event
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>All Events ({totalEvents})</CardTitle>
+            <CardDescription>
+              Complete list of events in your organization
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <EventTable data={events} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

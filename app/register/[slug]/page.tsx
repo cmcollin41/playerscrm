@@ -12,7 +12,7 @@ const fetchEventForSlug = cache(async (slug: string) => {
   let query = supabase
     .from("events")
     .select(
-      "*, accounts!inner(id, name, stripe_id, application_fee, subdomain), event_sessions(id, title, description, location, starts_at, ends_at, ordering), event_products(id, product_id, is_required, price_cents, description_override, ordering, org_products(id, name, image_path, slug, org_product_variants(id, sku, options, price_cents, image_path, inventory_qty, is_active)))"
+      "*, accounts!inner(id, name, stripe_id, application_fee, subdomain), event_sessions(id, title, description, location, starts_at, ends_at, ordering), event_products(id, product_id, is_required, price_cents, description_override, ordering, org_products(id, name, image_path, slug, org_product_variants(id, sku, options, price_cents, image_path, inventory_qty, is_active))), event_waivers(waiver_id, is_required, requires_guardian, ordering, waivers(id, title, body))",
     )
     .eq("slug", slug)
     .eq("is_published", true)
@@ -50,11 +50,15 @@ export async function generateMetadata({
   } else {
     if (startsAt) descriptionParts.push(startsAt)
     if (event.location) descriptionParts.push(event.location)
-    descriptionParts.push(`Register${accountName ? ` with ${accountName}` : ""}.`)
+    descriptionParts.push(
+      `Register${accountName ? ` with ${accountName}` : ""}.`,
+    )
   }
   const description = descriptionParts.join(" • ").slice(0, 300)
 
-  const images = event.image_url ? [{ url: event.image_url, alt: event.name }] : undefined
+  const images = event.image_url
+    ? [{ url: event.image_url, alt: event.name }]
+    : undefined
 
   return {
     title: event.name,
@@ -87,8 +91,12 @@ export default async function RegisterPage({
 
   // Check registration window
   const now = new Date()
-  const regOpen = event.registration_opens_at ? new Date(event.registration_opens_at) <= now : true
-  const regClosed = event.registration_closes_at ? new Date(event.registration_closes_at) < now : false
+  const regOpen = event.registration_opens_at
+    ? new Date(event.registration_opens_at) <= now
+    : true
+  const regClosed = event.registration_closes_at
+    ? new Date(event.registration_closes_at) < now
+    : false
   const isRegisterable = event.is_registerable !== false
 
   return (

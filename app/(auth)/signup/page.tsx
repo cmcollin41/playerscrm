@@ -34,7 +34,9 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           alt="Varsity Habits"
           unoptimized
         />
-        <span className="font-display text-xl text-gray-900">Varsity Habits</span>
+        <span className="font-display text-xl text-gray-900">
+          Varsity Habits
+        </span>
       </Link>
 
       <div className="mt-8 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-xl ring-1 ring-black/5">
@@ -107,18 +109,18 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           <div className="border-t border-gray-100 pt-5">
             <p className="text-sm font-semibold text-gray-900">Your program</p>
             <p className="mt-0.5 text-xs text-gray-500">
-              You can add more programs (e.g. boys + girls basketball, football)
-              from the dashboard once you&apos;re in.
+              School, club, or independent coach — all welcome. You can add more
+              programs from the dashboard once you&apos;re in.
             </p>
 
             <div className="mt-4 space-y-3">
               <div>
-                <Label htmlFor="org_name">School or club name</Label>
+                <Label htmlFor="org_name">School, club, or business name</Label>
                 <Input
                   id="org_name"
                   name="org_name"
                   required
-                  placeholder="Provo High School"
+                  placeholder="Provo High School, Paul Peterson Basketball, ..."
                   className="mt-1"
                 />
               </div>
@@ -129,7 +131,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
                   id="program_name"
                   name="program_name"
                   required
-                  placeholder="Provo Basketball"
+                  placeholder="Boys Basketball, Skills Camp, ..."
                   className="mt-1"
                 />
               </div>
@@ -174,8 +176,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
               />
             </div>
             <p className="mt-3 text-xs text-gray-500">
-              Charged after you complete checkout. Payments processed by
-              Stripe.
+              Charged after you complete checkout. Payments processed by Stripe.
             </p>
           </div>
 
@@ -191,7 +192,10 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
 
       <p className="mt-6 text-center text-sm text-gray-500">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-orange-600 hover:underline">
+        <Link
+          href="/login"
+          className="font-medium text-orange-600 hover:underline"
+        >
           Sign in
         </Link>
       </p>

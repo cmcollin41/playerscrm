@@ -13,6 +13,7 @@ import {
   Mail,
   DollarSign,
   CalendarCheck,
+  Megaphone,
 } from "lucide-react"
 
 export default function Home() {
@@ -38,16 +39,18 @@ function Hero() {
       <div className="mx-auto grid max-w-7xl items-center gap-16 px-4 pb-20 pt-16 sm:px-6 sm:pb-28 sm:pt-24 lg:grid-cols-12 lg:px-8">
         <div className="lg:col-span-7">
           <span className="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-orange-700">
-            Built for sports programs
+            For sports programs and independent coaches
           </span>
           <h1 className="mt-6 font-display text-5xl leading-[0.95] tracking-tight text-gray-900 sm:text-6xl lg:text-7xl xl:text-8xl">
             The operating system for your{" "}
-            <span className="text-orange-600">sports program.</span>
+            <span className="text-orange-600">
+              sports program — or your camps and clinics.
+            </span>
           </h1>
           <p className="mt-8 max-w-xl text-lg leading-relaxed text-gray-600 sm:text-xl">
-            Rosters, events, payments, your program&apos;s website, and parent
-            communications — in one place, built specifically for the way
-            sports programs actually run.
+            Rosters, events, payments, waivers, your program&apos;s website, and
+            parent communications — in one place, whether you run a full team
+            program or a standalone camp.
           </p>
           <div className="mt-10 flex flex-wrap items-center gap-3">
             <Link href="/signup">
@@ -70,8 +73,8 @@ function Hero() {
             </Link>
           </div>
           <p className="mt-6 text-sm text-gray-500">
-            For club programs, high schools, and youth sports — no contracts,
-            no setup fees.
+            For club programs, high schools, youth sports, and independent
+            coaches running camps — no contracts, no setup fees.
           </p>
         </div>
         <div className="lg:col-span-5">
@@ -262,10 +265,7 @@ function RowChip({
 // =============================================================================
 function FeatureSection() {
   return (
-    <section
-      id="features"
-      className="border-b border-gray-100 py-24 sm:py-32"
-    >
+    <section id="features" className="border-b border-gray-100 py-24 sm:py-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="max-w-2xl">
           <p className="text-sm font-semibold uppercase tracking-wider text-orange-600">
@@ -310,12 +310,13 @@ function FeatureSection() {
           <FeatureBlock
             eyebrow="Camps, clinics, and events"
             title="From flyer to paid in three clicks."
-            description="Publish events with capacity, registration windows, and a fee. Parents register and pay on a hosted page. Drop the link on Instagram, in an email, or on your school site."
+            description="Publish events with capacity, registration windows, a fee, and the waivers parents need to sign. Works whether you run a full program or just run camps — no team or roster setup required."
             bullets={[
               "Hosted registration page on your subdomain",
               "Stripe-powered payments, with reconciliation built in",
-              "Capacity, waitlists, and registration windows",
-              "Family discounts and multi-event checkout",
+              "Reusable liability waivers — typed signature with timestamp + IP captured",
+              "Standalone camps supported — no team or roster needed",
+              "Capacity, waitlists, and family discounts",
             ]}
             mockup={<EventMockup />}
           />
@@ -400,10 +401,7 @@ function RosterMockup() {
       </div>
       <ul className="mt-4 divide-y divide-gray-100">
         {rows.map((r) => (
-          <li
-            key={r.num}
-            className="flex items-center gap-4 py-2.5 text-sm"
-          >
+          <li key={r.num} className="flex items-center gap-4 py-2.5 text-sm">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900 font-display text-xs text-white">
               {r.num}
             </span>
@@ -529,7 +527,9 @@ function CommsMockup() {
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-xl ring-1 ring-black/5">
         <div className="flex items-center justify-between border-b border-gray-100 pb-3 text-xs">
           <div>
-            <p className="font-semibold text-gray-900">Camp registration is open</p>
+            <p className="font-semibold text-gray-900">
+              Camp registration is open
+            </p>
             <p className="mt-0.5 text-gray-500">
               coach@yourprogram.varsityhabits.com · to All Parents (218)
             </p>
@@ -582,11 +582,10 @@ function AudienceSection() {
             Who it&apos;s for
           </p>
           <h2 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight sm:text-5xl">
-            One platform.{" "}
-            <span className="text-gray-500">Three audiences.</span>
+            One platform. <span className="text-gray-500">Four audiences.</span>
           </h2>
         </div>
-        <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="mt-16 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
           <AudienceTile
             icon={<ClipboardList className="h-6 w-6" />}
             title="For coaches & programs"
@@ -595,6 +594,16 @@ function AudienceSection() {
               "Multi-team, multi-season roster management",
               "Email parents from your own domain",
               "Reports and exports for the board",
+            ]}
+          />
+          <AudienceTile
+            icon={<Megaphone className="h-6 w-6" />}
+            title="For independent coaches"
+            description="Run camps, clinics, and skills sessions without a team or roster behind them. Registration, payments, and waivers in one place."
+            points={[
+              "No team or roster setup required",
+              "Reusable liability waivers with electronic signature",
+              "Stripe payments with parent receipts and refunds",
             ]}
           />
           <AudienceTile
@@ -668,13 +677,12 @@ function PricingTeaser() {
             Pricing
           </p>
           <h2 className="mt-3 font-display text-4xl leading-[1.05] tracking-tight text-gray-900 sm:text-5xl">
-            One price.{" "}
-            <span className="text-gray-400">Every feature.</span>
+            One price. <span className="text-gray-400">Every feature.</span>
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg text-gray-600">
-            No seat fees, no setup fees, no per-athlete fees. Every program
-            gets the full platform for one flat rate — payments are billed
-            separately as a small fee per transaction.
+            No seat fees, no setup fees, no per-athlete fees. Every program gets
+            the full platform for one flat rate — payments are billed separately
+            as a small fee per transaction.
           </p>
         </div>
 
@@ -714,7 +722,9 @@ function PricingTeaser() {
                   Everything included
                 </p>
                 <ul className="mt-4 space-y-2.5">
-                  <PriceFeature>Unlimited rosters, teams, and seasons</PriceFeature>
+                  <PriceFeature>
+                    Unlimited rosters, teams, and seasons
+                  </PriceFeature>
                   <PriceFeature>Custom subdomain + your own CNAME</PriceFeature>
                   <PriceFeature>
                     Verified email sending from your domain
@@ -722,10 +732,14 @@ function PricingTeaser() {
                   <PriceFeature>
                     Up to <strong>10,000 broadcast emails / month</strong>
                   </PriceFeature>
-                  <PriceFeature>Public JSON API + per-record privacy</PriceFeature>
+                  <PriceFeature>
+                    Public JSON API + per-record privacy
+                  </PriceFeature>
                   <PriceFeature>Parent magic-link portal</PriceFeature>
                   <PriceFeature>Multi-year stats and awards</PriceFeature>
-                  <PriceFeature>Events &amp; hosted registration pages</PriceFeature>
+                  <PriceFeature>
+                    Events &amp; hosted registration pages
+                  </PriceFeature>
                 </ul>
               </div>
             </div>
@@ -848,8 +862,7 @@ function FinalCta() {
         </h2>
         <p className="mx-auto mt-6 max-w-2xl text-lg text-gray-400">
           Bring your roster — we&apos;ll show you the CRM, registration pages,
-          parent portal, and API feed your site can run on in under 30
-          minutes.
+          parent portal, and API feed your site can run on in under 30 minutes.
         </p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <Link href="/signup">

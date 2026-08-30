@@ -23,10 +23,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { event_id, person_ids, items } = await req.json()
+    const { event_id, person_ids, items, waiver_acceptances } = await req.json()
 
     if (!event_id || !person_ids?.length) {
-      return NextResponse.json({ error: "Missing event_id or person_ids" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Missing event_id or person_ids" },
+        { status: 400 },
+      )
     }
 
     const incomingItems: Array<{
@@ -36,6 +39,13 @@ export async function POST(req: Request) {
       shipping_address?: Record<string, any>
     }> = Array.isArray(items) ? items : []
 
+    const incomingAcceptances: Array<{
+      person_id: string
+      waiver_id: string
+      signer_name: string
+      signer_relationship: "self" | "guardian" | "other"
+    }> = Array.isArray(waiver_acceptances) ? waiver_acceptances : []
+
     // Use the admin client for tenant data ops — registrants aren't members
     // of the event's account, so RLS would hide the event under the
     // authenticated role. Auth was already verified above.
@@ -44,7 +54,9 @@ export async function POST(req: Request) {
     // Fetch event with account info
     const { data: event, error: eventError } = await admin
       .from("events")
-      .select("*, accounts(id, stripe_id, application_fee, application_fee_flat)")
+      .select(
+        "*, accounts(id, stripe_id, application_fee, application_fee_flat)",
+      )
       .eq("id", event_id)
       .single()
 
@@ -53,25 +65,29 @@ export async function POST(req: Request) {
     }
 
     if (!event.is_published) {
-      return NextResponse.json({ error: "Event is not open for registration" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Event is not open for registration" },
+        { status: 400 },
+      )
     }
 
     // event_registrations.registered_by → profiles(id). Race-safe upsert so two
     // concurrent registers can't both INSERT and one 500 on the PK.
-    const { error: profileUpsertError } = await admin
-      .from("profiles")
-      .upsert(
-        {
-          id: user.id,
-          email: user.email,
-          account_id: event.account_id,
-          current_account_id: event.account_id,
-          role: "general",
-        },
-        { onConflict: "id", ignoreDuplicates: true }
-      )
+    const { error: profileUpsertError } = await admin.from("profiles").upsert(
+      {
+        id: user.id,
+        email: user.email,
+        account_id: event.account_id,
+        current_account_id: event.account_id,
+        role: "general",
+      },
+      { onConflict: "id", ignoreDuplicates: true },
+    )
     if (profileUpsertError) {
-      return NextResponse.json({ error: profileUpsertError.message }, { status: 500 })
+      return NextResponse.json(
+        { error: profileUpsertError.message },
+        { status: 500 },
+      )
     }
 
     // Check capacity
@@ -83,7 +99,53 @@ export async function POST(req: Request) {
         .in("status", ["pending", "confirmed"])
 
       if ((count || 0) + person_ids.length > event.capacity) {
-        return NextResponse.json({ error: "Event is at capacity" }, { status: 400 })
+        return NextResponse.json(
+          { error: "Event is at capacity" },
+          { status: 400 },
+        )
+      }
+    }
+
+    // Validate waivers up front, before any inserts. Fetching attachedWaivers
+    // once here and reusing it below avoids orphan registrations on a missing
+    // signature and keeps a single source of truth for the snapshot insert.
+    const { data: attachedWaivers, error: waiverFetchError } = await admin
+      .from("event_waivers")
+      .select("waiver_id, is_required, waiver:waivers(id, title, body)")
+      .eq("event_id", event_id)
+
+    if (waiverFetchError) {
+      return NextResponse.json(
+        { error: waiverFetchError.message },
+        { status: 500 },
+      )
+    }
+
+    const requiredWaiverIds = (attachedWaivers ?? [])
+      .filter((w: any) => w.is_required)
+      .map((w: any) => w.waiver_id as string)
+
+    if (requiredWaiverIds.length > 0) {
+      const acceptanceIndex = new Map<
+        string,
+        (typeof incomingAcceptances)[number]
+      >()
+      for (const a of incomingAcceptances) {
+        acceptanceIndex.set(`${a.person_id}:${a.waiver_id}`, a)
+      }
+      for (const pid of person_ids as string[]) {
+        for (const wid of requiredWaiverIds) {
+          const a = acceptanceIndex.get(`${pid}:${wid}`)
+          if (!a || !a.signer_name?.trim()) {
+            return NextResponse.json(
+              {
+                error:
+                  "All required waivers must be signed for every registrant",
+              },
+              { status: 400 },
+            )
+          }
+        }
       }
     }
 
@@ -151,16 +213,61 @@ export async function POST(req: Request) {
         .from("account_people")
         .upsert(
           { account_id: event.account_id, person_id },
-          { onConflict: "account_id,person_id" }
+          { onConflict: "account_id,person_id" },
         )
     }
 
-    // Run each app's persist callback so per-app rows that FK back to
-    // event_registrations can be inserted (e.g. event_registration_items).
     const regByPerson = new Map<string, string>()
     for (const r of regs ?? []) {
       regByPerson.set(r.person_id as string, r.id as string)
     }
+
+    // Persist waiver acceptances. Validation already ran up front.
+    if (incomingAcceptances.length > 0 && (attachedWaivers?.length ?? 0) > 0) {
+      const waiverById = new Map<
+        string,
+        { id: string; title: string; body: string }
+      >()
+      for (const w of attachedWaivers as any[]) {
+        const tpl = Array.isArray(w.waiver) ? w.waiver[0] : w.waiver
+        if (tpl) waiverById.set(tpl.id, tpl)
+      }
+
+      const fwd = req.headers.get("x-forwarded-for") ?? ""
+      const ipAddress = fwd.split(",")[0]?.trim() || null
+      const userAgent = req.headers.get("user-agent") ?? null
+
+      const rows: any[] = []
+      for (const a of incomingAcceptances) {
+        const tpl = waiverById.get(a.waiver_id)
+        const regId = regByPerson.get(a.person_id)
+        if (!tpl || !regId) continue
+        rows.push({
+          registration_id: regId,
+          waiver_id: a.waiver_id,
+          signed_for_person_id: a.person_id,
+          title_snapshot: tpl.title,
+          body_snapshot: tpl.body,
+          signer_name: a.signer_name.trim(),
+          signer_relationship: a.signer_relationship,
+          signer_email: user.email ?? null,
+          ip_address: ipAddress,
+          user_agent: userAgent,
+        })
+      }
+
+      if (rows.length > 0) {
+        const { error: insErr } = await admin
+          .from("waiver_acceptances")
+          .insert(rows)
+        if (insErr) {
+          return NextResponse.json({ error: insErr.message }, { status: 500 })
+        }
+      }
+    }
+
+    // Run each app's persist callback so per-app rows that FK back to
+    // event_registrations can be inserted (e.g. event_registration_items).
     for (const result of validateResults) {
       if (!result.persist) continue
       try {
@@ -266,7 +373,10 @@ export async function POST(req: Request) {
       await admin
         .from("event_registrations")
         .update({ payment_id: payment.id })
-        .in("id", regs!.map((r: any) => r.id))
+        .in(
+          "id",
+          regs!.map((r: any) => r.id),
+        )
     }
 
     return NextResponse.json({
@@ -278,7 +388,7 @@ export async function POST(req: Request) {
     console.error("Registration error:", error)
     return NextResponse.json(
       { error: error.message || "Registration failed" },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

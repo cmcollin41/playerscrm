@@ -97,11 +97,26 @@ interface Registration {
       stripe_invoice_id?: string | null
     } | null
   } | null
+  waiver_acceptances?: WaiverAcceptanceRow[]
+}
+
+interface WaiverAcceptanceRow {
+  id: string
+  waiver_id: string
+  title_snapshot: string
+  body_snapshot: string
+  signer_name: string
+  signer_relationship: "self" | "guardian" | "other"
+  signer_email: string | null
+  ip_address: string | null
+  user_agent: string | null
+  accepted_at: string
 }
 
 interface EventDetailClientProps {
   event: any
   registrations: Registration[]
+  showWaiversColumn?: boolean
 }
 
 function formatAmount(cents: number | null | undefined): string | null {
@@ -151,16 +166,32 @@ function renderPayment(reg: Registration, feeAmount: number) {
     const method = reg.payment_status_note
     if (method === "venmo")
       return (
-        <Badge className="bg-[#e8f0fe] gap-2 px-2 py-1 hover:bg-[#e8f0fe]">
-          <Image src="/venmo-logo.svg" alt="Venmo" width={48} height={10} className="h-2.5 w-auto" />
-          {amountText && <span className="text-xs text-gray-700">{amountText}</span>}
+        <Badge className="gap-2 bg-[#e8f0fe] px-2 py-1 hover:bg-[#e8f0fe]">
+          <Image
+            src="/venmo-logo.svg"
+            alt="Venmo"
+            width={48}
+            height={10}
+            className="h-2.5 w-auto"
+          />
+          {amountText && (
+            <span className="text-xs text-gray-700">{amountText}</span>
+          )}
         </Badge>
       )
     if (method === "cashapp")
       return (
-        <Badge className="bg-[#00D54B]/10 gap-2 px-2 py-1 hover:bg-[#00D54B]/10">
-          <Image src="/cashapp-logo.svg" alt="Cash App" width={60} height={12} className="h-3 w-auto" />
-          {amountText && <span className="text-xs text-gray-700">{amountText}</span>}
+        <Badge className="gap-2 bg-[#00D54B]/10 px-2 py-1 hover:bg-[#00D54B]/10">
+          <Image
+            src="/cashapp-logo.svg"
+            alt="Cash App"
+            width={60}
+            height={12}
+            className="h-3 w-auto"
+          />
+          {amountText && (
+            <span className="text-xs text-gray-700">{amountText}</span>
+          )}
         </Badge>
       )
     if (method === "cash")
@@ -198,31 +229,43 @@ function renderPayment(reg: Registration, feeAmount: number) {
     )
   if (stripeStatus === "processing" || stripeStatus === "requires_action")
     return (
-      <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
+      <Badge
+        variant="outline"
+        className="border-blue-200 bg-blue-50 text-blue-700"
+      >
         <Clock className="mr-1 h-3 w-3" /> Processing
       </Badge>
     )
   if (stripeStatus === "canceled" || stripeStatus === "expired")
     return (
-      <Badge variant="outline" className="border-gray-200 bg-gray-50 text-gray-600 capitalize">
+      <Badge
+        variant="outline"
+        className="border-gray-200 bg-gray-50 capitalize text-gray-600"
+      >
         {stripeStatus}
       </Badge>
     )
   if (stripeStatus === "payment_failed" || stripeStatus === "failed")
     return (
-      <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
+      <Badge
+        variant="outline"
+        className="border-red-200 bg-red-50 text-red-700"
+      >
         <AlertCircle className="mr-1 h-3 w-3" /> Failed
       </Badge>
     )
   if (stripeStatus === "pending")
     return (
-      <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-800">
+      <Badge
+        variant="outline"
+        className="border-amber-200 bg-amber-50 text-amber-800"
+      >
         <Clock className="mr-1 h-3 w-3" /> Pending
       </Badge>
     )
   if (stripeStatus)
     return (
-      <Badge variant="outline" className="capitalize text-muted-foreground">
+      <Badge variant="outline" className="text-muted-foreground capitalize">
         {stripeStatus.replace(/_/g, " ")}
       </Badge>
     )
@@ -233,7 +276,8 @@ function renderPayment(reg: Registration, feeAmount: number) {
 function renderInvoiceLink(reg: Registration) {
   const invoice = reg.invoice
   const invoiceUrl = invoice?.metadata?.hosted_invoice_url || null
-  const invoicePaid = invoice?.status === "paid" || invoice?.status === "succeeded"
+  const invoicePaid =
+    invoice?.status === "paid" || invoice?.status === "succeeded"
   const receiptUrl = reg.payments?.data?.receipt_url || null
   const stripePaid = reg.payments?.status === "succeeded"
 
@@ -272,7 +316,14 @@ function renderInvoiceLink(reg: Registration) {
   return <span className="text-xs text-gray-400">—</span>
 }
 
-export function EventDetailClient({ event, registrations }: EventDetailClientProps) {
+export function EventDetailClient({
+  event,
+  registrations,
+  showWaiversColumn = false,
+}: EventDetailClientProps) {
+  const [waiverModalReg, setWaiverModalReg] = useState<Registration | null>(
+    null,
+  )
   const router = useRouter()
   const supabase = createClient()
   const [pendingId, setPendingId] = useState<string | null>(null)
@@ -347,7 +398,7 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
             <Button
               variant="outline"
               size="sm"
-              className="shrink-0 text-green-700 border-green-200 bg-green-50/50 hover:bg-green-50"
+              className="shrink-0 border-green-200 bg-green-50/50 text-green-700 hover:bg-green-50"
               onClick={() =>
                 setInvoiceTarget({ mode: "bulk", regs: pendingForBulk })
               }
@@ -373,143 +424,174 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
                     <th className="pb-3 pr-4">Status</th>
                     <th className="pb-3 pr-4">Payment</th>
                     <th className="pb-3 pr-4">Doc</th>
+                    {showWaiversColumn && (
+                      <th className="pb-3 pr-4">Waivers</th>
+                    )}
                     <th className="pb-3 pr-4">Date</th>
-                    <th className="pb-3 w-8"></th>
+                    <th className="w-8 pb-3"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {registrations.map((reg) => {
                     const displayEmail = reg.people?.email || reg.guardian_email
-                    const isGuardianEmail = !reg.people?.email && !!reg.guardian_email
+                    const isGuardianEmail =
+                      !reg.people?.email && !!reg.guardian_email
                     return (
-                    <tr key={reg.id} className="border-b last:border-0">
-                      <td className="py-3 pr-4 font-medium">
-                        {reg.people?.id ? (
-                          <Link
-                            href={`/people/${reg.people.id}`}
-                            className="hover:underline"
-                          >
-                            {reg.people.first_name} {reg.people.last_name}
-                          </Link>
-                        ) : (
-                          <>
-                            {reg.people?.first_name} {reg.people?.last_name}
-                          </>
-                        )}
-                      </td>
-                      <td className="py-3 pr-4 text-gray-500">
-                        {displayEmail ? (
-                          <span>
-                            {displayEmail}
-                            {isGuardianEmail && (
-                              <span className="ml-1.5 text-[10px] uppercase tracking-wide text-gray-400">
-                                (parent)
-                              </span>
-                            )}
-                          </span>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td className="py-3 pr-4 text-gray-500">
-                        {reg.people?.grade || "-"}
-                      </td>
-                      <td className="py-3 pr-4">
-                        {renderRegistrationStatus(reg.status)}
-                      </td>
-                      <td className="py-3 pr-4">
-                        {renderPayment(reg, event.fee_amount)}
-                      </td>
-                      <td className="py-3 pr-4">
-                        {renderInvoiceLink(reg)}
-                      </td>
-                      <td className="py-3 pr-4 text-gray-500">
-                        {new Date(reg.created_at).toLocaleDateString()}
-                      </td>
-                      <td className="py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          {eligibleForInvoice(reg) && stripeAccountId && (reg.people?.email || reg.guardian_email) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-8 w-8 shrink-0 p-0 text-green-700 border-green-200 bg-green-50/50 hover:bg-green-50"
-                              title="Send invoice"
-                              onClick={() =>
-                                setInvoiceTarget({ mode: "single", reg })
-                              }
+                      <tr key={reg.id} className="border-b last:border-0">
+                        <td className="py-3 pr-4 font-medium">
+                          {reg.people?.id ? (
+                            <Link
+                              href={`/people/${reg.people.id}`}
+                              className="hover:underline"
                             >
-                              <Receipt className="h-4 w-4" />
-                            </Button>
+                              {reg.people.first_name} {reg.people.last_name}
+                            </Link>
+                          ) : (
+                            <>
+                              {reg.people?.first_name} {reg.people?.last_name}
+                            </>
                           )}
-                          <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              disabled={pendingId === reg.id}
-                            >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {reg.status !== "confirmed" && (
-                              <DropdownMenuItem
-                                onClick={() => updateStatus(reg.id, "confirmed")}
-                              >
-                                <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
-                                Mark confirmed
-                              </DropdownMenuItem>
-                            )}
-                            {reg.status !== "pending" && (
-                              <DropdownMenuItem
-                                onClick={() => updateStatus(reg.id, "pending")}
-                              >
-                                <Clock className="mr-2 h-4 w-4 text-amber-600" />
-                                Mark pending
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => setPaymentTarget(reg)}>
-                              {reg.payment_status === "waived" ? (
-                                <ShieldCheck className="mr-2 h-4 w-4 text-violet-600" />
-                              ) : (
-                                <DollarSign className="mr-2 h-4 w-4 text-green-600" />
+                        </td>
+                        <td className="py-3 pr-4 text-gray-500">
+                          {displayEmail ? (
+                            <span>
+                              {displayEmail}
+                              {isGuardianEmail && (
+                                <span className="ml-1.5 text-[10px] uppercase tracking-wide text-gray-400">
+                                  (parent)
+                                </span>
                               )}
-                              {reg.payment_status === "paid" || reg.payment_status === "waived"
-                                ? "Edit payment"
-                                : "Mark as paid"}
-                            </DropdownMenuItem>
-                            {reg.status !== "waitlisted" && (
-                              <DropdownMenuItem
-                                onClick={() => updateStatus(reg.id, "waitlisted")}
+                            </span>
+                          ) : (
+                            "-"
+                          )}
+                        </td>
+                        <td className="py-3 pr-4 text-gray-500">
+                          {reg.people?.grade || "-"}
+                        </td>
+                        <td className="py-3 pr-4">
+                          {renderRegistrationStatus(reg.status)}
+                        </td>
+                        <td className="py-3 pr-4">
+                          {renderPayment(reg, event.fee_amount)}
+                        </td>
+                        <td className="py-3 pr-4">{renderInvoiceLink(reg)}</td>
+                        {showWaiversColumn && (
+                          <td className="py-3 pr-4">
+                            {(reg.waiver_acceptances?.length ?? 0) > 0 ? (
+                              <button
+                                onClick={() => setWaiverModalReg(reg)}
+                                className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700 hover:bg-green-100"
+                                title="View signed waivers"
                               >
-                                <UserMinus className="mr-2 h-4 w-4 text-blue-600" />
-                                Move to waitlist
-                              </DropdownMenuItem>
+                                <ShieldCheck className="h-3 w-3" />
+                                {reg.waiver_acceptances!.length} signed
+                              </button>
+                            ) : (
+                              <span className="text-xs text-gray-400">—</span>
                             )}
-                            {reg.status !== "cancelled" && (
-                              <DropdownMenuItem
-                                onClick={() => updateStatus(reg.id, "cancelled")}
-                              >
-                                <Ban className="mr-2 h-4 w-4 text-red-600" />
-                                Cancel
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={() => setConfirmRemoveId(reg.id)}
-                              className="text-red-600 focus:text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Remove
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        </div>
-                      </td>
-                    </tr>
-                  )
+                          </td>
+                        )}
+                        <td className="py-3 pr-4 text-gray-500">
+                          {new Date(reg.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            {eligibleForInvoice(reg) &&
+                              stripeAccountId &&
+                              (reg.people?.email || reg.guardian_email) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 w-8 shrink-0 border-green-200 bg-green-50/50 p-0 text-green-700 hover:bg-green-50"
+                                  title="Send invoice"
+                                  onClick={() =>
+                                    setInvoiceTarget({ mode: "single", reg })
+                                  }
+                                >
+                                  <Receipt className="h-4 w-4" />
+                                </Button>
+                              )}
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  disabled={pendingId === reg.id}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {reg.status !== "confirmed" && (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      updateStatus(reg.id, "confirmed")
+                                    }
+                                  >
+                                    <CheckCircle2 className="mr-2 h-4 w-4 text-green-600" />
+                                    Mark confirmed
+                                  </DropdownMenuItem>
+                                )}
+                                {reg.status !== "pending" && (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      updateStatus(reg.id, "pending")
+                                    }
+                                  >
+                                    <Clock className="mr-2 h-4 w-4 text-amber-600" />
+                                    Mark pending
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setPaymentTarget(reg)}
+                                >
+                                  {reg.payment_status === "waived" ? (
+                                    <ShieldCheck className="mr-2 h-4 w-4 text-violet-600" />
+                                  ) : (
+                                    <DollarSign className="mr-2 h-4 w-4 text-green-600" />
+                                  )}
+                                  {reg.payment_status === "paid" ||
+                                  reg.payment_status === "waived"
+                                    ? "Edit payment"
+                                    : "Mark as paid"}
+                                </DropdownMenuItem>
+                                {reg.status !== "waitlisted" && (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      updateStatus(reg.id, "waitlisted")
+                                    }
+                                  >
+                                    <UserMinus className="mr-2 h-4 w-4 text-blue-600" />
+                                    Move to waitlist
+                                  </DropdownMenuItem>
+                                )}
+                                {reg.status !== "cancelled" && (
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      updateStatus(reg.id, "cancelled")
+                                    }
+                                  >
+                                    <Ban className="mr-2 h-4 w-4 text-red-600" />
+                                    Cancel
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setConfirmRemoveId(reg.id)}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Remove
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </td>
+                      </tr>
+                    )
                   })}
                 </tbody>
               </table>
@@ -526,15 +608,17 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
           <AlertDialogHeader>
             <AlertDialogTitle>Remove registration?</AlertDialogTitle>
             <AlertDialogDescription>
-              This permanently deletes the registration row. The person record is
-              not affected. Prefer "Cancel" if you want to keep a record of the
-              cancellation.
+              This permanently deletes the registration row. The person record
+              is not affected. Prefer "Cancel" if you want to keep a record of
+              the cancellation.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => confirmRemoveId && removeRegistration(confirmRemoveId)}
+              onClick={() =>
+                confirmRemoveId && removeRegistration(confirmRemoveId)
+              }
               className="bg-red-600 hover:bg-red-700"
             >
               Remove
@@ -563,14 +647,97 @@ export function EventDetailClient({ event, registrations }: EventDetailClientPro
         registrationId={paymentTarget?.id ?? null}
         personName={
           paymentTarget
-            ? `${paymentTarget.people?.first_name ?? ""} ${paymentTarget.people?.last_name ?? ""}`.trim() ||
-              "this registrant"
+            ? `${paymentTarget.people?.first_name ?? ""} ${
+                paymentTarget.people?.last_name ?? ""
+              }`.trim() || "this registrant"
             : ""
         }
         initialStatus={paymentTarget?.payment_status ?? null}
         initialNote={paymentTarget?.payment_status_note ?? null}
       />
+
+      <SignedWaiversModal
+        registration={waiverModalReg}
+        onClose={() => setWaiverModalReg(null)}
+      />
     </>
+  )
+}
+
+function SignedWaiversModal({
+  registration,
+  onClose,
+}: {
+  registration: Registration | null
+  onClose: () => void
+}) {
+  if (!registration) return null
+  const personName =
+    `${registration.people?.first_name ?? ""} ${
+      registration.people?.last_name ?? ""
+    }`.trim() || "registrant"
+  const acceptances = registration.waiver_acceptances ?? []
+
+  return (
+    <Dialog open={!!registration} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Signed waivers — {personName}</DialogTitle>
+          <DialogDescription>
+            Snapshot of every waiver signed for this registration, including
+            signer details captured at signing time.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+          {acceptances.length === 0 && (
+            <p className="text-sm text-gray-500">No signed waivers on file.</p>
+          )}
+          {acceptances.map((a) => (
+            <div key={a.id} className="rounded-md border border-gray-200 p-3">
+              <p className="text-sm font-semibold text-gray-900">
+                {a.title_snapshot}
+              </p>
+              <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
+                <dt className="text-gray-500">Signer</dt>
+                <dd className="font-medium text-gray-900">{a.signer_name}</dd>
+                <dt className="text-gray-500">Signing as</dt>
+                <dd className="capitalize">{a.signer_relationship}</dd>
+                <dt className="text-gray-500">Signed at</dt>
+                <dd>{new Date(a.accepted_at).toLocaleString()}</dd>
+                {a.signer_email && (
+                  <>
+                    <dt className="text-gray-500">Signer email</dt>
+                    <dd>{a.signer_email}</dd>
+                  </>
+                )}
+                {a.ip_address && (
+                  <>
+                    <dt className="text-gray-500">IP address</dt>
+                    <dd className="font-mono text-[11px]">{a.ip_address}</dd>
+                  </>
+                )}
+                {a.user_agent && (
+                  <>
+                    <dt className="text-gray-500">User agent</dt>
+                    <dd className="break-all font-mono text-[11px]">
+                      {a.user_agent}
+                    </dd>
+                  </>
+                )}
+              </dl>
+              <details className="mt-3">
+                <summary className="cursor-pointer text-xs font-medium text-gray-600 hover:text-gray-900">
+                  Waiver text at time of signing
+                </summary>
+                <div className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap rounded border border-gray-100 bg-gray-50 p-3 text-[11px] leading-relaxed text-gray-700">
+                  {a.body_snapshot}
+                </div>
+              </details>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -594,7 +761,9 @@ function SendEventInvoiceModal({
   onClose,
   onSent,
 }: SendEventInvoiceModalProps) {
-  const defaultAmount = event.fee_amount ? (event.fee_amount / 100).toFixed(2) : ""
+  const defaultAmount = event.fee_amount
+    ? (event.fee_amount / 100).toFixed(2)
+    : ""
   const [amount, setAmount] = useState(defaultAmount)
   const [memo, setMemo] = useState("")
   const [sending, setSending] = useState(false)
@@ -617,11 +786,15 @@ function SendEventInvoiceModal({
 
   async function sendOne(reg: Registration, amt: number, desc: string) {
     const email = reg.people?.email || reg.guardian_email
-    if (!email) throw new Error(`No email for ${reg.people?.first_name ?? "registrant"}`)
+    if (!email)
+      throw new Error(`No email for ${reg.people?.first_name ?? "registrant"}`)
     if (!reg.people?.id) throw new Error("Missing person id")
-    if (!stripeAccountId) throw new Error("Stripe is not connected on this account")
+    if (!stripeAccountId)
+      throw new Error("Stripe is not connected on this account")
 
-    const athleteName = `${reg.people.first_name ?? ""} ${reg.people.last_name ?? ""}`.trim()
+    const athleteName = `${reg.people.first_name ?? ""} ${
+      reg.people.last_name ?? ""
+    }`.trim()
 
     // For dependents, the payer is the resolved guardian; otherwise the
     // registrant pays for themselves.
@@ -671,7 +844,8 @@ function SendEventInvoiceModal({
             ok++
             if (resent) resentCount++
           } catch (e) {
-            if (!firstErr) firstErr = e instanceof Error ? e : new Error(String(e))
+            if (!firstErr)
+              firstErr = e instanceof Error ? e : new Error(String(e))
           }
         }
         const fail = target.regs.length - ok
@@ -695,18 +869,29 @@ function SendEventInvoiceModal({
   const isBulk = target?.mode === "bulk"
   const targetName =
     target?.mode === "single"
-      ? `${target.reg.people?.first_name ?? ""} ${target.reg.people?.last_name ?? ""}`.trim()
+      ? `${target.reg.people?.first_name ?? ""} ${
+          target.reg.people?.last_name ?? ""
+        }`.trim()
       : null
 
   return (
-    <Dialog open={!!target} onOpenChange={(open) => !open && !sending && onClose()}>
+    <Dialog
+      open={!!target}
+      onOpenChange={(open) => !open && !sending && onClose()}
+    >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Send invoice</DialogTitle>
           <DialogDescription>
             {isBulk
-              ? `Sends a Stripe invoice to ${target!.regs.length} pending registrant${target!.regs.length === 1 ? "" : "s"}. When paid, each registration auto-flips to Confirmed.`
-              : `Sends a Stripe invoice to ${targetName || "this registrant"}. When paid, the registration auto-flips to Confirmed.`}
+              ? `Sends a Stripe invoice to ${
+                  target!.regs.length
+                } pending registrant${
+                  target!.regs.length === 1 ? "" : "s"
+                }. When paid, each registration auto-flips to Confirmed.`
+              : `Sends a Stripe invoice to ${
+                  targetName || "this registrant"
+                }. When paid, the registration auto-flips to Confirmed.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -726,7 +911,8 @@ function SendEventInvoiceModal({
             />
             {event.fee_amount > 0 && (
               <p className="text-xs text-gray-500">
-                Default is the event fee (${(event.fee_amount / 100).toFixed(2)}). Edit if you need a different amount.
+                Default is the event fee (${(event.fee_amount / 100).toFixed(2)}
+                ). Edit if you need a different amount.
               </p>
             )}
           </div>
@@ -740,7 +926,9 @@ function SendEventInvoiceModal({
               onChange={(e) => setMemo(e.target.value)}
               placeholder={
                 target?.mode === "single"
-                  ? `Invoice to complete registration for ${targetName || "registrant"} -- ${event.name}`
+                  ? `Invoice to complete registration for ${
+                      targetName || "registrant"
+                    } -- ${event.name}`
                   : `Invoice to complete registration for {registrant} -- ${event.name}`
               }
               disabled={sending}
@@ -753,15 +941,20 @@ function SendEventInvoiceModal({
               <ul className="mt-1 space-y-0.5">
                 {target!.regs.slice(0, 6).map((r) => {
                   const email = r.people?.email || r.guardian_email
-                  const name = `${r.people?.first_name ?? ""} ${r.people?.last_name ?? ""}`.trim()
+                  const name = `${r.people?.first_name ?? ""} ${
+                    r.people?.last_name ?? ""
+                  }`.trim()
                   return (
                     <li key={r.id} className="truncate">
-                      {name || "—"} · <span className="text-gray-500">{email}</span>
+                      {name || "—"} ·{" "}
+                      <span className="text-gray-500">{email}</span>
                     </li>
                   )
                 })}
                 {target!.regs.length > 6 && (
-                  <li className="text-gray-500">+ {target!.regs.length - 6} more</li>
+                  <li className="text-gray-500">
+                    + {target!.regs.length - 6} more
+                  </li>
                 )}
               </ul>
             </div>
@@ -784,7 +977,9 @@ function SendEventInvoiceModal({
 
 export function ShareLinkBanner({ slug }: { slug: string }) {
   const url =
-    typeof window !== "undefined" ? `${window.location.origin}/register/${slug}` : ""
+    typeof window !== "undefined"
+      ? `${window.location.origin}/register/${slug}`
+      : ""
 
   const copyLink = () => {
     navigator.clipboard.writeText(`${window.location.origin}/register/${slug}`)
@@ -796,8 +991,15 @@ export function ShareLinkBanner({ slug }: { slug: string }) {
       <p className="flex-1 text-sm text-blue-800">
         Share this link with families to let them register:
       </p>
-      <code className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-900">{url}</code>
-      <Button size="sm" variant="outline" className="shrink-0" onClick={copyLink}>
+      <code className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-900">
+        {url}
+      </code>
+      <Button
+        size="sm"
+        variant="outline"
+        className="shrink-0"
+        onClick={copyLink}
+      >
         <ExternalLink className="mr-1 h-3 w-3" />
         Copy
       </Button>

@@ -10,6 +10,7 @@ import {
   Building2,
   ChevronRight,
   DollarSign,
+  FileText,
   Globe,
   Mail,
   Plug,
@@ -83,8 +84,7 @@ export default function AccountSettingsPage() {
           .eq("account_id", activeAccountId)
           .eq("profile_id", u.id)
           .maybeSingle()
-        allowed =
-          membership?.role === "admin" || membership?.role === "owner"
+        allowed = membership?.role === "admin" || membership?.role === "owner"
       }
 
       if (!allowed) {
@@ -200,7 +200,11 @@ export default function AccountSettingsPage() {
       }
 
       if (totalUpdated > 0) {
-        toast.success(`Updated ${totalUpdated} invoice${totalUpdated === 1 ? "" : "s"} from Stripe`)
+        toast.success(
+          `Updated ${totalUpdated} invoice${
+            totalUpdated === 1 ? "" : "s"
+          } from Stripe`,
+        )
       } else {
         toast("All invoices are already in sync with Stripe")
       }
@@ -241,6 +245,13 @@ export default function AccountSettingsPage() {
       icon: Mail,
       title: "Email sending",
       description: "Verify sending domains and manage sender addresses",
+    },
+    {
+      href: "/settings/waivers",
+      icon: FileText,
+      title: "Waivers",
+      description:
+        "Reusable liability and consent templates for event registrations",
     },
     {
       href: "/settings/domain",
@@ -292,7 +303,9 @@ export default function AccountSettingsPage() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-gray-900">{item.title}</p>
-              <p className="text-muted-foreground text-xs">{item.description}</p>
+              <p className="text-muted-foreground text-xs">
+                {item.description}
+              </p>
             </div>
             <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 group-hover:text-gray-600" />
           </Link>
@@ -311,7 +324,8 @@ export default function AccountSettingsPage() {
                 Connect a Stripe account
               </h3>
               <p className="mt-2 max-w-md text-sm text-gray-500">
-                Connect Stripe to collect fees, send invoices, and accept payments.
+                Connect Stripe to collect fees, send invoices, and accept
+                payments.
               </p>
               <button
                 disabled={connecting}
@@ -334,7 +348,11 @@ export default function AccountSettingsPage() {
                   <LoadingDots color="#fff" />
                 ) : (
                   <>
-                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                    <svg
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
                       <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
                     </svg>
                     Connect Stripe
@@ -347,7 +365,11 @@ export default function AccountSettingsPage() {
           {stripeConnected && (
             <div className="flex items-start gap-4">
               <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-50">
-                <svg className="h-5 w-5 text-purple-600" viewBox="0 0 24 24" fill="currentColor">
+                <svg
+                  className="h-5 w-5 text-purple-600"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
                   <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
                 </svg>
               </div>
@@ -358,15 +380,24 @@ export default function AccountSettingsPage() {
                     stripeAccount?.email ||
                     "Connected"}
                 </p>
-                <p className="mt-0.5 text-xs text-gray-500">{stripeAccount?.id}</p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {stripeAccount?.id}
+                </p>
                 <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
                   <span className="inline-flex items-center gap-1">
                     <span
-                      className={`inline-block h-1.5 w-1.5 rounded-full ${stripeAccount?.payouts_enabled ? "bg-green-500" : "bg-amber-500"}`}
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${
+                        stripeAccount?.payouts_enabled
+                          ? "bg-green-500"
+                          : "bg-amber-500"
+                      }`}
                     />
-                    Payouts {stripeAccount?.payouts_enabled ? "enabled" : "pending"}
+                    Payouts{" "}
+                    {stripeAccount?.payouts_enabled ? "enabled" : "pending"}
                   </span>
-                  <span className="capitalize">{stripeAccount?.type} account</span>
+                  <span className="capitalize">
+                    {stripeAccount?.type} account
+                  </span>
                 </div>
               </div>
             </div>
@@ -404,35 +435,45 @@ export default function AccountSettingsPage() {
                 {!reconcileResult.done && (
                   <span className="mr-2 text-amber-600">Processing…</span>
                 )}
-                Progress: <strong>{reconcileResult.totalChecked}</strong> / {reconcileResult.total}{" "}
-                &middot; Updated: <strong>{reconcileResult.totalUpdated}</strong> &middot; Errors:{" "}
+                Progress: <strong>{reconcileResult.totalChecked}</strong> /{" "}
+                {reconcileResult.total} &middot; Updated:{" "}
+                <strong>{reconcileResult.totalUpdated}</strong> &middot; Errors:{" "}
                 <strong>{reconcileResult.totalErrors}</strong>
               </p>
-              {reconcileResult.results?.filter((r: any) => r.newStatus).length > 0 && (
+              {reconcileResult.results?.filter((r: any) => r.newStatus).length >
+                0 && (
                 <>
-                  <p className="mt-3 text-xs font-medium text-gray-700">Updated:</p>
+                  <p className="mt-3 text-xs font-medium text-gray-700">
+                    Updated:
+                  </p>
                   <ul className="mt-1 space-y-1">
                     {reconcileResult.results
                       .filter((r: any) => r.newStatus)
                       .slice(0, 10)
                       .map((r: any) => (
                         <li key={r.invoiceId}>
-                          {r.invoiceId.slice(0, 8)}… {r.oldStatus} → {r.newStatus}
+                          {r.invoiceId.slice(0, 8)}… {r.oldStatus} →{" "}
+                          {r.newStatus}
                         </li>
                       ))}
-                    {reconcileResult.results.filter((r: any) => r.newStatus).length > 10 && (
+                    {reconcileResult.results.filter((r: any) => r.newStatus)
+                      .length > 10 && (
                       <li className="text-gray-400">
                         …and{" "}
-                        {reconcileResult.results.filter((r: any) => r.newStatus).length - 10}{" "}
+                        {reconcileResult.results.filter((r: any) => r.newStatus)
+                          .length - 10}{" "}
                         more
                       </li>
                     )}
                   </ul>
                 </>
               )}
-              {reconcileResult.results?.filter((r: any) => r.error).length > 0 && (
+              {reconcileResult.results?.filter((r: any) => r.error).length >
+                0 && (
                 <>
-                  <p className="mt-3 text-xs font-medium text-red-600">Errors:</p>
+                  <p className="mt-3 text-xs font-medium text-red-600">
+                    Errors:
+                  </p>
                   <ul className="mt-1 space-y-1">
                     {reconcileResult.results
                       .filter((r: any) => r.error)

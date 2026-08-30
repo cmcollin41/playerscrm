@@ -1,7 +1,13 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect, notFound } from "next/navigation"
 import Link from "next/link"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Accordion,
   AccordionContent,
@@ -17,7 +23,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { EventDetailClient, DeleteEventButton, ShareLinkBanner } from "./event-detail-client"
+import {
+  EventDetailClient,
+  DeleteEventButton,
+  ShareLinkBanner,
+} from "./event-detail-client"
 import { AddToCalendarButton } from "@/components/events/add-to-calendar-button"
 import { EventIntegrationsCarousel } from "@/components/events/event-integrations-carousel"
 import { getIntegration } from "@/lib/integrations"
@@ -48,7 +58,9 @@ export default async function EventDetailPage({
 
   const { data: rawRegistrations } = await supabase
     .from("event_registrations")
-    .select("*, people(id, first_name, last_name, email, phone, grade, dependent), payments(status, amount, data)")
+    .select(
+      "*, people(id, first_name, last_name, email, phone, grade, dependent), payments(status, amount, data)",
+    )
     .eq("event_id", id)
     .order("created_at", { ascending: false })
 
@@ -77,6 +89,29 @@ export default async function EventDetailPage({
     .order("ordering", { ascending: true })
     .order("starts_at", { ascending: true })
 
+  const registrationIds = (rawRegistrations || []).map((r) => r.id)
+  const acceptancesByRegistration = new Map<string, any[]>()
+  if (registrationIds.length > 0) {
+    const { data: acceptances } = await supabase
+      .from("waiver_acceptances")
+      .select("*")
+      .in("registration_id", registrationIds)
+      .order("accepted_at", { ascending: true })
+    for (const a of acceptances ?? []) {
+      const arr = acceptancesByRegistration.get(a.registration_id) ?? []
+      arr.push(a)
+      acceptancesByRegistration.set(a.registration_id, arr)
+    }
+  }
+
+  // Whether this event has any waivers attached — used to decide whether to
+  // render the Waivers column at all.
+  const { data: attachedWaivers } = await supabase
+    .from("event_waivers")
+    .select("waiver_id")
+    .eq("event_id", id)
+  const eventHasWaivers = (attachedWaivers?.length ?? 0) > 0
+
   const { data: siblings } = event.series_id
     ? await supabase
         .from("events")
@@ -86,7 +121,9 @@ export default async function EventDetailPage({
         .order("series_index", { ascending: true })
     : { data: null }
 
-  const app = getIntegration(event.event_primary_integration ?? event.event_type)
+  const app = getIntegration(
+    event.event_primary_integration ?? event.event_type,
+  )
 
   // Capability gating reads the event's installed integrations. v1 typically
   // only has one capability-bearing integration per event so behavior matches
@@ -100,7 +137,9 @@ export default async function EventDetailPage({
   const { data: children } = supportsChildren
     ? await supabase
         .from("events")
-        .select("id, name, slug, starts_at, location, event_type, event_primary_integration, is_published")
+        .select(
+          "id, name, slug, starts_at, location, event_type, event_primary_integration, is_published",
+        )
         .eq("account_id", event.account_id)
         .eq("parent_event_id", event.id)
         .order("starts_at", { ascending: true, nullsFirst: false })
@@ -121,7 +160,9 @@ export default async function EventDetailPage({
       .in("relation_id", dependentsNeedingGuardian)
 
     // Prefer primary guardian; fall back to any guardian with an email.
-    const sorted = (rels || []).slice().sort((a: any, b: any) => Number(!!b.primary) - Number(!!a.primary))
+    const sorted = (rels || [])
+      .slice()
+      .sort((a: any, b: any) => Number(!!b.primary) - Number(!!a.primary))
     for (const rel of sorted as any[]) {
       const depId = rel.relation_id
       const email = rel.people?.email
@@ -135,13 +176,18 @@ export default async function EventDetailPage({
 
   const registrations = (rawRegistrations || []).map((r) => ({
     ...r,
-    guardian_email: r.people?.id ? guardianEmailByDependentId.get(r.people.id) || null : null,
-    guardian_person_id: r.people?.id ? guardianPersonIdByDependentId.get(r.people.id) || null : null,
+    guardian_email: r.people?.id
+      ? guardianEmailByDependentId.get(r.people.id) || null
+      : null,
+    guardian_person_id: r.people?.id
+      ? guardianPersonIdByDependentId.get(r.people.id) || null
+      : null,
     invoice: invoiceByRegistrationId.get(r.id) || null,
+    waiver_acceptances: acceptancesByRegistration.get(r.id) || [],
   }))
 
-  const confirmed = registrations.filter(r => r.status === "confirmed").length
-  const pending = registrations.filter(r => r.status === "pending").length
+  const confirmed = registrations.filter((r) => r.status === "confirmed").length
+  const pending = registrations.filter((r) => r.status === "pending").length
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -236,7 +282,8 @@ export default async function EventDetailPage({
             <div>
               <p className="text-xs text-gray-500">Registered</p>
               <div className="text-sm font-medium">
-                {confirmed}{event.capacity ? ` / ${event.capacity}` : ""}
+                {confirmed}
+                {event.capacity ? ` / ${event.capacity}` : ""}
                 {pending > 0 && (
                   <TooltipProvider>
                     <Tooltip>
@@ -246,9 +293,10 @@ export default async function EventDetailPage({
                         </span>
                       </TooltipTrigger>
                       <TooltipContent className="max-w-xs text-xs">
-                        Pending = registration started but payment not confirmed yet.
-                        The Stripe webhook flips these to Confirmed once payment succeeds.
-                        You can also mark them Confirmed manually from the attendees table.
+                        Pending = registration started but payment not confirmed
+                        yet. The Stripe webhook flips these to Confirmed once
+                        payment succeeds. You can also mark them Confirmed
+                        manually from the attendees table.
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
@@ -263,7 +311,9 @@ export default async function EventDetailPage({
               <DollarSign className="h-5 w-5 text-gray-400" />
               <div>
                 <p className="text-xs text-gray-500">Fee</p>
-                <p className="text-sm font-medium">${(event.fee_amount / 100).toFixed(2)}</p>
+                <p className="text-sm font-medium">
+                  ${(event.fee_amount / 100).toFixed(2)}
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -288,12 +338,18 @@ export default async function EventDetailPage({
                         <Link
                           href={`/events/${s.id}`}
                           className={`flex items-baseline justify-between gap-2 text-sm ${
-                            isCurrent ? "font-semibold text-gray-900" : "text-gray-700 hover:text-gray-900"
+                            isCurrent
+                              ? "font-semibold text-gray-900"
+                              : "text-gray-700 hover:text-gray-900"
                           }`}
                         >
                           <span>
                             {s.series_index}. {s.name}
-                            {isCurrent && <span className="ml-2 text-xs text-gray-500">(this one)</span>}
+                            {isCurrent && (
+                              <span className="ml-2 text-xs text-gray-500">
+                                (this one)
+                              </span>
+                            )}
                           </span>
                           {s.starts_at && (
                             <span className="text-xs text-gray-500">
@@ -316,14 +372,19 @@ export default async function EventDetailPage({
           <CardHeader className="flex flex-row items-start justify-between gap-2">
             <div>
               <CardTitle className="text-lg">
-                Sub-events {children && children.length > 0 && `(${children.length})`}
+                Sub-events{" "}
+                {children && children.length > 0 && `(${children.length})`}
               </CardTitle>
               <CardDescription>
                 Events nested under this {app.name.toLowerCase()}.
               </CardDescription>
             </div>
             <Link
-              href={`/events/new?parent=${event.id}${app.capabilities.childIntegrationSlug ? `&app=${app.capabilities.childIntegrationSlug}` : ""}${event.team_id ? `&team=${event.team_id}` : ""}`}
+              href={`/events/new?parent=${event.id}${
+                app.capabilities.childIntegrationSlug
+                  ? `&app=${app.capabilities.childIntegrationSlug}`
+                  : ""
+              }${event.team_id ? `&team=${event.team_id}` : ""}`}
             >
               <Button size="sm">
                 <Plus className="mr-1.5 h-4 w-4" />
@@ -335,7 +396,9 @@ export default async function EventDetailPage({
             <CardContent>
               <ul className="divide-y divide-gray-100">
                 {children.map((c) => {
-                  const childApp = getIntegration(c.event_primary_integration ?? c.event_type)
+                  const childApp = getIntegration(
+                    c.event_primary_integration ?? c.event_type,
+                  )
                   return (
                     <li key={c.id} className="py-2">
                       <Link
@@ -382,15 +445,20 @@ export default async function EventDetailPage({
                         {s.starts_at && (
                           <p className="text-xs text-gray-500">
                             {new Date(s.starts_at).toLocaleString()}
-                            {s.ends_at && ` – ${new Date(s.ends_at).toLocaleTimeString()}`}
+                            {s.ends_at &&
+                              ` – ${new Date(s.ends_at).toLocaleTimeString()}`}
                           </p>
                         )}
                       </div>
                       {s.location && (
-                        <p className="mt-1 text-xs text-gray-500">{s.location}</p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {s.location}
+                        </p>
                       )}
                       {s.description && (
-                        <p className="mt-2 text-sm text-gray-700">{s.description}</p>
+                        <p className="mt-2 text-sm text-gray-700">
+                          {s.description}
+                        </p>
                       )}
                     </div>
                   ))}
@@ -401,7 +469,11 @@ export default async function EventDetailPage({
         </Card>
       )}
 
-      <EventDetailClient event={event} registrations={registrations} />
+      <EventDetailClient
+        event={event}
+        registrations={registrations}
+        showWaiversColumn={eventHasWaivers}
+      />
     </div>
   )
 }

@@ -5,9 +5,23 @@ import { createClient } from "@/lib/supabase/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, MapPin, DollarSign, Mail, Check, Plus, Loader2 } from "lucide-react"
+import {
+  Calendar,
+  MapPin,
+  DollarSign,
+  Mail,
+  Check,
+  Plus,
+  Loader2,
+} from "lucide-react"
 import { toast } from "sonner"
 import {
   ProductSelectionStep,
@@ -18,6 +32,15 @@ import {
   type EventProductForRegister,
   type Registrant,
 } from "./product-selection-step"
+import {
+  WaiverStep,
+  signaturesAreComplete,
+  defaultRelationship,
+  waiverKey,
+  type WaiverForRegister,
+  type WaiverSignatures,
+  type WaiverRegistrant,
+} from "./waiver-step"
 
 function formatEventDateRange(starts: string | null, ends: string | null) {
   if (!starts) return null
@@ -56,13 +79,27 @@ function formatEventDateRange(starts: string | null, ends: string | null) {
   }
 
   if (sameYear) {
-    const startStr = start.toLocaleDateString(undefined, { month: "long", day: "numeric" })
-    const endStr = end.toLocaleDateString(undefined, { month: "long", day: "numeric" })
+    const startStr = start.toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+    })
+    const endStr = end.toLocaleDateString(undefined, {
+      month: "long",
+      day: "numeric",
+    })
     return `${startStr} – ${endStr}, ${start.getFullYear()}`
   }
 
-  const startStr = start.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
-  const endStr = end.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+  const startStr = start.toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  })
+  const endStr = end.toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  })
   return `${startStr} – ${endStr}`
 }
 
@@ -72,10 +109,23 @@ interface RegisterClientProps {
   registrationOpen: boolean
 }
 
-type Step = "info" | "email" | "magic-link-sent" | "profile" | "registrant-kind" | "select-kids" | "select-products" | "success"
+type Step =
+  | "info"
+  | "email"
+  | "magic-link-sent"
+  | "profile"
+  | "registrant-kind"
+  | "select-kids"
+  | "sign-waivers"
+  | "select-products"
+  | "success"
 type RegistrantKind = "self" | "dependent" | "both"
 
-export function RegisterClient({ event, account, registrationOpen }: RegisterClientProps) {
+export function RegisterClient({
+  event,
+  account,
+  registrationOpen,
+}: RegisterClientProps) {
   const supabase = createClient()
   const [step, setStep] = useState<Step>("info")
   const [authLoading, setAuthLoading] = useState(true)
@@ -87,15 +137,29 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [registering, setRegistering] = useState(false)
   const [showAddChild, setShowAddChild] = useState(false)
-  const [newChild, setNewChild] = useState({ first_name: "", last_name: "", grade: "", relationship: "Parent" })
+  const [newChild, setNewChild] = useState({
+    first_name: "",
+    last_name: "",
+    grade: "",
+    relationship: "Parent",
+  })
   const [addingChild, setAddingChild] = useState(false)
   const [registerSelf, setRegisterSelf] = useState(false)
-  const [selfName, setSelfName] = useState({ first_name: "", last_name: "", grade: "" })
+  const [selfName, setSelfName] = useState({
+    first_name: "",
+    last_name: "",
+    grade: "",
+  })
   const [addingSelf, setAddingSelf] = useState(false)
-  const [profileForm, setProfileForm] = useState({ first_name: "", last_name: "" })
+  const [profileForm, setProfileForm] = useState({
+    first_name: "",
+    last_name: "",
+  })
   const [savingProfile, setSavingProfile] = useState(false)
   const [hasSelfInList, setHasSelfInList] = useState(false)
-  const [registrantKind, setRegistrantKind] = useState<RegistrantKind | null>(null)
+  const [registrantKind, setRegistrantKind] = useState<RegistrantKind | null>(
+    null,
+  )
 
   const eventProducts: EventProductForRegister[] = Array.isArray(
     event.event_products,
@@ -112,6 +176,14 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   const [productAddresses, setProductAddresses] = useState<AddressesByPerson>(
     {},
   )
+
+  const eventWaivers: WaiverForRegister[] = Array.isArray(event.event_waivers)
+    ? [...event.event_waivers].sort(
+        (a: any, b: any) => (a.ordering ?? 0) - (b.ordering ?? 0),
+      )
+    : []
+  const hasWaivers = eventWaivers.length > 0
+  const [waiverSignatures, setWaiverSignatures] = useState<WaiverSignatures>({})
 
   // Load family via server API (avoids RLS timing issues with browser client)
   const loadFamily = async () => {
@@ -156,7 +228,9 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       }
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === "INITIAL_SESSION" || event === "SIGNED_IN") {
         if (session?.user) {
           await handleSignedIn(session.user)
@@ -225,7 +299,9 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       email: email.trim(),
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: `${window.location.origin}/api/auth/callback?next=${encodeURIComponent(next)}`,
+        emailRedirectTo: `${
+          window.location.origin
+        }/api/auth/callback?next=${encodeURIComponent(next)}`,
       },
     })
 
@@ -241,7 +317,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
   }
 
   const toggleChild = (id: string) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -274,9 +350,14 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       if (!res.ok) throw new Error(data.error || "Failed to add")
       const person = data.person
 
-      setFamily(prev => [...prev, person])
-      setSelected(prev => new Set(prev).add(person.id))
-      setNewChild({ first_name: "", last_name: "", grade: "", relationship: "Parent" })
+      setFamily((prev) => [...prev, person])
+      setSelected((prev) => new Set(prev).add(person.id))
+      setNewChild({
+        first_name: "",
+        last_name: "",
+        grade: "",
+        relationship: "Parent",
+      })
       setShowAddChild(false)
       toast.success("Added")
     } catch (err: any) {
@@ -310,8 +391,8 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       if (!res.ok) throw new Error(data.error || "Failed to add")
       const person = data.person
 
-      setFamily(prev => [...prev, person])
-      setSelected(prev => new Set(prev).add(person.id))
+      setFamily((prev) => [...prev, person])
+      setSelected((prev) => new Set(prev).add(person.id))
       setSelfName({ first_name: "", last_name: "", grade: "" })
       setRegisterSelf(false)
       setHasSelfInList(true)
@@ -333,9 +414,61 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       dependent: !!p.dependent,
     }))
 
+  const waiverRegistrants: WaiverRegistrant[] = Array.from(selected)
+    .map((id) => family.find((p) => p.id === id))
+    .filter(Boolean)
+    .map((p: any) => ({
+      id: p.id,
+      first_name: p.first_name,
+      last_name: p.last_name,
+      dependent: !!p.dependent,
+      birthdate: p.birthdate ?? null,
+    }))
+
+  function seedWaiverSignatures() {
+    setWaiverSignatures((prev) => {
+      const next: WaiverSignatures = { ...prev }
+      for (const w of eventWaivers) {
+        for (const r of waiverRegistrants) {
+          const key = waiverKey(r.id, w.waiver_id)
+          if (!next[key]) {
+            next[key] = {
+              signer_name: "",
+              signer_relationship: defaultRelationship(r, w),
+              accepted: false,
+            }
+          }
+        }
+      }
+      return next
+    })
+  }
+
   const handleAdvanceFromPeople = () => {
     if (selected.size === 0) {
       toast.error("Select at least one person to register")
+      return
+    }
+    if (hasWaivers) {
+      seedWaiverSignatures()
+      setStep("sign-waivers")
+      return
+    }
+    if (hasProducts) {
+      setStep("select-products")
+      return
+    }
+    submitRegistration([])
+  }
+
+  const handleAdvanceFromWaivers = () => {
+    const check = signaturesAreComplete({
+      registrants: waiverRegistrants,
+      waivers: eventWaivers,
+      signatures: waiverSignatures,
+    })
+    if (!check.complete) {
+      toast.error(check.reason ?? "Sign all required waivers to continue")
       return
     }
     if (hasProducts) {
@@ -367,6 +500,28 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
     submitRegistration(items)
   }
 
+  const buildWaiverAcceptancesPayload = () => {
+    const out: Array<{
+      person_id: string
+      waiver_id: string
+      signer_name: string
+      signer_relationship: "self" | "guardian" | "other"
+    }> = []
+    for (const w of eventWaivers) {
+      for (const r of waiverRegistrants) {
+        const sig = waiverSignatures[waiverKey(r.id, w.waiver_id)]
+        if (!sig?.accepted) continue
+        out.push({
+          person_id: r.id,
+          waiver_id: w.waiver_id,
+          signer_name: sig.signer_name.trim(),
+          signer_relationship: sig.signer_relationship,
+        })
+      }
+    }
+    return out
+  }
+
   const submitRegistration = async (
     items: Array<{
       person_id: string
@@ -384,6 +539,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
           event_id: event.id,
           person_ids: Array.from(selected),
           items,
+          waiver_acceptances: buildWaiverAcceptancesPayload(),
         }),
       })
 
@@ -422,12 +578,14 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
           </div>
         )}
         <CardHeader className="text-center">
-          <p className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-1">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-400">
             {account?.name}
           </p>
           <CardTitle className="text-2xl">{event.name}</CardTitle>
           {event.description && (
-            <CardDescription className="mt-2">{event.description}</CardDescription>
+            <CardDescription className="mt-2">
+              {event.description}
+            </CardDescription>
           )}
         </CardHeader>
         <CardContent>
@@ -446,10 +604,12 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
             )}
             {event.is_paid && (
               <span className="flex items-center gap-1.5">
-                <DollarSign className="h-4 w-4" />
-                ${(event.fee_amount / 100).toFixed(2)} per person
+                <DollarSign className="h-4 w-4" />$
+                {(event.fee_amount / 100).toFixed(2)} per person
                 {event.fee_description && (
-                  <span className="text-gray-400">({event.fee_description})</span>
+                  <span className="text-gray-400">
+                    ({event.fee_description})
+                  </span>
                 )}
               </span>
             )}
@@ -457,52 +617,62 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
         </CardContent>
       </Card>
 
-      {Array.isArray(event.event_sessions) && event.event_sessions.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base">Sessions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {[...event.event_sessions]
-              .sort((a: any, b: any) => {
-                if ((a.ordering ?? 0) !== (b.ordering ?? 0)) {
-                  return (a.ordering ?? 0) - (b.ordering ?? 0)
-                }
-                const aStart = a.starts_at ? Date.parse(a.starts_at) : Infinity
-                const bStart = b.starts_at ? Date.parse(b.starts_at) : Infinity
-                return aStart - bStart
-              })
-              .map((s: any) => (
-                <div key={s.id} className="rounded-lg border p-3">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-sm font-medium">{s.title}</p>
-                    {s.starts_at && (
-                      <p className="text-xs text-gray-500">
-                        {new Date(s.starts_at).toLocaleString(undefined, {
-                          month: "short",
-                          day: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                        {s.ends_at &&
-                          ` – ${new Date(s.ends_at).toLocaleTimeString(undefined, {
+      {Array.isArray(event.event_sessions) &&
+        event.event_sessions.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="text-base">Sessions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {[...event.event_sessions]
+                .sort((a: any, b: any) => {
+                  if ((a.ordering ?? 0) !== (b.ordering ?? 0)) {
+                    return (a.ordering ?? 0) - (b.ordering ?? 0)
+                  }
+                  const aStart = a.starts_at
+                    ? Date.parse(a.starts_at)
+                    : Infinity
+                  const bStart = b.starts_at
+                    ? Date.parse(b.starts_at)
+                    : Infinity
+                  return aStart - bStart
+                })
+                .map((s: any) => (
+                  <div key={s.id} className="rounded-lg border p-3">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <p className="text-sm font-medium">{s.title}</p>
+                      {s.starts_at && (
+                        <p className="text-xs text-gray-500">
+                          {new Date(s.starts_at).toLocaleString(undefined, {
+                            month: "short",
+                            day: "numeric",
                             hour: "numeric",
                             minute: "2-digit",
-                          })}`}
+                          })}
+                          {s.ends_at &&
+                            ` – ${new Date(s.ends_at).toLocaleTimeString(
+                              undefined,
+                              {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              },
+                            )}`}
+                        </p>
+                      )}
+                    </div>
+                    {s.location && (
+                      <p className="mt-1 text-xs text-gray-500">{s.location}</p>
+                    )}
+                    {s.description && (
+                      <p className="mt-2 text-sm text-gray-700">
+                        {s.description}
                       </p>
                     )}
                   </div>
-                  {s.location && (
-                    <p className="mt-1 text-xs text-gray-500">{s.location}</p>
-                  )}
-                  {s.description && (
-                    <p className="mt-2 text-sm text-gray-700">{s.description}</p>
-                  )}
-                </div>
-              ))}
-          </CardContent>
-        </Card>
-      )}
+                ))}
+            </CardContent>
+          </Card>
+        )}
 
       {authLoading && step === "info" && (
         <Card>
@@ -552,7 +722,11 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
                 onKeyDown={(e) => e.key === "Enter" && handleSendMagicLink()}
               />
             </div>
-            <Button className="w-full" onClick={handleSendMagicLink} disabled={sending || !email}>
+            <Button
+              className="w-full"
+              onClick={handleSendMagicLink}
+              disabled={sending || !email}
+            >
               {sending ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -568,10 +742,12 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       {step === "magic-link-sent" && (
         <Card>
           <CardContent className="py-8 text-center">
-            <Mail className="mx-auto h-10 w-10 text-gray-400 mb-4" />
+            <Mail className="mx-auto mb-4 h-10 w-10 text-gray-400" />
             <h3 className="text-lg font-semibold">Check your email</h3>
-            <p className="mt-2 text-sm text-gray-500 max-w-sm mx-auto">
-              We sent a sign-in link to <strong>{email}</strong>. It can take a minute to arrive — if you don&apos;t see it, check your spam folder.
+            <p className="mx-auto mt-2 max-w-sm text-sm text-gray-500">
+              We sent a sign-in link to <strong>{email}</strong>. It can take a
+              minute to arrive — if you don&apos;t see it, check your spam
+              folder.
             </p>
             <button
               onClick={() => {
@@ -589,9 +765,10 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       {/* Step: Collect parent name on first sign-in */}
       {step === "profile" && (
         <>
-          <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2.5 mb-4 text-sm">
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm">
             <span className="text-gray-500">
-              Signed in as <span className="font-medium text-gray-900">{user?.email}</span>
+              Signed in as{" "}
+              <span className="font-medium text-gray-900">{user?.email}</span>
             </span>
             <button
               onClick={async () => {
@@ -602,7 +779,7 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
                 setProfileForm({ first_name: "", last_name: "" })
                 setStep("info")
               }}
-              className="text-gray-400 hover:text-gray-600 text-xs font-medium"
+              className="text-xs font-medium text-gray-400 hover:text-gray-600"
             >
               Sign out
             </button>
@@ -617,25 +794,35 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label htmlFor="profile_first" className="text-xs">First Name *</Label>
+                  <Label htmlFor="profile_first" className="text-xs">
+                    First Name *
+                  </Label>
                   <Input
                     id="profile_first"
                     placeholder="First"
                     value={profileForm.first_name}
                     onChange={(e) =>
-                      setProfileForm((p) => ({ ...p, first_name: e.target.value }))
+                      setProfileForm((p) => ({
+                        ...p,
+                        first_name: e.target.value,
+                      }))
                     }
                     onKeyDown={(e) => e.key === "Enter" && handleSaveProfile()}
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="profile_last" className="text-xs">Last Name *</Label>
+                  <Label htmlFor="profile_last" className="text-xs">
+                    Last Name *
+                  </Label>
                   <Input
                     id="profile_last"
                     placeholder="Last"
                     value={profileForm.last_name}
                     onChange={(e) =>
-                      setProfileForm((p) => ({ ...p, last_name: e.target.value }))
+                      setProfileForm((p) => ({
+                        ...p,
+                        last_name: e.target.value,
+                      }))
                     }
                     onKeyDown={(e) => e.key === "Enter" && handleSaveProfile()}
                   />
@@ -644,9 +831,15 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
               <Button
                 className="w-full"
                 onClick={handleSaveProfile}
-                disabled={savingProfile || !profileForm.first_name || !profileForm.last_name}
+                disabled={
+                  savingProfile ||
+                  !profileForm.first_name ||
+                  !profileForm.last_name
+                }
               >
-                {savingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {savingProfile ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
                 Continue
               </Button>
             </CardContent>
@@ -669,15 +862,17 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
                 setRegistrantKind("self")
                 setRegisterSelf(!hasSelfInList)
                 setShowAddChild(false)
-                const self = family.find(p => !p.dependent)
-                if (self) setSelected(prev => new Set(prev).add(self.id))
+                const self = family.find((p) => !p.dependent)
+                if (self) setSelected((prev) => new Set(prev).add(self.id))
                 setStep("select-kids")
               }}
-              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left hover:border-gray-400 transition-colors"
+              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left transition-colors hover:border-gray-400"
             >
               <div className="flex-1">
                 <p className="text-sm font-medium">Just myself</p>
-                <p className="text-xs text-gray-500">I&apos;m the athlete signing up</p>
+                <p className="text-xs text-gray-500">
+                  I&apos;m the athlete signing up
+                </p>
               </div>
             </button>
             <button
@@ -687,11 +882,13 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
                 setShowAddChild(false)
                 setStep("select-kids")
               }}
-              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left hover:border-gray-400 transition-colors"
+              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left transition-colors hover:border-gray-400"
             >
               <div className="flex-1">
                 <p className="text-sm font-medium">My child or dependent</p>
-                <p className="text-xs text-gray-500">I&apos;m a parent or guardian signing up someone else</p>
+                <p className="text-xs text-gray-500">
+                  I&apos;m a parent or guardian signing up someone else
+                </p>
               </div>
             </button>
             <button
@@ -699,15 +896,17 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
                 setRegistrantKind("both")
                 setRegisterSelf(!hasSelfInList)
                 setShowAddChild(false)
-                const self = family.find(p => !p.dependent)
-                if (self) setSelected(prev => new Set(prev).add(self.id))
+                const self = family.find((p) => !p.dependent)
+                if (self) setSelected((prev) => new Set(prev).add(self.id))
                 setStep("select-kids")
               }}
-              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left hover:border-gray-400 transition-colors"
+              className="flex w-full items-center gap-3 rounded-lg border border-gray-200 p-4 text-left transition-colors hover:border-gray-400"
             >
               <div className="flex-1">
                 <p className="text-sm font-medium">Myself and my child(ren)</p>
-                <p className="text-xs text-gray-500">Register everyone in one go</p>
+                <p className="text-xs text-gray-500">
+                  Register everyone in one go
+                </p>
               </div>
             </button>
           </CardContent>
@@ -717,242 +916,378 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
       {/* Step: Select kids */}
       {step === "select-kids" && (
         <>
-        <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2.5 mb-4 text-sm">
-          <span className="text-gray-500">
-            Signed in as <span className="font-medium text-gray-900">{user?.email}</span>
-          </span>
-          <button
-            onClick={async () => {
-              await supabase.auth.signOut()
-              setUser(null)
-              setFamily([])
-              setSelected(new Set())
-              setStep("info")
-            }}
-            className="text-gray-400 hover:text-gray-600 text-xs font-medium"
-          >
-            Sign out
-          </button>
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Who are you registering?</CardTitle>
-            <CardDescription>Select the people you'd like to register for this event</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {familyLoading && (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="h-5 w-5 animate-spin text-gray-400 mr-2" />
-                <span className="text-sm text-gray-500">Loading your people...</span>
-              </div>
-            )}
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm">
+            <span className="text-gray-500">
+              Signed in as{" "}
+              <span className="font-medium text-gray-900">{user?.email}</span>
+            </span>
+            <button
+              onClick={async () => {
+                await supabase.auth.signOut()
+                setUser(null)
+                setFamily([])
+                setSelected(new Set())
+                setStep("info")
+              }}
+              className="text-xs font-medium text-gray-400 hover:text-gray-600"
+            >
+              Sign out
+            </button>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">
+                Who are you registering?
+              </CardTitle>
+              <CardDescription>
+                Select the people you'd like to register for this event
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {familyLoading && (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin text-gray-400" />
+                  <span className="text-sm text-gray-500">
+                    Loading your people...
+                  </span>
+                </div>
+              )}
 
-            {!familyLoading && (
-              <>
-                {/* Register myself — only show if user has no person record yet */}
-                {!registerSelf && !hasSelfInList && (
-                  <button
-                    onClick={() => setRegisterSelf(true)}
-                    className="flex w-full items-center gap-3 rounded-lg border border-dashed border-gray-300 p-3 text-left text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
-                  >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    Register myself
-                  </button>
-                )}
+              {!familyLoading && (
+                <>
+                  {/* Register myself — only show if user has no person record yet */}
+                  {!registerSelf && !hasSelfInList && (
+                    <button
+                      onClick={() => setRegisterSelf(true)}
+                      className="flex w-full items-center gap-3 rounded-lg border border-dashed border-gray-300 p-3 text-left text-sm text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700"
+                    >
+                      <Plus className="h-4 w-4 shrink-0" />
+                      Register myself
+                    </button>
+                  )}
 
-                {registerSelf && (
-                  <div className="rounded-lg border border-gray-200 p-4 space-y-3">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Register myself</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs">First Name *</Label>
-                        <Input
-                          placeholder="First"
-                          value={selfName.first_name}
-                          onChange={(e) => setSelfName(p => ({ ...p, first_name: e.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Last Name *</Label>
-                        <Input
-                          placeholder="Last"
-                          value={selfName.last_name}
-                          onChange={(e) => setSelfName(p => ({ ...p, last_name: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs">Grade</Label>
-                      <select
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                        value={selfName.grade}
-                        onChange={(e) => setSelfName(p => ({ ...p, grade: e.target.value }))}
-                      >
-                        <option value="">Select grade</option>
-                        {[...Array(12)].map((_, i) => (
-                          <option key={i} value={String(i + 1)}>{i + 1}</option>
-                        ))}
-                        <option value="Graduated">Graduated</option>
-                      </select>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleAddSelf} disabled={addingSelf}>
-                        {addingSelf ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setRegisterSelf(false)}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* People list */}
-                {family.map((person) => (
-                  <button
-                    key={person.id}
-                    disabled={person.alreadyRegistered}
-                    onClick={() => toggleChild(person.id)}
-                    className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
-                      person.alreadyRegistered
-                        ? "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
-                        : selected.has(person.id)
-                        ? "border-gray-900 bg-gray-50"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
-                      selected.has(person.id) ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300"
-                    }`}>
-                      {selected.has(person.id) && <Check className="h-3 w-3" />}
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">
-                        {person.dependent
-                          ? `${person.first_name} ${person.last_name}`
-                          : "Myself"}
+                  {registerSelf && (
+                    <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Register myself
                       </p>
-                      {!person.dependent && (person.first_name || person.last_name) && (
-                        <p className="text-xs text-gray-500">
-                          {person.first_name} {person.last_name}
-                        </p>
-                      )}
-                      {person.dependent && person.grade && (
-                        <p className="text-xs text-gray-500">Grade {person.grade}</p>
-                      )}
-                    </div>
-                    {person.alreadyRegistered && (
-                      <Badge variant="secondary" className="text-[10px]">Already registered</Badge>
-                    )}
-                  </button>
-                ))}
-
-                {/* Add another person — always at bottom */}
-                {!showAddChild ? (
-                  <button
-                    onClick={() => setShowAddChild(true)}
-                    className="flex w-full items-center gap-3 rounded-lg border border-dashed border-gray-300 p-3 text-left text-sm text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-colors"
-                  >
-                    <Plus className="h-4 w-4 shrink-0" />
-                    Add another person
-                  </button>
-                ) : (
-                  <div className="rounded-lg border border-gray-200 p-4 space-y-3">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Add a person</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1">
-                        <Label className="text-xs">First Name *</Label>
-                        <Input
-                          placeholder="First"
-                          value={newChild.first_name}
-                          onChange={(e) => setNewChild(p => ({ ...p, first_name: e.target.value }))}
-                        />
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">First Name *</Label>
+                          <Input
+                            placeholder="First"
+                            value={selfName.first_name}
+                            onChange={(e) =>
+                              setSelfName((p) => ({
+                                ...p,
+                                first_name: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Last Name *</Label>
+                          <Input
+                            placeholder="Last"
+                            value={selfName.last_name}
+                            onChange={(e) =>
+                              setSelfName((p) => ({
+                                ...p,
+                                last_name: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Last Name *</Label>
-                        <Input
-                          placeholder="Last"
-                          value={newChild.last_name}
-                          onChange={(e) => setNewChild(p => ({ ...p, last_name: e.target.value }))}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs">Grade</Label>
                         <select
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                          value={newChild.grade}
-                          onChange={(e) => setNewChild(p => ({ ...p, grade: e.target.value }))}
+                          className="border-input flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm"
+                          value={selfName.grade}
+                          onChange={(e) =>
+                            setSelfName((p) => ({
+                              ...p,
+                              grade: e.target.value,
+                            }))
+                          }
                         >
                           <option value="">Select grade</option>
                           {[...Array(12)].map((_, i) => (
-                            <option key={i} value={String(i + 1)}>{i + 1}</option>
+                            <option key={i} value={String(i + 1)}>
+                              {i + 1}
+                            </option>
                           ))}
+                          <option value="Graduated">Graduated</option>
                         </select>
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-xs">Your relationship</Label>
-                        <select
-                          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                          value={newChild.relationship}
-                          onChange={(e) => setNewChild(p => ({ ...p, relationship: e.target.value }))}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleAddSelf}
+                          disabled={addingSelf}
                         >
-                          <option value="Parent">Parent</option>
-                          <option value="Guardian">Guardian</option>
-                          <option value="Other">Other</option>
-                        </select>
+                          {addingSelf ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "Add"
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setRegisterSelf(false)}
+                        >
+                          Cancel
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleAddChild} disabled={addingChild}>
-                        {addingChild ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add"}
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setShowAddChild(false)}>
-                        Cancel
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            <div className="pt-4 border-t">
-              {event.is_paid && selected.size > 0 && (
-                <p className="mb-3 text-sm text-gray-600 text-center">
-                  Total: <strong>${((event.fee_amount * selected.size) / 100).toFixed(2)}</strong>
-                  {selected.size > 1 && (
-                    <span className="text-gray-400"> ({selected.size} x ${(event.fee_amount / 100).toFixed(2)})</span>
                   )}
-                </p>
+
+                  {/* People list */}
+                  {family.map((person) => (
+                    <button
+                      key={person.id}
+                      disabled={person.alreadyRegistered}
+                      onClick={() => toggleChild(person.id)}
+                      className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition-colors ${
+                        person.alreadyRegistered
+                          ? "cursor-not-allowed border-gray-200 bg-gray-50 opacity-60"
+                          : selected.has(person.id)
+                            ? "border-gray-900 bg-gray-50"
+                            : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <div
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
+                          selected.has(person.id)
+                            ? "border-gray-900 bg-gray-900 text-white"
+                            : "border-gray-300"
+                        }`}
+                      >
+                        {selected.has(person.id) && (
+                          <Check className="h-3 w-3" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">
+                          {person.dependent
+                            ? `${person.first_name} ${person.last_name}`
+                            : "Myself"}
+                        </p>
+                        {!person.dependent &&
+                          (person.first_name || person.last_name) && (
+                            <p className="text-xs text-gray-500">
+                              {person.first_name} {person.last_name}
+                            </p>
+                          )}
+                        {person.dependent && person.grade && (
+                          <p className="text-xs text-gray-500">
+                            Grade {person.grade}
+                          </p>
+                        )}
+                      </div>
+                      {person.alreadyRegistered && (
+                        <Badge variant="secondary" className="text-[10px]">
+                          Already registered
+                        </Badge>
+                      )}
+                    </button>
+                  ))}
+
+                  {/* Add another person — always at bottom */}
+                  {!showAddChild ? (
+                    <button
+                      onClick={() => setShowAddChild(true)}
+                      className="flex w-full items-center gap-3 rounded-lg border border-dashed border-gray-300 p-3 text-left text-sm text-gray-500 transition-colors hover:border-gray-400 hover:text-gray-700"
+                    >
+                      <Plus className="h-4 w-4 shrink-0" />
+                      Add another person
+                    </button>
+                  ) : (
+                    <div className="space-y-3 rounded-lg border border-gray-200 p-4">
+                      <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                        Add a person
+                      </p>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">First Name *</Label>
+                          <Input
+                            placeholder="First"
+                            value={newChild.first_name}
+                            onChange={(e) =>
+                              setNewChild((p) => ({
+                                ...p,
+                                first_name: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Last Name *</Label>
+                          <Input
+                            placeholder="Last"
+                            value={newChild.last_name}
+                            onChange={(e) =>
+                              setNewChild((p) => ({
+                                ...p,
+                                last_name: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Grade</Label>
+                          <select
+                            className="border-input flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm"
+                            value={newChild.grade}
+                            onChange={(e) =>
+                              setNewChild((p) => ({
+                                ...p,
+                                grade: e.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Select grade</option>
+                            {[...Array(12)].map((_, i) => (
+                              <option key={i} value={String(i + 1)}>
+                                {i + 1}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Your relationship</Label>
+                          <select
+                            className="border-input flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm"
+                            value={newChild.relationship}
+                            onChange={(e) =>
+                              setNewChild((p) => ({
+                                ...p,
+                                relationship: e.target.value,
+                              }))
+                            }
+                          >
+                            <option value="Parent">Parent</option>
+                            <option value="Guardian">Guardian</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={handleAddChild}
+                          disabled={addingChild}
+                        >
+                          {addingChild ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            "Add"
+                          )}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setShowAddChild(false)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
-              <Button
-                className="w-full"
-                size="lg"
-                onClick={handleAdvanceFromPeople}
-                disabled={registering || selected.size === 0}
-              >
-                {registering ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : hasProducts ? (
-                  "Continue"
-                ) : event.is_paid ? (
-                  "Continue to Payment"
-                ) : (
-                  "Complete Registration"
+
+              <div className="border-t pt-4">
+                {event.is_paid && selected.size > 0 && (
+                  <p className="mb-3 text-center text-sm text-gray-600">
+                    Total:{" "}
+                    <strong>
+                      ${((event.fee_amount * selected.size) / 100).toFixed(2)}
+                    </strong>
+                    {selected.size > 1 && (
+                      <span className="text-gray-400">
+                        {" "}
+                        ({selected.size} x $
+                        {(event.fee_amount / 100).toFixed(2)})
+                      </span>
+                    )}
+                  </p>
                 )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                <Button
+                  className="w-full"
+                  size="lg"
+                  onClick={handleAdvanceFromPeople}
+                  disabled={registering || selected.size === 0}
+                >
+                  {registering ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : hasWaivers || hasProducts ? (
+                    "Continue"
+                  ) : event.is_paid ? (
+                    "Continue to Payment"
+                  ) : (
+                    "Complete Registration"
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Step: Sign waivers */}
+      {step === "sign-waivers" && (
+        <>
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm">
+            <button
+              onClick={() => setStep("select-kids")}
+              className="text-xs font-medium text-gray-500 hover:text-gray-700"
+            >
+              ← Back
+            </button>
+            <span className="text-gray-500">
+              Signed in as{" "}
+              <span className="font-medium text-gray-900">{user?.email}</span>
+            </span>
+          </div>
+          <WaiverStep
+            registrants={waiverRegistrants}
+            waivers={eventWaivers}
+            signatures={waiverSignatures}
+            onSignaturesChange={setWaiverSignatures}
+          />
+          <div className="mt-4">
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={handleAdvanceFromWaivers}
+              disabled={registering}
+            >
+              {registering ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : hasProducts ? (
+                "Continue"
+              ) : event.is_paid ? (
+                "Continue to Payment"
+              ) : (
+                "Complete Registration"
+              )}
+            </Button>
+          </div>
         </>
       )}
 
       {/* Step: Select product variants per registrant */}
       {step === "select-products" && (
         <>
-          <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2.5 mb-4 text-sm">
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-2.5 text-sm">
             <button
-              onClick={() => setStep("select-kids")}
+              onClick={() =>
+                setStep(hasWaivers ? "sign-waivers" : "select-kids")
+              }
               className="text-xs font-medium text-gray-500 hover:text-gray-700"
             >
               ← Back
@@ -976,9 +1311,8 @@ export function RegisterClient({ event, account, registrationOpen }: RegisterCli
           />
           <div className="mt-4">
             {event.is_paid && (
-              <p className="mb-3 text-sm text-gray-600 text-center">
-                Total:{" "}
-                <strong>${(eventTotalCents / 100).toFixed(2)}</strong>
+              <p className="mb-3 text-center text-sm text-gray-600">
+                Total: <strong>${(eventTotalCents / 100).toFixed(2)}</strong>
                 {productsExtraCents > 0 && (
                   <span className="text-gray-400">
                     {" "}

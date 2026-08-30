@@ -223,9 +223,12 @@ export async function proxy(request: NextRequest) {
           if (!isPortalPath) {
             return NextResponse.redirect(new URL("/portal/welcome", request.url))
           }
-        } else {
+        } else if (!isPortalPath) {
           return NextResponse.redirect(new URL("/no-access", request.url))
         }
+        // Unlinked but already inside /portal/*: let the portal render its
+        // own "your admin hasn't linked you yet" state instead of bouncing
+        // to the dashboard no-access screen. See lib/portal-auth.ts.
       }
     }
 
@@ -281,9 +284,11 @@ export async function proxy(request: NextRequest) {
         if (!isPortalPath) {
           return NextResponse.redirect(new URL("/portal/welcome", request.url))
         }
-      } else {
+      } else if (!isPortalPath) {
         return NextResponse.redirect(new URL("/no-access", request.url))
       }
+      // Unlinked but already inside /portal/*: let the portal render its own
+      // "your admin hasn't linked you yet" state. See lib/portal-auth.ts.
     }
   }
 

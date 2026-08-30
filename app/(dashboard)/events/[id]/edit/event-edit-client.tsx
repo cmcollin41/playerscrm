@@ -8,7 +8,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import { ImageDropzone } from "@/components/ui/image-dropzone"
 import { Trash2, Plus } from "lucide-react"
 import { toast } from "sonner"
@@ -20,6 +26,7 @@ import {
   type InstalledIntegration,
 } from "@/lib/integrations/install"
 import { EventProductsManager } from "@/components/events/event-products-manager"
+import { EventWaiversManager } from "@/components/events/event-waivers-manager"
 
 function toLocalInput(value: string | null): string {
   if (!value) return ""
@@ -68,7 +75,9 @@ export function EventEditClient({
   const supabase = createClient()
   const [saving, setSaving] = useState(false)
 
-  const app = getIntegration(event.event_primary_integration ?? event.event_type)
+  const app = getIntegration(
+    event.event_primary_integration ?? event.event_type,
+  )
   const [appData, setAppData] = useState<Record<string, any>>(
     () => app.columnsToAppData?.(event) ?? {},
   )
@@ -84,20 +93,26 @@ export function EventEditClient({
   const [isRegisterable, setIsRegisterable] = useState(!!event.is_registerable)
   const [isPaid, setIsPaid] = useState(!!event.is_paid)
   const [registrationOpensAt, setRegistrationOpensAt] = useState(
-    toLocalInput(event.registration_opens_at)
+    toLocalInput(event.registration_opens_at),
   )
   const [registrationClosesAt, setRegistrationClosesAt] = useState(
-    toLocalInput(event.registration_closes_at)
+    toLocalInput(event.registration_closes_at),
   )
   const [capacity, setCapacity] = useState(event.capacity?.toString() || "")
   const [feeAmount, setFeeAmount] = useState(
-    event.fee_amount ? (event.fee_amount / 100).toFixed(2) : ""
+    event.fee_amount ? (event.fee_amount / 100).toFixed(2) : "",
   )
-  const [feeDescription, setFeeDescription] = useState(event.fee_description || "")
+  const [feeDescription, setFeeDescription] = useState(
+    event.fee_description || "",
+  )
   const [isPublished, setIsPublished] = useState(!!event.is_published)
-  const [imageUrl, setImageUrl] = useState<string | null>(event.image_url || null)
+  const [imageUrl, setImageUrl] = useState<string | null>(
+    event.image_url || null,
+  )
 
-  const [sessions, setSessions] = useState<SessionDraft[]>(initialSessions.map(sessionFromRow))
+  const [sessions, setSessions] = useState<SessionDraft[]>(
+    initialSessions.map(sessionFromRow),
+  )
   const [removedSessionIds, setRemovedSessionIds] = useState<string[]>([])
 
   const [installedIntegrations, setInstalledIntegrations] = useState<
@@ -119,7 +134,9 @@ export function EventEditClient({
   }, [event.id, event.account_id, supabase])
 
   const updateSession = (idx: number, patch: Partial<SessionDraft>) => {
-    setSessions((prev) => prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)))
+    setSessions((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)),
+    )
   }
 
   const addSession = () => {
@@ -164,7 +181,9 @@ export function EventEditClient({
     setSaving(true)
     try {
       const feeInCents =
-        isRegisterable && isPaid && feeAmount ? Math.round(parseFloat(feeAmount) * 100) : 0
+        isRegisterable && isPaid && feeAmount
+          ? Math.round(parseFloat(feeAmount) * 100)
+          : 0
 
       const updatePayload: any = {
         name: name.trim(),
@@ -299,7 +318,9 @@ export function EventEditClient({
                   onChange={setImageUrl}
                   onFileSelect={async (file) => {
                     const ext = file.name.split(".").pop()
-                    const fileName = `${event.account_id}/${crypto.randomUUID()}.${ext}`
+                    const fileName = `${
+                      event.account_id
+                    }/${crypto.randomUUID()}.${ext}`
                     const { data, error } = await supabase.storage
                       .from("event-images")
                       .upload(fileName, file, { upsert: false })
@@ -355,7 +376,8 @@ export function EventEditClient({
           <CardHeader>
             <CardTitle className="text-lg">Sessions</CardTitle>
             <CardDescription>
-              Optional sub-events with their own time and description (e.g., camp days, tournament rounds).
+              Optional sub-events with their own time and description (e.g.,
+              camp days, tournament rounds).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -363,7 +385,10 @@ export function EventEditClient({
               <p className="text-sm text-gray-500">No sessions added yet.</p>
             )}
             {sessions.map((s, idx) => (
-              <div key={s.id ?? `new-${idx}`} className="space-y-3 rounded-lg border p-4">
+              <div
+                key={s.id ?? `new-${idx}`}
+                className="space-y-3 rounded-lg border p-4"
+              >
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">Session {idx + 1}</p>
                   <Button
@@ -379,7 +404,9 @@ export function EventEditClient({
                   <Label>Title *</Label>
                   <Input
                     value={s.title}
-                    onChange={(e) => updateSession(idx, { title: e.target.value })}
+                    onChange={(e) =>
+                      updateSession(idx, { title: e.target.value })
+                    }
                     placeholder="Day 1 — Skills"
                   />
                 </div>
@@ -387,7 +414,9 @@ export function EventEditClient({
                   <Label>Description</Label>
                   <Textarea
                     value={s.description}
-                    onChange={(e) => updateSession(idx, { description: e.target.value })}
+                    onChange={(e) =>
+                      updateSession(idx, { description: e.target.value })
+                    }
                     rows={2}
                   />
                 </div>
@@ -395,7 +424,9 @@ export function EventEditClient({
                   <Label>Location</Label>
                   <Input
                     value={s.location}
-                    onChange={(e) => updateSession(idx, { location: e.target.value })}
+                    onChange={(e) =>
+                      updateSession(idx, { location: e.target.value })
+                    }
                     placeholder="Defaults to event location"
                   />
                 </div>
@@ -405,7 +436,9 @@ export function EventEditClient({
                     <Input
                       type="datetime-local"
                       value={s.startsAt}
-                      onChange={(e) => updateSession(idx, { startsAt: e.target.value })}
+                      onChange={(e) =>
+                        updateSession(idx, { startsAt: e.target.value })
+                      }
                     />
                   </div>
                   <div className="space-y-2">
@@ -413,13 +446,20 @@ export function EventEditClient({
                     <Input
                       type="datetime-local"
                       value={s.endsAt}
-                      onChange={(e) => updateSession(idx, { endsAt: e.target.value })}
+                      onChange={(e) =>
+                        updateSession(idx, { endsAt: e.target.value })
+                      }
                     />
                   </div>
                 </div>
               </div>
             ))}
-            <Button type="button" variant="outline" size="sm" onClick={addSession}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addSession}
+            >
               <Plus className="mr-2 h-4 w-4" />
               Add session
             </Button>
@@ -438,7 +478,10 @@ export function EventEditClient({
                   Off for informational events with no signup
                 </p>
               </div>
-              <Switch checked={isRegisterable} onCheckedChange={setIsRegisterable} />
+              <Switch
+                checked={isRegisterable}
+                onCheckedChange={setIsRegisterable}
+              />
             </div>
 
             {isRegisterable && (
@@ -527,6 +570,10 @@ export function EventEditClient({
 
         {isRegisterable && (
           <>
+            <EventWaiversManager
+              eventId={event.id}
+              accountId={event.account_id}
+            />
             {/* Bundled Products is rendered when the account has the
                 integration enabled in Settings > Integrations. Attaching the
                 first product auto-installs the integration on this event
