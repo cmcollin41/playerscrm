@@ -10,6 +10,7 @@
 
 import React from "react"
 import resend from "./resend"
+import { platformSender, type SenderPurpose } from "./sender"
 import { createClient } from "@/lib/supabase/server"
 import { BasicTemplate } from "@/components/emails/basic-template"
 import { render } from "@react-email/render"
@@ -75,6 +76,107 @@ export function resendErrorMessage(error: any): string {
 }
 
 /**
+ * Detect Resend's "domain is not verified" rejection. Resend surfaces this as
+ * a 403 with name `validation_error` and a message mentioning the unverified
+ * domain. We only fall back to the platform domain for this specific case so
+ * other errors (bad key, rate limits, validation) are not masked.
+ */
+export function isDomainNotVerifiedError(error: any): boolean {
+  if (!error) return false
+  if (error.statusCode === 403 || error.status === 403) return true
+  const text = `${error.name || ''} ${error.message || ''}`.toLowerCase()
+  return text.includes('not verified') || text.includes('domain is not verified')
+}
+
+/**
+ * Parse the display name from a "From" header like `Name <email@domain>`.
+ * Returns undefined when there is no display name so callers can fall back to
+ * the default account-name handling.
+ */
+function displayNameFromSender(sender: string): string | undefined {
+  const match = sender.match(/^\s*(.*?)\s*</)
+  const name = match?.[1]?.trim()
+  return name || undefined
+}
+
+/**
+ * Send a single email, retrying once with the platform fallback "From" if the
+ * account's sender domain is unverified. Returns the "From" actually used so
+ * callers can record it in the database.
+ */
+async function sendSingleWithFallback(
+  from: string,
+  fallbackFrom: string,
+  recipient: EmailRecipient,
+  subject: string,
+  html: string,
+  text: string | undefined,
+): Promise<{ data: any; error: any; usedSender: string }> {
+  const send = (fromAddr: string) =>
+    resend.emails.send({ from: fromAddr, to: recipient.email, subject, html, text })
+
+  try {
+    const { data, error } = await send(from)
+    if (error && isDomainNotVerifiedError(error) && fallbackFrom !== from) {
+      console.warn(
+        `⚠️ Sender domain for "${from}" is not verified; falling back to platform sender "${fallbackFrom}"`,
+      )
+      const retry = await send(fallbackFrom)
+      return { data: retry.data, error: retry.error, usedSender: fallbackFrom }
+    }
+    return { data, error, usedSender: from }
+  } catch (thrown) {
+    if (isDomainNotVerifiedError(thrown) && fallbackFrom !== from) {
+      console.warn(
+        `⚠️ Sender domain for "${from}" is not verified; falling back to platform sender "${fallbackFrom}"`,
+      )
+      const retry = await send(fallbackFrom)
+      return { data: retry.data, error: retry.error, usedSender: fallbackFrom }
+    }
+    throw thrown
+  }
+}
+
+/**
+ * Batch-send emails, retrying once with the platform fallback "From" if the
+ * account's sender domain is unverified. Returns the "From" actually used.
+ */
+async function sendBatchWithFallback(
+  from: string,
+  fallbackFrom: string,
+  batch: EmailRecipient[],
+  subject: string,
+  html: string,
+  text: string | undefined,
+): Promise<{ data: any; error: any; usedSender: string }> {
+  const send = (fromAddr: string) =>
+    resend.batch.send(
+      batch.map((recipient) => ({ from: fromAddr, to: recipient.email, subject, html, text })),
+    )
+
+  try {
+    const { data, error } = await send(from)
+    if (error && isDomainNotVerifiedError(error) && fallbackFrom !== from) {
+      console.warn(
+        `⚠️ Sender domain for "${from}" is not verified; falling back to platform sender "${fallbackFrom}"`,
+      )
+      const retry = await send(fallbackFrom)
+      return { data: retry.data, error: retry.error, usedSender: fallbackFrom }
+    }
+    return { data, error, usedSender: from }
+  } catch (thrown) {
+    if (isDomainNotVerifiedError(thrown) && fallbackFrom !== from) {
+      console.warn(
+        `⚠️ Sender domain for "${from}" is not verified; falling back to platform sender "${fallbackFrom}"`,
+      )
+      const retry = await send(fallbackFrom)
+      return { data: retry.data, error: retry.error, usedSender: fallbackFrom }
+    }
+    throw thrown
+  }
+}
+
+/**
  * Send emails using Resend with batching support
  */
 export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
@@ -132,6 +234,11 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
     let totalFailed = 0
     let firstError: any = null
 
+    // Platform fallback "From" used when the account sender domain is
+    // unverified. `account` may be missing; platformSender handles that.
+    const fallbackPurpose: SenderPurpose = metadata.invoice_id ? "invoice" : "default"
+    const fallbackSender = platformSender(account, fallbackPurpose)
+
     // Process each batch
     for (const batch of batches) {
       try {
@@ -139,13 +246,14 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
         if (batch.length === 1) {
           // Single send
           const recipient = batch[0]
-          const { data, error } = await resend.emails.send({
-            from: sender,
-            to: recipient.email,
-            subject: subject,
-            html: emailHtml,
-            text: emailText,
-          })
+          const { data, error, usedSender } = await sendSingleWithFallback(
+            sender,
+            fallbackSender,
+            recipient,
+            subject,
+            emailHtml,
+            emailText,
+          )
 
           if (error) {
             console.error(`Error sending email to ${recipient.email}:`, error)
@@ -157,10 +265,10 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
           allResults.push(data)
           totalSent++
 
-          // Log to database
+          // Log to database (record the "From" actually used)
           allEmailLogs.push({
             account_id,
-            sender,
+            sender: usedSender,
             recipient_id: recipient.person_id || null,
             subject,
             content,
@@ -175,15 +283,14 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
           })
         } else {
           // Batch send
-          const batchData = batch.map((recipient) => ({
-            from: sender,
-            to: recipient.email,
-            subject: subject,
-            html: emailHtml,
-            text: emailText,
-          }))
-
-          const { data, error } = await resend.batch.send(batchData)
+          const { data, error, usedSender } = await sendBatchWithFallback(
+            sender,
+            fallbackSender,
+            batch,
+            subject,
+            emailHtml,
+            emailText,
+          )
 
           if (error) {
             console.error("Error in batch send:", error)
@@ -196,12 +303,12 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
             allResults.push(...(data.data || []))
             totalSent += (data.data || []).length
 
-            // Log each email to database
+            // Log each email to database (record the "From" actually used)
             const emailLogs = batch.map((recipient, index) => {
               const resendData = data.data?.[index]
               return {
                 account_id,
-                sender,
+                sender: usedSender,
                 recipient_id: recipient.person_id || null,
                 subject,
                 content,
@@ -296,16 +403,43 @@ export async function sendTransactionalEmail(options: {
   try {
     const supabase = await createClient()
 
-    const { data, error } = await resend.emails.send({
-      from: sender,
+    // Platform fallback "From" for the domain-not-verified case. No account
+    // object is available here, so preserve the display name parsed from the
+    // original sender (e.g. "Provo Basketball <..>") when building the fallback.
+    const fallbackPurpose: SenderPurpose = metadata?.invoice_id ? "invoice" : "default"
+    const fallbackSender = platformSender({ name: displayNameFromSender(sender) }, fallbackPurpose)
+
+    const attachmentPayload =
+      attachments && attachments.length > 0
+        ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType })) }
+        : {}
+
+    let usedSender = sender
+    let { data, error } = await resend.emails.send({
+      from: usedSender,
       to,
       subject,
       html,
       text,
-      ...(attachments && attachments.length > 0
-        ? { attachments: attachments.map((a) => ({ filename: a.filename, content: a.content, contentType: a.contentType })) }
-        : {}),
+      ...attachmentPayload,
     })
+
+    if (error && isDomainNotVerifiedError(error) && fallbackSender !== sender) {
+      console.warn(
+        `⚠️ Sender domain for "${sender}" is not verified; falling back to platform sender "${fallbackSender}"`,
+      )
+      usedSender = fallbackSender
+      const retry = await resend.emails.send({
+        from: usedSender,
+        to,
+        subject,
+        html,
+        text,
+        ...attachmentPayload,
+      })
+      data = retry.data
+      error = retry.error
+    }
 
     if (error) {
       console.error("Error sending transactional email:", error)
@@ -317,10 +451,10 @@ export async function sendTransactionalEmail(options: {
       }
     }
 
-    // Log to database
+    // Log to database (record the "From" actually used)
     await supabase.from("emails").insert({
       account_id,
-      sender,
+      sender: usedSender,
       recipient_id: person_id || null,
       subject,
       content: text || html,
@@ -339,7 +473,7 @@ export async function sendTransactionalEmail(options: {
       data,
       sent_count: 1,
       failed_count: 0,
-      email_ids: [data?.id].filter(Boolean),
+      email_ids: [data?.id].filter((id): id is string => Boolean(id)),
     }
   } catch (error) {
     console.error("Error in sendTransactionalEmail:", error)

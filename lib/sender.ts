@@ -72,3 +72,28 @@ export function resolveSender(
       : PLATFORM_DEFAULT_LOCALPART
   return `${accountName} <${localpart}@${PLATFORM_DOMAIN}>`
 }
+
+/**
+ * Build the platform-managed fallback "From" header explicitly.
+ *
+ * Unlike `resolveSender`, this always ignores the account's own senders and
+ * returns an address on the verified PLATFORM_DOMAIN. Use it when an account
+ * sender domain is unverified and a send must fall back to a domain Resend
+ * will accept.
+ *
+ *   invoice -> invoices@PLATFORM_DOMAIN
+ *   default -> noreply@PLATFORM_DOMAIN
+ *
+ * Display name is the account name when available, matching `resolveSender`.
+ */
+export function platformSender(
+  account: AccountForSender | null | undefined,
+  purpose: SenderPurpose = "default",
+): string {
+  const accountName = account?.name?.trim() || "Varsity Habits"
+  const localpart =
+    purpose === "invoice"
+      ? PLATFORM_INVOICE_LOCALPART
+      : PLATFORM_DEFAULT_LOCALPART
+  return `${accountName} <${localpart}@${PLATFORM_DOMAIN}>`
+}
