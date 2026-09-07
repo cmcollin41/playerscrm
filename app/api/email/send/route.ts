@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server"
-import { sendEmails, EmailOptions } from "@/lib/email-service"
+import {
+  sendEmails,
+  EmailOptions,
+  resendErrorStatus,
+  resendErrorMessage,
+} from "@/lib/email-service"
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
@@ -131,14 +136,17 @@ export async function POST(req: Request) {
     const result = await sendEmails(options)
 
     if (!result.success) {
+      const message = resendErrorMessage(result.error)
+      const status = resendErrorStatus(result.error)
+      console.error("Failed to send emails:", result.error)
       return NextResponse.json(
-        { 
-          error: "Failed to send emails",
-          details: result.error,
+        {
+          error: message,
+          details: message,
           sent_count: result.sent_count || 0,
           failed_count: result.failed_count || 0,
         },
-        { status: 500 }
+        { status }
       )
     }
 

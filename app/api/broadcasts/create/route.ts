@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createBroadcast } from "@/lib/resend-broadcasts"
+import { resendErrorStatus, resendErrorMessage } from "@/lib/email-service"
 
 export const maxDuration = 60
 
@@ -123,9 +124,10 @@ export async function POST(req: Request) {
 
     if (!resendResult.success || !resendResult.data) {
       console.error("Resend createBroadcast failed:", resendResult.error)
+      const message = resendErrorMessage(resendResult.error)
       return NextResponse.json(
-        { error: "Failed to create broadcast in Resend", details: resendResult.error },
-        { status: 500 }
+        { error: message, details: message },
+        { status: resendErrorStatus(resendResult.error) }
       )
     }
 

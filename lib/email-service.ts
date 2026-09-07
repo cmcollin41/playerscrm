@@ -54,6 +54,27 @@ export interface EmailResult {
 }
 
 /**
+ * Derive an HTTP status for surfacing a Resend error to an API caller.
+ * Resend client/config errors (bad API key, unverified domain, validation)
+ * come back with a 4xx `statusCode`; pass those through so operators see the
+ * real cause. Everything else is an upstream failure → 502.
+ */
+export function resendErrorStatus(error: any): number {
+  const code = error?.statusCode
+  if (typeof code === 'number' && code >= 400 && code <= 499) return code
+  return 502
+}
+
+/**
+ * Extract a human-readable message from a Resend error object or thrown Error.
+ */
+export function resendErrorMessage(error: any): string {
+  if (!error) return 'Unknown email provider error'
+  if (typeof error === 'string') return error
+  return error.message || 'Unknown email provider error'
+}
+
+/**
  * Send emails using Resend with batching support
  */
 export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
@@ -109,6 +130,7 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
     const allEmailLogs: any[] = []
     let totalSent = 0
     let totalFailed = 0
+    let firstError: any = null
 
     // Process each batch
     for (const batch of batches) {
@@ -127,6 +149,7 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
 
           if (error) {
             console.error(`Error sending email to ${recipient.email}:`, error)
+            if (!firstError) firstError = error
             totalFailed++
             continue
           }
@@ -164,6 +187,7 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
 
           if (error) {
             console.error("Error in batch send:", error)
+            if (!firstError) firstError = error
             totalFailed += batch.length
             continue
           }
@@ -197,6 +221,7 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
         }
       } catch (batchError) {
         console.error("Error processing batch:", batchError)
+        if (!firstError) firstError = batchError
         totalFailed += batch.length
       }
     }
@@ -230,6 +255,7 @@ export async function sendEmails(options: EmailOptions): Promise<EmailResult> {
     return {
       success: totalSent > 0,
       data: allResults,
+      error: firstError || undefined,
       sent_count: totalSent,
       failed_count: totalFailed,
       email_ids: allResults.map((r: any) => r.id).filter(Boolean),
