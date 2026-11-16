@@ -11,7 +11,9 @@ Sports CRM platform for managing athletes, teams, rosters, awards, and email com
 ```bash
 npm run dev          # Start dev server
 npm run build        # Production build
-npm run lint         # ESLint via Next.js
+npm run typecheck    # tsc, ignoring generated .next types
+npm run lint         # ESLint (app, components, lib)
+npm test             # Vitest unit tests (lib/**/*.test.ts)
 npm run format       # Check formatting (Prettier)
 npm run format:write # Fix formatting
 ```
