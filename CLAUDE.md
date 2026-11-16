@@ -39,7 +39,7 @@ Node >= 22.x required.
 - **Server fetchers**: `lib/fetchers/server.ts` — uses Supabase server client
 - **Client fetchers**: `lib/fetchers/client.ts` — uses browser client
 - **Auth helpers**: `lib/auth.ts` — `getUserProfile()`, `isAdmin()`, `requireAuth()`, `requireAdmin()`
-- **User roles**: `admin` | `general`
+- **Roles**: per account, in `account_members`: `owner` > `admin` > `manager` > `member`. Check with `supabase.rpc("has_account_role", { p_account_id, p_min_role })` or `requireAccountAdminApi()`. The old `profiles.role` (`admin` | `general`) is legacy and must not be used for access; `lib/legacy-role-guard.test.ts` enforces this.
 
 ### Multi-tenancy
 All data is scoped to an `account_id`. RLS policies enforce tenant isolation. The user's profile links to an account, and most tables have `account_id` foreign keys.
