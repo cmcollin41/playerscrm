@@ -33,6 +33,7 @@ import {
 import { DocumentIcon, ChevronDownIcon } from "@heroicons/react/24/outline"
 import { postRosterInvoice } from "@/lib/post-roster-invoice"
 import { rosterTemplateDollars } from "@/lib/roster-pricing"
+import { formatDollars } from "@/lib/money"
 
 type BillingTab = "fee" | "invoice" | "status"
 
@@ -444,7 +445,7 @@ export function RosterBillingSheet({
                           <span className="truncate">
                             {inv.invoice_number || inv.id.slice(0, 8)}
                             {inv.amount != null
-                              ? ` — $${Number(inv.amount).toFixed(2)}`
+                              ? ` — ${formatDollars(inv.amount)}`
                               : ""}
                             {` · ${inv.status}`}
                           </span>
@@ -483,7 +484,7 @@ export function RosterBillingSheet({
                       Roster fee
                     </p>
                     <p className="font-mono text-sm font-semibold tabular-nums">
-                      ${currentFeeAmount.toFixed(2)}
+                      {formatDollars(currentFeeAmount)}
                     </p>
                   </div>
                 </div>
@@ -549,7 +550,7 @@ export function RosterBillingSheet({
                   ? "Sending…"
                   : invoiceAmountInput.trim() &&
                       Number.parseFloat(invoiceAmountInput) > 0
-                    ? `Create & send invoice for $${Number.parseFloat(invoiceAmountInput).toFixed(2)}`
+                    ? `Create & send invoice for ${formatDollars(Number.parseFloat(invoiceAmountInput))}`
                     : "Enter an amount"}
               </Button>
             </TabsContent>

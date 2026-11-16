@@ -4,6 +4,7 @@ import { useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { formatDollars } from "@/lib/money"
 import {
   Table,
   TableBody,
@@ -102,13 +103,6 @@ export default function FeesTable({ fees }: FeesTableProps) {
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(amount)
-  }
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -144,7 +138,7 @@ export default function FeesTable({ fees }: FeesTableProps) {
             {fees.map((fee) => (
               <TableRow key={fee.id} className={!fee.is_active ? "opacity-60" : ""}>
                 <TableCell className="font-medium">{fee.name}</TableCell>
-                <TableCell>{formatCurrency(fee.amount)}</TableCell>
+                <TableCell>{formatDollars(fee.amount)}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {fee.description || "-"}
                 </TableCell>

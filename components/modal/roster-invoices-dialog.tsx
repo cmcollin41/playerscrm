@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { formatDollars } from "@/lib/money"
 import { CheckCircle, AlertCircle, FileText, Clock, Ban, AlertTriangle } from "lucide-react"
 
 interface RosterInvoice {
@@ -190,7 +191,7 @@ export function RosterInvoicesDialog({
                     Total invoiced
                   </p>
                   <p className="font-mono text-lg font-semibold tabular-nums">
-                    ${totalInvoiced.toFixed(2)}
+                    {formatDollars(totalInvoiced)}
                   </p>
                 </div>
                 <div className="text-right">
@@ -198,7 +199,7 @@ export function RosterInvoicesDialog({
                     Collected
                   </p>
                   <p className="font-mono text-lg font-semibold tabular-nums">
-                    ${totalCollected.toFixed(2)}
+                    {formatDollars(totalCollected)}
                   </p>
                 </div>
               </div>

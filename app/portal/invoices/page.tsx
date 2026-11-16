@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { requirePortalContext } from "@/lib/portal-auth"
+import { formatDollars } from "@/lib/money"
 
 export const dynamic = "force-dynamic"
 
@@ -53,7 +54,7 @@ export default async function PortalInvoicesPage() {
         <>
           {openTotal > 0 && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              <span className="font-medium">${Number(openTotal).toFixed(2)}</span>{" "}
+              <span className="font-medium">{formatDollars(openTotal)}</span>{" "}
               outstanding across {rows.filter((r) => r.status !== "paid").length}{" "}
               invoice(s).
             </div>
@@ -99,7 +100,7 @@ function InvoiceRowView({ row }: { row: InvoiceRow }) {
       </div>
       <div className="flex items-center gap-3">
         <span className="text-sm font-semibold text-gray-900">
-          ${Number(row.amount ?? 0).toFixed(2)}
+          {formatDollars(row.amount)}
         </span>
         <StatusBadge status={row.status} />
         {hostedUrl && (

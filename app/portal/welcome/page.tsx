@@ -2,6 +2,7 @@ import Link from "next/link"
 import { Users, Calendar, Receipt, ArrowRight } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { requirePortalContext } from "@/lib/portal-auth"
+import { formatDollars } from "@/lib/money"
 
 export const dynamic = "force-dynamic"
 
@@ -84,7 +85,7 @@ export default async function PortalWelcomePage() {
           label="Open invoices"
           value={
             openInvoiceCount > 0
-              ? `${openInvoiceCount} ($${Number(openInvoiceAmount).toFixed(2)})`
+              ? `${openInvoiceCount} (${formatDollars(openInvoiceAmount)})`
               : "0"
           }
           href="/portal/invoices"

@@ -7,9 +7,9 @@ import {
   buttonStyle,
   colors,
   formatEmailDate,
-  formatMoney,
   text,
 } from "./email-shell"
+import { formatDollars } from "@/lib/money"
 
 export interface ReceiptEmailProps {
   accountName: string
@@ -35,7 +35,7 @@ export function ReceiptEmail({
   billedFor,
   receiptLink,
 }: ReceiptEmailProps) {
-  const total = formatMoney(amountPaid)
+  const total = formatDollars(amountPaid)
   const paidOn = formatEmailDate(paidAt)
 
   const details = [
@@ -120,7 +120,7 @@ export function receiptEmailText(props: ReceiptEmailProps): string {
     "",
     `Hi ${props.recipientName}, thanks for your payment to ${props.accountName}. This invoice is paid in full - nothing more is due.`,
     "",
-    `Amount paid: ${formatMoney(props.amountPaid)}`,
+    `Amount paid: ${formatDollars(props.amountPaid)}`,
     `Date paid: ${formatEmailDate(props.paidAt)}`,
     `Invoice number: ${props.invoiceNumber}`,
     props.billedFor ? `For: ${props.billedFor}` : null,

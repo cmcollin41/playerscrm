@@ -24,7 +24,7 @@ import { Button } from "@/components/ui/button";
 import PersonSheet from "@/components/modal/person-sheet";
 import InvoiceSheet from "@/components/modal/invoice-sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { formatCurrency } from "@/lib/utils"
+import { formatDollars } from "@/lib/money"
 import {
   filterInvoicesAttachedToRoster,
   filterInvoicesNotAttachedToRoster,
@@ -677,7 +677,7 @@ export default function PersonPage({ params }: PersonPageProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {formatCurrency(stats.totalAmount)}
+              {formatDollars(stats.totalAmount)}
             </div>
             <p className="text-xs text-muted-foreground">
               {stats.totalInvoices} invoices
@@ -692,11 +692,11 @@ export default function PersonPage({ params }: PersonPageProps) {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono text-green-600">
-              {formatCurrency(stats.paidAmount)}
+              {formatDollars(stats.paidAmount)}
             </div>
             <p className="text-xs text-muted-foreground">
               {stats.paidAmount > 0
-                ? `Roster-linked ${formatCurrency(stats.paidOnRosterInvoices)} · Unattached ${formatCurrency(stats.paidOffRosterInvoices)}`
+                ? `Roster-linked ${formatDollars(stats.paidOnRosterInvoices)} · Unattached ${formatDollars(stats.paidOffRosterInvoices)}`
                 : "Payments received"}
             </p>
           </CardContent>
@@ -944,7 +944,7 @@ export default function PersonPage({ params }: PersonPageProps) {
                             )}
                           </h3>
                           <div className="text-sm font-medium font-mono">
-                            {formatCurrency(
+                            {formatDollars(
                               personInvoices.reduce((sum, inv) => sum + (inv.amount || 0), 0)
                             )}
                           </div>
@@ -977,7 +977,7 @@ export default function PersonPage({ params }: PersonPageProps) {
                                   {invoice.status}
                                 </Badge>
                                 <span className="font-semibold font-mono">
-                                  {formatCurrency(invoice.amount)}
+                                  {formatDollars(invoice.amount)}
                                 </span>
                               </div>
                             </div>
@@ -1016,7 +1016,7 @@ export default function PersonPage({ params }: PersonPageProps) {
                                         {payment.status}
                                       </Badge>
                                       <span className="font-medium font-mono">
-                                        {formatCurrency(payment.amount)}
+                                        {formatDollars(payment.amount)}
                                       </span>
                                     </div>
                                   </div>

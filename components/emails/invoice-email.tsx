@@ -7,9 +7,9 @@ import {
   buttonStyle,
   colors,
   formatEmailDate,
-  formatMoney,
   text,
 } from "./email-shell"
+import { formatDollars } from "@/lib/money"
 
 export interface InvoiceEmailProps {
   accountName: string
@@ -35,7 +35,7 @@ export function InvoiceEmail({
   billedFor,
   paymentLink,
 }: InvoiceEmailProps) {
-  const total = formatMoney(amount)
+  const total = formatDollars(amount)
   const due = dueDate ? formatEmailDate(dueDate) : null
 
   const details = [{ label: "Invoice number", value: invoiceNumber }]
@@ -112,7 +112,7 @@ export function InvoiceEmail({
 }
 
 export function invoiceEmailText(props: InvoiceEmailProps): string {
-  const total = formatMoney(props.amount)
+  const total = formatDollars(props.amount)
   return [
     `Invoice from ${props.accountName}`,
     "",

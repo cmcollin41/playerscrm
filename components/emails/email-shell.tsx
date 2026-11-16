@@ -71,13 +71,6 @@ export function buttonStyle(background: string): React.CSSProperties {
   }
 }
 
-export function formatMoney(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount)
-}
-
 /**
  * No per-account timezone is stored; render dates in Mountain time so they
  * match local wall-clock terms rather than the server's UTC.
