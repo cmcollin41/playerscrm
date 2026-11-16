@@ -66,6 +66,26 @@ Types are auto-generated in `types/schema.types.ts`.
 - **Never** use deprecated `@supabase/auth-helpers-nextjs` or the old `cookies: { get, set, remove }` pattern
 - Use the `@supabase/ssr` `createServerClient`/`createBrowserClient` with `getAll`/`setAll` cookie methods
 
+## Money
+
+Two units are in use. Never convert between them by hand.
+
+- **Dollars** (numeric): `invoices.amount`, `payments.amount`,
+  `rosters.custom_amount`, and `fees.amount` (whole dollars).
+- **Integer cents**: `events.fee_amount`, every `*_cents` column,
+  `accounts.application_fee_flat`, and every amount sent to or received
+  from Stripe.
+- `accounts.application_fee` is a percent, not money.
+
+Rules:
+- Convert and format only with `lib/money.ts` (`dollarsToCents`,
+  `centsToDollars`, `centsToDecimalString`, `formatCents`, `formatDollars`).
+  `lib/money-guard.test.ts` fails the build on a bare `/ 100` or `* 100`.
+- Name variables after their unit: `amountCents`, `totalDollars`.
+- New money columns are integer cents and end in `_cents`.
+- Writing a Stripe amount into `invoices` or `payments` always goes through
+  `centsToDollars`.
+
 ## Code Style
 - TypeScript strict mode
 - Omit semicolons
