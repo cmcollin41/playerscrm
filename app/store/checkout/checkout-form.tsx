@@ -27,10 +27,7 @@ import {
   OrderSummary,
   type PartnerShipping,
 } from "./order-summary"
-
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`
-}
+import { formatCents } from "@/lib/money"
 
 interface AddressForm {
   email: string
@@ -766,7 +763,7 @@ function PaymentForm({
             <Loader2 className="h-4 w-4 animate-spin" /> Processing…
           </span>
         ) : (
-          `Pay ${formatPrice(totalCents)}`
+          `Pay ${formatCents(totalCents)}`
         )}
       </Button>
     </form>

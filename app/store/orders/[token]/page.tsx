@@ -6,6 +6,7 @@ import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { getTenantAccount } from "@/lib/tenant"
 import { PartnerBadge } from "@/components/store/partner-badge"
 import { ClearCartOnSuccess } from "./clear-cart-on-success"
+import { centsToDollars } from "@/lib/money"
 
 export const dynamic = "force-dynamic"
 
@@ -17,7 +18,7 @@ function formatPrice(cents: number, currency: string = "USD"): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: currency.toUpperCase(),
-  }).format(cents / 100)
+  }).format(centsToDollars(cents))
 }
 
 function optionsLabel(options: Record<string, string>): string {

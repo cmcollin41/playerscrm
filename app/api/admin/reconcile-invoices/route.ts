@@ -1,6 +1,7 @@
 import { requireAccountAdminApi } from "@/lib/auth"
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
+import { centsToDollars } from "@/lib/money"
 
 const PAGE_SIZE = 10
 
@@ -113,7 +114,7 @@ export async function POST(req: Request) {
                 invoice_id: inv.id,
                 person_id: inv.person_id,
                 account_id: inv.account_id,
-                amount: stripeInvoice.amount_paid / 100,
+                amount: centsToDollars(stripeInvoice.amount_paid),
                 status: "succeeded",
                 payment_method: "stripe",
                 payment_intent_id:

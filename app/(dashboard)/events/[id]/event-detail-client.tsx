@@ -66,6 +66,7 @@ import {
 import { toast } from "sonner"
 import { postEventInvoice } from "@/lib/post-event-invoice"
 import { EventRegistrationPaymentModal } from "@/components/modal/event-registration-payment-modal"
+import { centsToDecimalString, formatCents } from "@/lib/money"
 
 interface Registration {
   id: string
@@ -122,7 +123,7 @@ interface EventDetailClientProps {
 
 function formatAmount(cents: number | null | undefined): string | null {
   if (!cents || cents <= 0) return null
-  return `$${(cents / 100).toFixed(2)}`
+  return formatCents(cents)
 }
 
 // Registration status answers "are they in?" — keep visually distinct from
@@ -763,7 +764,7 @@ function SendEventInvoiceModal({
   onSent,
 }: SendEventInvoiceModalProps) {
   const defaultAmount = event.fee_amount
-    ? (event.fee_amount / 100).toFixed(2)
+    ? centsToDecimalString(event.fee_amount)
     : ""
   const [amount, setAmount] = useState(defaultAmount)
   const [memo, setMemo] = useState("")
@@ -913,7 +914,7 @@ function SendEventInvoiceModal({
             />
             {event.fee_amount > 0 && (
               <p className="text-xs text-gray-500">
-                Default is the event fee (${(event.fee_amount / 100).toFixed(2)}
+                Default is the event fee (${centsToDecimalString(event.fee_amount)}
                 ). Edit if you need a different amount.
               </p>
             )}

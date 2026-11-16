@@ -12,10 +12,7 @@ import {
 } from "@/components/ui/carousel"
 import { PartnerBadge } from "@/components/store/partner-badge"
 import type { CartLine } from "@/providers/cart-provider"
-
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`
-}
+import { formatCents } from "@/lib/money"
 
 function optionsLabel(options: Record<string, string>): string {
   return Object.entries(options ?? {})
@@ -104,7 +101,7 @@ function LineCard({ line }: { line: CartLine }) {
         </p>
       </div>
       <p className="text-sm font-medium tabular-nums">
-        {formatPrice(line.priceCents * line.quantity)}
+        {formatCents(line.priceCents * line.quantity)}
       </p>
     </div>
   )
@@ -228,14 +225,14 @@ function Totals({
     shippingDisplay != null
       ? shippingDisplay
       : shippingCents != null
-        ? formatPrice(shippingCents)
+        ? formatCents(shippingCents)
         : "—"
 
   return (
     <dl className="flex flex-col gap-2 text-sm">
       <div className="flex items-center justify-between">
         <dt className="text-muted-foreground">Subtotal</dt>
-        <dd className="tabular-nums">{formatPrice(subtotalCents)}</dd>
+        <dd className="tabular-nums">{formatCents(subtotalCents)}</dd>
       </div>
 
       {showPerPartnerShipping ? (
@@ -250,7 +247,7 @@ function Totals({
                 className="text-foreground"
               />
             </dt>
-            <dd className="tabular-nums">{formatPrice(p.shippingCents)}</dd>
+            <dd className="tabular-nums">{formatCents(p.shippingCents)}</dd>
           </div>
         ))
       ) : (
@@ -263,7 +260,7 @@ function Totals({
       <div className="mt-1 flex items-center justify-between border-t pt-2 text-base font-semibold">
         <dt>Total</dt>
         <dd className="tabular-nums">
-          {totalCents != null ? formatPrice(totalCents) : "—"}
+          {totalCents != null ? formatCents(totalCents) : "—"}
         </dd>
       </div>
     </dl>
@@ -342,7 +339,7 @@ export function OrderSummary({
 export function MobileOrderSummary(props: OrderSummaryProps) {
   const [open, setOpen] = useState(false)
   const groups = useMemo(() => groupByPartner(props.lines), [props.lines])
-  const total = props.totalCents != null ? formatPrice(props.totalCents) : "—"
+  const total = props.totalCents != null ? formatCents(props.totalCents) : "—"
 
   return (
     <div className="rounded-md border md:hidden">

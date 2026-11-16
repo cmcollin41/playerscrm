@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { ProductBuyPanel } from "./product-buy-panel"
 import { ProductGallery, type GallerySlide } from "./product-gallery"
+import { formatCents } from "@/lib/money"
 
 interface VariantForClient {
   id: string
@@ -24,10 +25,6 @@ interface ProductViewProps {
   fallbackImageUrl: string | null
   connectionId: string
   partnerSlug: string
-}
-
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`
 }
 
 export function ProductView({
@@ -88,8 +85,8 @@ export function ProductView({
           <h1 className="mt-2 font-cal text-3xl font-bold">{productName}</h1>
           <p className="mt-2 text-2xl font-semibold tabular-nums">
             {minPrice === maxPrice
-              ? formatPrice(minPrice)
-              : `${formatPrice(minPrice)} – ${formatPrice(maxPrice)}`}
+              ? formatCents(minPrice)
+              : `${formatCents(minPrice)} – ${formatCents(maxPrice)}`}
           </p>
         </div>
 

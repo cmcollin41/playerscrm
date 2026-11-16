@@ -33,6 +33,7 @@ import { EventIntegrationsCarousel } from "@/components/events/event-integration
 import { getIntegration } from "@/lib/integrations"
 import { getEventIntegrations } from "@/lib/integrations/install"
 import { Plus } from "lucide-react"
+import { centsToDecimalString } from "@/lib/money"
 
 export default async function EventDetailPage({
   params,
@@ -312,7 +313,7 @@ export default async function EventDetailPage({
               <div>
                 <p className="text-xs text-gray-500">Fee</p>
                 <p className="text-sm font-medium">
-                  ${(event.fee_amount / 100).toFixed(2)}
+                  ${centsToDecimalString(event.fee_amount)}
                 </p>
               </div>
             </CardContent>

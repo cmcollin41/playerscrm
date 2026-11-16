@@ -41,6 +41,7 @@ import {
   type WaiverSignatures,
   type WaiverRegistrant,
 } from "./waiver-step"
+import { centsToDecimalString } from "@/lib/money"
 
 function formatEventDateRange(starts: string | null, ends: string | null) {
   if (!starts) return null
@@ -605,7 +606,7 @@ export function RegisterClient({
             {event.is_paid && (
               <span className="flex items-center gap-1.5">
                 <DollarSign className="h-4 w-4" />$
-                {(event.fee_amount / 100).toFixed(2)} per person
+                {centsToDecimalString(event.fee_amount)} per person
                 {event.fee_description && (
                   <span className="text-gray-400">
                     ({event.fee_description})
@@ -1205,13 +1206,13 @@ export function RegisterClient({
                   <p className="mb-3 text-center text-sm text-gray-600">
                     Total:{" "}
                     <strong>
-                      ${((event.fee_amount * selected.size) / 100).toFixed(2)}
+                      ${centsToDecimalString(event.fee_amount * selected.size)}
                     </strong>
                     {selected.size > 1 && (
                       <span className="text-gray-400">
                         {" "}
                         ({selected.size} x $
-                        {(event.fee_amount / 100).toFixed(2)})
+                        {centsToDecimalString(event.fee_amount)})
                       </span>
                     )}
                   </p>
@@ -1312,11 +1313,11 @@ export function RegisterClient({
           <div className="mt-4">
             {event.is_paid && (
               <p className="mb-3 text-center text-sm text-gray-600">
-                Total: <strong>${(eventTotalCents / 100).toFixed(2)}</strong>
+                Total: <strong>${centsToDecimalString(eventTotalCents)}</strong>
                 {productsExtraCents > 0 && (
                   <span className="text-gray-400">
                     {" "}
-                    (incl. ${(productsExtraCents / 100).toFixed(2)} add-ons)
+                    (incl. ${centsToDecimalString(productsExtraCents)} add-ons)
                   </span>
                 )}
               </p>

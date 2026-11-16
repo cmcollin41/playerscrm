@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { createClient } from "@/lib/supabase/server";
 import { calculateApplicationFeeFromDollars } from "@/lib/fees";
+import { centsToDollars, dollarsToCents } from "@/lib/money";
 import { sendInvoiceEmail } from "@/lib/send-invoice-email";
 
 export async function POST(req: Request) {
@@ -22,7 +23,7 @@ export async function POST(req: Request) {
   } = await req.json();
 
   // Dollars, to the cent. Reject anything else before touching Stripe.
-  const amountCents = Math.round(Number(amount) * 100);
+  const amountCents = dollarsToCents(Number(amount));
   if (!Number.isFinite(amountCents) || amountCents <= 0) {
     return NextResponse.json(
       { error: "Enter a valid invoice amount" },
@@ -133,7 +134,7 @@ export async function POST(req: Request) {
       metadata: {
         stripe_customer_id: customerId,
         stripe_account_id: stripeAccountId,
-        application_fee_amount: applicationFeeAmount / 100,
+        application_fee_amount: centsToDollars(applicationFeeAmount),
         is_custom_invoice: isCustomInvoice
       }
     });
@@ -144,7 +145,7 @@ export async function POST(req: Request) {
       .insert({
         account_id: accountId,
         person_id,
-        amount: amountCents / 100,
+        amount: centsToDollars(amountCents),
         status: 'draft',
         description: invoiceDescription,
         roster_id: resolvedRosterId,
@@ -152,7 +153,7 @@ export async function POST(req: Request) {
         metadata: {
           stripe_customer_id: customerId,
           stripe_account_id: stripeAccountId,
-          application_fee_amount: applicationFeeAmount / 100,
+          application_fee_amount: centsToDollars(applicationFeeAmount),
           is_custom_invoice: isCustomInvoice,
           ...(isEventInvoice
             ? { event_registration_id: eventRegistrationId, event_id: eventId }

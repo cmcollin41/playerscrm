@@ -7,6 +7,7 @@ import { cancelRegistrationDispatchesOnRefund } from "@/lib/events/dispatch-regi
 import { getEventIntegrations } from "@/lib/integrations/install";
 import { getServerHooks } from "@/lib/integrations/server";
 import { resolveInvoiceStatus } from "@/lib/invoice-status";
+import { centsToDollars } from "@/lib/money";
 import { NextResponse } from "next/server";
 
 
@@ -290,7 +291,7 @@ const updateSupabase = async (event: any, supabase: any) => {
             invoice_id: invoiceId,
             person_id: invoiceRow?.person_id || stripeInvoice.metadata?.person_id || null,
             account_id: invoiceRow?.account_id || stripeInvoice.metadata?.account_id || null,
-            amount: stripeInvoice.amount_paid / 100,
+            amount: centsToDollars(stripeInvoice.amount_paid),
             status: 'succeeded',
             payment_method: 'stripe',
             payment_intent_id: typeof stripeInvoice.payment_intent === 'string'
@@ -316,7 +317,7 @@ const updateSupabase = async (event: any, supabase: any) => {
             const receipt = await sendReceiptEmail({
               supabase,
               invoiceId,
-              amountPaid: stripeInvoice.amount_paid / 100,
+              amountPaid: centsToDollars(stripeInvoice.amount_paid),
               paidAt: paidAtSeconds ? new Date(paidAtSeconds * 1000) : new Date(),
               receiptLink: stripeInvoice.hosted_invoice_url,
             });
@@ -522,7 +523,7 @@ const updateSupabase = async (event: any, supabase: any) => {
           invoice_id: paymentIntent.metadata.invoice_id,
           person_id: paymentIntent.metadata.person_id,
           account_id: paymentIntent.metadata.account_id,
-          amount: paymentIntent.amount / 100,
+          amount: centsToDollars(paymentIntent.amount),
           status: paymentIntent.status,
           payment_method: 'stripe',
           metadata: {

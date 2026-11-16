@@ -33,6 +33,7 @@ import { getIntegration } from "@/lib/integrations"
 import { listEnabledIntegrations, installIntegration } from "@/lib/integrations/install"
 import type { Integration } from "@/lib/integrations"
 import { EventIntegrationsCarousel } from "@/components/events/event-integrations-carousel"
+import { dollarsToCents } from "@/lib/money"
 
 type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly"
 
@@ -249,7 +250,7 @@ export default function NewEventPage() {
 
       const feeInCents =
         isRegisterable && isPaid && feeAmount
-          ? Math.round(parseFloat(feeAmount) * 100)
+          ? dollarsToCents(parseFloat(feeAmount))
           : 0
 
       const insertRow: any = {

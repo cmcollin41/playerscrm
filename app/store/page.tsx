@@ -8,19 +8,16 @@ import { getStoreImagePublicUrl } from "@/lib/storage/store-images"
 import { productDescriptionToPlainText } from "@/lib/store/sanitize"
 import { Card, CardContent } from "@/components/ui/card"
 import { ShoppingBag } from "lucide-react"
+import { formatCents } from "@/lib/money"
 
 export const dynamic = "force-dynamic"
-
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`
-}
 
 function priceLabel(prices: number[]): string | null {
   if (prices.length === 0) return null
   const min = Math.min(...prices)
   const max = Math.max(...prices)
-  if (min === max) return formatPrice(min)
-  return `From ${formatPrice(min)}`
+  if (min === max) return formatCents(min)
+  return `From ${formatCents(min)}`
 }
 
 export async function generateMetadata(): Promise<Metadata> {

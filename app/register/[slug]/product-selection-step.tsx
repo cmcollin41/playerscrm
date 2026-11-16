@@ -18,6 +18,7 @@ import {
   resolveVariant,
   type VariantForPicker,
 } from "@/components/store/variant-picker"
+import { centsToDecimalString } from "@/lib/money"
 
 type DeliveryMode = "pickup_at_event" | "shipped_to_registrant"
 
@@ -192,7 +193,7 @@ function ProductRow({
             <p className="text-[11px] text-gray-500">Required</p>
           ) : (
             <p className="text-[11px] text-gray-500">
-              Optional — ${(ep.price_cents / 100).toFixed(2)} extra
+              Optional — ${centsToDecimalString(ep.price_cents)} extra
             </p>
           )}
         </div>
@@ -414,7 +415,7 @@ export function ProductSelectionStep({
                       >
                         <Plus className="h-4 w-4" />
                         Add {ep.org_products?.name ?? "add-on"} (+$
-                        {(ep.price_cents / 100).toFixed(2)})
+                        {centsToDecimalString(ep.price_cents)})
                       </button>
                     )
                   }

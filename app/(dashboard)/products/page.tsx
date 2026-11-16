@@ -20,21 +20,18 @@ import { PublishButton } from "./publish-button"
 import { AckPublishButton } from "./ack-publish-button"
 import { PartnerCard } from "./partner-card"
 import { listIntegrations } from "@/lib/integrations"
+import { formatCents } from "@/lib/money"
 
 // Resync to partners can fan out to N Printify roundtrips per product;
 // give the route enough wall time to finish a healthy resync.
 export const maxDuration = 300
 
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`
-}
-
 function priceRangeLabel(prices: number[]): string {
   if (prices.length === 0) return "—"
   const min = Math.min(...prices)
   const max = Math.max(...prices)
-  if (min === max) return formatPrice(min)
-  return `${formatPrice(min)} – ${formatPrice(max)}`
+  if (min === max) return formatCents(min)
+  return `${formatCents(min)} – ${formatCents(max)}`
 }
 
 function statusVariant(status: string): "default" | "secondary" | "outline" {

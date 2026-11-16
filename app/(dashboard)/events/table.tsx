@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { DataTable } from "@/components/ui/data-table"
 import { DollarSign, Users } from "lucide-react"
+import { centsToDecimalString } from "@/lib/money"
 
 type EventType = "camp" | "practice" | "game" | "other"
 
@@ -204,7 +205,7 @@ const columns: ColumnDef<EventRow>[] = [
       return (
         <div className="flex items-center gap-1 font-mono text-sm">
           <DollarSign className="h-3 w-3 text-gray-400" />
-          {(cents / 100).toFixed(2)}
+          {centsToDecimalString(cents)}
         </div>
       )
     },

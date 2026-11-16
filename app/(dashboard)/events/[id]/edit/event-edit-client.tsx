@@ -27,6 +27,7 @@ import {
 } from "@/lib/integrations/install"
 import { EventProductsManager } from "@/components/events/event-products-manager"
 import { EventWaiversManager } from "@/components/events/event-waivers-manager"
+import { centsToDecimalString, dollarsToCents } from "@/lib/money"
 
 function toLocalInput(value: string | null): string {
   if (!value) return ""
@@ -100,7 +101,7 @@ export function EventEditClient({
   )
   const [capacity, setCapacity] = useState(event.capacity?.toString() || "")
   const [feeAmount, setFeeAmount] = useState(
-    event.fee_amount ? (event.fee_amount / 100).toFixed(2) : "",
+    event.fee_amount ? centsToDecimalString(event.fee_amount) : "",
   )
   const [feeDescription, setFeeDescription] = useState(
     event.fee_description || "",
@@ -182,7 +183,7 @@ export function EventEditClient({
     try {
       const feeInCents =
         isRegisterable && isPaid && feeAmount
-          ? Math.round(parseFloat(feeAmount) * 100)
+          ? dollarsToCents(parseFloat(feeAmount))
           : 0
 
       const updatePayload: any = {

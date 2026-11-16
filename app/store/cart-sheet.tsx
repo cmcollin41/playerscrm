@@ -16,10 +16,7 @@ import {
 } from "@/components/ui/sheet"
 import { PartnerBadge } from "@/components/store/partner-badge"
 import { useCart, type CartLine } from "@/providers/cart-provider"
-
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`
-}
+import { formatCents } from "@/lib/money"
 
 function optionsLabel(options: Record<string, string>): string {
   return Object.entries(options)
@@ -143,7 +140,7 @@ export function CartSheet() {
                 <div className="flex items-center justify-between">
                   <dt className="text-muted-foreground">Subtotal</dt>
                   <dd className="font-medium tabular-nums">
-                    {formatPrice(subtotalCents)}
+                    {formatCents(subtotalCents)}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
@@ -241,7 +238,7 @@ function CartSheetLine({ line, onQtyChange, onRemove }: CartSheetLineProps) {
             </button>
           </div>
           <p className="text-sm font-semibold tabular-nums">
-            {formatPrice(line.priceCents * line.quantity)}
+            {formatCents(line.priceCents * line.quantity)}
           </p>
         </div>
       </div>

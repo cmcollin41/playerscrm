@@ -12,6 +12,7 @@ import {
   resolveVariant,
   type VariantForPicker,
 } from "@/components/store/variant-picker"
+import { formatCents } from "@/lib/money"
 
 type VariantForClient = VariantForPicker
 
@@ -27,10 +28,6 @@ interface ProductBuyPanelProps {
   fallbackImageUrl: string | null
   connectionId: string
   partnerSlug: string
-}
-
-function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`
 }
 
 export function ProductBuyPanel({
@@ -111,7 +108,7 @@ export function ProductBuyPanel({
         <div>
           {selectedVariant ? (
             <p className="text-lg font-semibold tabular-nums">
-              {formatPrice(selectedVariant.price_cents)}
+              {formatCents(selectedVariant.price_cents)}
             </p>
           ) : (
             <p className="text-sm text-muted-foreground">

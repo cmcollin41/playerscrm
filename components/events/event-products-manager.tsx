@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { installIntegration, uninstallIntegration } from "@/lib/integrations/install"
+import { centsToDecimalString, dollarsToCents } from "@/lib/money"
 
 type DeliveryMode = "pickup_at_event" | "shipped_to_registrant" | null
 
@@ -48,10 +49,6 @@ interface AttachmentDraft extends AttachmentRow {
   priceDollars: string
   // local edit flag to suppress immediate updates while user is typing
   dirty?: boolean
-}
-
-function centsToDollars(cents: number): string {
-  return (cents / 100).toFixed(2)
 }
 
 export function EventProductsManager({
@@ -131,7 +128,7 @@ export function EventProductsManager({
           is_required: r.is_required,
           price_cents: r.price_cents,
           ordering: r.ordering,
-          priceDollars: centsToDollars(r.price_cents),
+          priceDollars: centsToDecimalString(r.price_cents),
           product: r.org_products
             ? {
                 id: r.org_products.id,
@@ -195,7 +192,7 @@ export function EventProductsManager({
       {
         ...(data as AttachmentRow),
         product,
-        priceDollars: centsToDollars(data.price_cents),
+        priceDollars: centsToDecimalString(data.price_cents),
       },
     ])
     setPicking("")
@@ -263,14 +260,14 @@ export function EventProductsManager({
     if (!attachment || !attachment.dirty) return
     const parsed = parseFloat(attachment.priceDollars)
     const cents =
-      Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) : 0
+      Number.isFinite(parsed) && parsed >= 0 ? dollarsToCents(parsed) : 0
     setAttachments((prev) =>
       prev.map((a) =>
         a.id === id
           ? {
               ...a,
               price_cents: cents,
-              priceDollars: centsToDollars(cents),
+              priceDollars: centsToDecimalString(cents),
               dirty: false,
             }
           : a,

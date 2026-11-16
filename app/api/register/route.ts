@@ -7,6 +7,7 @@ import { confirmedPersonIds } from "@/lib/events/registration-status"
 import { getEventIntegrations } from "@/lib/integrations/install"
 import { getServerHooks } from "@/lib/integrations/server"
 import type { IntegrationValidateResult } from "@/lib/integrations"
+import { centsToDollars } from "@/lib/money"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20" as any,
@@ -380,7 +381,7 @@ export async function POST(req: Request) {
       .insert({
         account_id: event.account_id,
         person_id: person_ids[0],
-        amount: totalAmount / 100,
+        amount: centsToDollars(totalAmount),
         status: "pending",
         payment_intent_id: paymentIntentId,
         data: {
