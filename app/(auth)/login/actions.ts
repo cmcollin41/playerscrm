@@ -6,10 +6,10 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createClient as createAdminClient } from '@/lib/supabase/admin'
 import { authCallbackRedirectUrl } from '@/lib/auth-site'
+import { findInviteByToken, inviteProblem, redeemInvite } from '@/lib/invites'
 import {
   ensureAccountMembership,
   normalizeSignupEmail,
-  parseInviteRole,
   resolvePeopleIdForAccountSignup,
   syncProfileAfterSignup,
 } from '@/lib/signup-invite'
@@ -42,17 +42,26 @@ export async function signup(formData: FormData): Promise<{ error?: string } | v
   const emailRaw = String(formData.get("email") || "")
   const email = normalizeSignupEmail(emailRaw)
   const password = String(formData.get("password"))
-  const account_id = String(formData.get("account_id") || "")
-  const people_id_raw = String(formData.get("people_id") || "").trim()
-  const explicitPeopleId = people_id_raw.length > 0 ? people_id_raw : null
   const first_name = String(formData.get("first_name") || "")
   const last_name = String(formData.get("last_name") || "")
   const from_events = formData.get("from_events") as string | null
-  const invite_role = parseInviteRole(String(formData.get("invite_role") || ""))
+  const inviteToken = String(formData.get("invite") || "")
 
-  if (!email || !password || !account_id) {
-    return redirect(`/login?error=${encodeURIComponent("Email, password, and account are required")}`)
+  if (!email || !password) {
+    return redirect(`/login?error=${encodeURIComponent("Email and password are required")}`)
   }
+
+  const invite = await findInviteByToken(admin, inviteToken)
+  const problem = inviteProblem(invite, email, new Date())
+  if (problem || !invite) {
+    return redirect(
+      `/login?error=${encodeURIComponent(problem || "An invitation is required to create an account.")}`,
+    )
+  }
+
+  const account_id = invite.account_id
+  const invite_role = invite.role
+  const explicitPeopleId = invite.people_id
 
   const people_id = await resolvePeopleIdForAccountSignup(
     admin,
@@ -95,6 +104,13 @@ export async function signup(formData: FormData): Promise<{ error?: string } | v
   }
 
   const userId = signInData.user.id
+
+  const redeemed = await redeemInvite(admin, invite.id)
+  if (!redeemed) {
+    return redirect(
+      `/login?error=${encodeURIComponent("This invitation has already been used.")}`,
+    )
+  }
 
   await ensureAccountMembership(admin, account_id, userId, invite_role)
   await syncProfileAfterSignup(
