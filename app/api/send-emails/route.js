@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { sendEmails } from "@/lib/email-service";
 import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { isSenderAllowed } from "@/lib/email-sender";
 
 export const maxDuration = 60;
 
@@ -25,6 +27,48 @@ export async function POST(req) {
       return NextResponse.json(
         { error: "Account ID is required" },
         { status: 400 }
+      );
+    }
+
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: allowed } = await supabase.rpc("has_account_role", {
+      p_account_id: account.id,
+      p_min_role: "manager",
+    });
+
+    if (allowed !== true) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { data: dbAccount, error: accountError } = await supabase
+      .from("accounts")
+      .select("*")
+      .eq("id", account.id)
+      .single();
+
+    if (accountError || !dbAccount) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    const { data: senderRows } = await supabase
+      .from("senders")
+      .select("*")
+      .eq("account_id", dbAccount.id);
+
+    dbAccount.senders = senderRows || [];
+
+    if (!isSenderAllowed(sender, dbAccount.senders)) {
+      return NextResponse.json(
+        { error: "Sender is not a verified sender for this account" },
+        { status: 403 }
       );
     }
 
@@ -89,8 +133,8 @@ export async function POST(req) {
       content: message,
       preview,
       template: "basic",
-      account_id: account.id,
-      account,
+      account_id: dbAccount.id,
+      account: dbAccount,
     });
 
     if (!result.success) {
