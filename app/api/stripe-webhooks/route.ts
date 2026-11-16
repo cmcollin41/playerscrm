@@ -6,6 +6,7 @@ import { dispatchPaidOrder } from "@/lib/store/dispatch-order";
 import { cancelRegistrationDispatchesOnRefund } from "@/lib/events/dispatch-registration-products";
 import { getEventIntegrations } from "@/lib/integrations/install";
 import { getServerHooks } from "@/lib/integrations/server";
+import { resolveInvoiceStatus } from "@/lib/invoice-status";
 import { NextResponse } from "next/server";
 
 
@@ -205,26 +206,32 @@ const updateSupabase = async (event: any, supabase: any) => {
 
     let invoiceId = stripeInvoice.metadata?.invoice_id;
     let existingMetadata: Record<string, any> = {};
+    let currentStatus: string | null = null;
+    let invoiceRow: { account_id: string | null; person_id: string | null } | null = null;
 
     // Fallback: if metadata.invoice_id is missing, look up by stripe_invoice_id
     if (!invoiceId && stripeInvoice.id) {
       const { data: matchedInvoice } = await supabase
         .from("invoices")
-        .select("id, metadata")
+        .select("id, metadata, status, account_id, person_id")
         .eq("metadata->>stripe_invoice_id", stripeInvoice.id)
         .maybeSingle();
 
       if (matchedInvoice) {
         invoiceId = matchedInvoice.id;
         existingMetadata = matchedInvoice.metadata || {};
+        currentStatus = matchedInvoice.status ?? null;
+        invoiceRow = { account_id: matchedInvoice.account_id ?? null, person_id: matchedInvoice.person_id ?? null };
       }
     } else if (invoiceId) {
       const { data: existing } = await supabase
         .from("invoices")
-        .select("metadata")
+        .select("metadata, status, account_id, person_id")
         .eq("id", invoiceId)
         .maybeSingle();
       existingMetadata = existing?.metadata || {};
+      currentStatus = existing?.status ?? null;
+      invoiceRow = existing ? { account_id: existing.account_id ?? null, person_id: existing.person_id ?? null } : null;
     }
 
     if (!invoiceId) {
@@ -232,10 +239,12 @@ const updateSupabase = async (event: any, supabase: any) => {
       return;
     }
 
+    const nextStatus = resolveInvoiceStatus(currentStatus, mappedStatus);
+
     const { error: invoiceError } = await supabase
       .from("invoices")
       .update({
-        status: mappedStatus,
+        status: nextStatus,
         metadata: {
           ...existingMetadata,
           stripe_invoice_id: stripeInvoice.id,
@@ -250,7 +259,7 @@ const updateSupabase = async (event: any, supabase: any) => {
       throw new Error(`invoice update failed: ${invoiceError.message}`);
     }
 
-    console.log(`Invoice ${invoiceId} updated to status: ${mappedStatus}`);
+    console.log(`Invoice ${invoiceId} updated to status: ${nextStatus}`);
 
     // If payment was successful, mark any linked event registration as paid.
     if (mappedStatus === 'paid') {
@@ -278,8 +287,8 @@ const updateSupabase = async (event: any, supabase: any) => {
           .from("payments")
           .insert({
             invoice_id: invoiceId,
-            person_id: stripeInvoice.metadata?.person_id || null,
-            account_id: stripeInvoice.metadata?.account_id || null,
+            person_id: invoiceRow?.person_id || stripeInvoice.metadata?.person_id || null,
+            account_id: invoiceRow?.account_id || stripeInvoice.metadata?.account_id || null,
             amount: stripeInvoice.amount_paid / 100,
             status: 'succeeded',
             payment_method: 'stripe',
