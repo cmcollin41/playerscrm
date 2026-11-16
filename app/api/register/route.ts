@@ -355,10 +355,11 @@ export async function POST(req: Request) {
       .insert({
         account_id: event.account_id,
         person_id: person_ids[0],
-        amount: totalAmount,
+        amount: totalAmount / 100,
         status: "pending",
         payment_intent_id: paymentIntentId,
         data: {
+          amount_unit: "dollars",
           event_id,
           person_ids,
           registration_ids: regs!.map((r: any) => r.id),
