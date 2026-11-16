@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Profiles, UserRole } from "@/types/schema.types"
+import type { Profiles } from "@/types/schema.types"
 
 /** Active workspace: prefer `current_account_id`, fall back to legacy `account_id` until fully migrated. */
 export function resolveActiveAccountId(
@@ -111,10 +111,6 @@ export async function requireAuth(): Promise<AuthProfile> {
   const profile = await getUserProfile()
   if (!profile) throw new Error("Unauthorized: not authenticated")
   return profile
-}
-
-export function hasRole(profile: Profiles | null, role: UserRole): boolean {
-  return profile?.role === role
 }
 
 /**
