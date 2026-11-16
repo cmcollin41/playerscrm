@@ -32,6 +32,31 @@ export function isHigherOrEqualRole(a: AccountRole, b: AccountRole): boolean {
   return roleRank(a) >= roleRank(b)
 }
 
+interface RoleChangeInput {
+  /** True when the caller holds the owner role on the account. */
+  callerIsOwner: boolean
+  /** The target's current role, or null when they are not yet a member. */
+  currentRole: AccountRole | null
+  newRole: AccountRole
+  /** How many owners the account has right now. */
+  ownerCount: number
+}
+
+/** Returns why a role assignment is not allowed, or null when it is. */
+export function roleChangeProblem(input: RoleChangeInput): string | null {
+  const { callerIsOwner, currentRole, newRole, ownerCount } = input
+  if (newRole === "owner" && !callerIsOwner) {
+    return "Only an owner can grant the owner role"
+  }
+  if (currentRole === "owner" && !callerIsOwner) {
+    return "Only an owner can change an owner's role"
+  }
+  if (currentRole === "owner" && newRole !== "owner" && ownerCount <= 1) {
+    return "An account must keep at least one owner"
+  }
+  return null
+}
+
 export interface RoleDisplayConfig {
   label: string
   icon: LucideIcon

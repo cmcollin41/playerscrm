@@ -3,6 +3,7 @@ import {
   isHigherOrEqualRole,
   isValidAccountRole,
   parseAccountRole,
+  roleChangeProblem,
 } from "@/lib/roles"
 
 describe("parseAccountRole", () => {
@@ -49,5 +50,43 @@ describe("isHigherOrEqualRole", () => {
 
   it("member does not reach manager", () => {
     expect(isHigherOrEqualRole("member", "manager")).toBe(false)
+  })
+})
+
+describe("roleChangeProblem", () => {
+  it("blocks a non-owner granting owner", () => {
+    expect(
+      roleChangeProblem({ callerIsOwner: false, currentRole: null, newRole: "owner", ownerCount: 1 }),
+    ).toContain("grant the owner role")
+  })
+
+  it("lets an owner grant owner", () => {
+    expect(
+      roleChangeProblem({ callerIsOwner: true, currentRole: null, newRole: "owner", ownerCount: 1 }),
+    ).toBeNull()
+  })
+
+  it("blocks a non-owner changing an owner", () => {
+    expect(
+      roleChangeProblem({ callerIsOwner: false, currentRole: "owner", newRole: "member", ownerCount: 2 }),
+    ).toContain("change an owner")
+  })
+
+  it("blocks demoting the last owner", () => {
+    expect(
+      roleChangeProblem({ callerIsOwner: true, currentRole: "owner", newRole: "admin", ownerCount: 1 }),
+    ).toContain("at least one owner")
+  })
+
+  it("allows demoting an owner when another remains", () => {
+    expect(
+      roleChangeProblem({ callerIsOwner: true, currentRole: "owner", newRole: "admin", ownerCount: 2 }),
+    ).toBeNull()
+  })
+
+  it("lets a non-owner change non-owner roles", () => {
+    expect(
+      roleChangeProblem({ callerIsOwner: false, currentRole: "member", newRole: "admin", ownerCount: 1 }),
+    ).toBeNull()
   })
 })
