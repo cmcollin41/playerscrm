@@ -61,7 +61,10 @@ export async function sendParentMagicLink(
     email,
     options: {
       shouldCreateUser: true,
-      emailRedirectTo: `${(await originFromRequest()) ?? getPortalBaseUrl()}/portal/auth/callback`,
+      // The `?next=` is deliberate: every auth email redirect carries a query
+      // string, so the email templates can always append
+      // `&token_hash=…&type=…` to `{{ .RedirectTo }}`.
+      emailRedirectTo: `${(await originFromRequest()) ?? getPortalBaseUrl()}/portal/auth/callback?next=%2Fportal%2Fwelcome`,
     },
   })
 
