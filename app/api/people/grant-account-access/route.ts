@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { hasAccountAdminAccess, resolveActiveAccountId } from "@/lib/auth"
 import { resolvePersonInviteRecipientEmail } from "@/lib/person-invite-email"
+import { parseAccountRole, roleChangeProblem } from "@/lib/roles"
 import { parseInviteRole } from "@/lib/signup-invite"
 import { NextResponse } from "next/server"
 
@@ -47,6 +48,20 @@ export async function POST(req: Request) {
         { error: "Forbidden: account admin access required" },
         { status: 403 },
       )
+    }
+
+    const { data: ownerCheck } = await supabase.rpc("has_account_role", {
+      p_account_id: activeAccountId,
+      p_min_role: "owner",
+    })
+    const problem = roleChangeProblem({
+      callerIsOwner: ownerCheck === true,
+      currentRole: null,
+      newRole: parseAccountRole(role),
+      ownerCount: 0,
+    })
+    if (problem) {
+      return NextResponse.json({ error: problem }, { status: 403 })
     }
 
     const admin = createAdminClient()

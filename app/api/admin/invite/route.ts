@@ -4,6 +4,7 @@ import { NextResponse } from "next/server"
 import { sendTransactionalEmail } from "@/lib/email-service"
 import { resolveSender } from "@/lib/sender"
 import { encryptId } from "@/app/utils/ecryption"
+import { roleChangeProblem } from "@/lib/roles"
 
 export async function POST(req: Request) {
   try {
@@ -27,6 +28,20 @@ export async function POST(req: Request) {
         { error: "Invalid role" },
         { status: 400 }
       )
+    }
+
+    const { data: ownerCheck } = await supabase.rpc("has_account_role", {
+      p_account_id: activeAccountId,
+      p_min_role: "owner",
+    })
+    const problem = roleChangeProblem({
+      callerIsOwner: ownerCheck === true,
+      currentRole: null,
+      newRole: role,
+      ownerCount: 0,
+    })
+    if (problem) {
+      return NextResponse.json({ error: problem }, { status: 403 })
     }
 
     const admin = createAdminClient()

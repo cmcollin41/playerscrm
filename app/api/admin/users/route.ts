@@ -1,6 +1,11 @@
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { requireAccountAdminApi } from "@/lib/auth"
-import { isValidAccountRole, type AccountRole } from "@/lib/roles"
+import {
+  isValidAccountRole,
+  parseAccountRole,
+  roleChangeProblem,
+  type AccountRole,
+} from "@/lib/roles"
 import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
@@ -121,6 +126,26 @@ export async function PATCH(req: Request) {
         { error: "User not found in this account" },
         { status: 404 },
       )
+    }
+
+    const { data: ownerCheck } = await auth.supabase.rpc("has_account_role", {
+      p_account_id: activeAccountId,
+      p_min_role: "owner",
+    })
+    const { count: ownerCount } = await admin
+      .from("account_members")
+      .select("id", { count: "exact", head: true })
+      .eq("account_id", activeAccountId)
+      .eq("role", "owner")
+
+    const problem = roleChangeProblem({
+      callerIsOwner: ownerCheck === true,
+      currentRole: parseAccountRole(membership.role),
+      newRole: role,
+      ownerCount: ownerCount ?? 0,
+    })
+    if (problem) {
+      return NextResponse.json({ error: problem }, { status: 403 })
     }
 
     const { error: updateError } = await admin
