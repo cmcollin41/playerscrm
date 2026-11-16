@@ -6,3 +6,10 @@
 .vscode
 **.git
 .vercel
+
+# local environment files — never commit
+.env*
+!.env.example
+
+# typescript build cache
+*.tsbuildinfo
