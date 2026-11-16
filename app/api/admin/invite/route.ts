@@ -5,6 +5,7 @@ import { sendTransactionalEmail } from "@/lib/email-service"
 import { resolveSender } from "@/lib/sender"
 import { encryptId } from "@/app/utils/ecryption"
 import { roleChangeProblem } from "@/lib/roles"
+import { createAccountInvite } from "@/lib/invites"
 
 export async function POST(req: Request) {
   try {
@@ -82,11 +83,17 @@ export async function POST(req: Request) {
 
     const { getAuthSiteUrl } = await import("@/lib/auth-site")
 
+    const inviteToken = await createAccountInvite(admin, {
+      accountId: activeAccountId,
+      email,
+      role,
+      invitedBy: user.id,
+    })
     const signupUrl = new URL("/login", getAuthSiteUrl())
     signupUrl.searchParams.set("sign_up", "true")
     signupUrl.searchParams.set("account_id", activeAccountId)
     signupUrl.searchParams.set("email", encryptId(email))
-    signupUrl.searchParams.set("invite_role", role)
+    signupUrl.searchParams.set("invite", inviteToken)
     if (firstName) signupUrl.searchParams.set("first_name", firstName)
     if (lastName) signupUrl.searchParams.set("last_name", lastName)
 

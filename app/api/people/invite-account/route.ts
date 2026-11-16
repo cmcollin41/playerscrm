@@ -5,6 +5,7 @@ import {
   resolveActiveAccountId,
 } from "@/lib/auth"
 import { encryptId } from "@/app/utils/ecryption"
+import { createAccountInvite } from "@/lib/invites"
 import { sendTransactionalEmail } from "@/lib/email-service"
 import { resolveSender } from "@/lib/sender"
 import { NextResponse } from "next/server"
@@ -129,12 +130,19 @@ export async function POST(req: Request) {
     const sender = resolveSender(account as any, "default")
 
     const encryptedEmail = encryptId(email)
+    const inviteToken = await createAccountInvite(admin, {
+      accountId: activeAccountId,
+      email,
+      role: "member",
+      peopleId: person.id,
+      invitedBy: user.id,
+    })
     const signupUrl = new URL("/login", appOrigin)
     signupUrl.searchParams.set("sign_up", "true")
     signupUrl.searchParams.set("account_id", activeAccountId)
     signupUrl.searchParams.set("people_id", person.id)
     signupUrl.searchParams.set("email", encryptedEmail)
-    signupUrl.searchParams.set("invite_role", "member")
+    signupUrl.searchParams.set("invite", inviteToken)
     if (person.first_name) signupUrl.searchParams.set("first_name", person.first_name)
     if (person.last_name) signupUrl.searchParams.set("last_name", person.last_name)
 
