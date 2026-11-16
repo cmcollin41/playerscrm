@@ -1,7 +1,14 @@
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { requireAccountAdminApi } from "@/lib/auth"
 import { NextResponse } from "next/server"
+import { createElement } from "react"
+import {
+  InviteEmail,
+  inviteEmailText,
+  type InviteEmailProps,
+} from "@/components/emails/invite-email"
 import { sendTransactionalEmail } from "@/lib/email-service"
+import { renderEmail } from "@/lib/emails/render"
 import { resolveSender } from "@/lib/sender"
 import { encryptId } from "@/app/utils/ecryption"
 
@@ -54,7 +61,7 @@ export async function POST(req: Request) {
 
     const { data: account } = await supabase
       .from("accounts")
-      .select("id, name, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email)")
+      .select("id, name, logo, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email)")
       .eq("id", activeAccountId)
       .single()
 
@@ -82,37 +89,24 @@ export async function POST(req: Request) {
         .filter(Boolean)
         .join(" ") || user.email
 
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>You're invited to ${account.name}</title>
-          </head>
-          <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-              <h1 style="margin: 0; font-size: 24px;">${account.name}</h1>
-              <p style="margin: 10px 0 0 0; color: #6c757d;">Team Invitation</p>
-            </div>
-            <div style="padding: 20px 0;">
-              <p>Hi${firstName ? ` ${firstName}` : ""},</p>
-              <p><strong>${inviterName}</strong> has invited you to join <strong>${account.name}</strong>.</p>
-              <p>Click the button below to create your account and get started:</p>
-              <a href="${signupUrl.toString()}" style="display: inline-block; padding: 12px 24px; background-color: #18181b; color: #ffffff !important; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: 600;">Accept Invitation</a>
-              <p style="font-size: 14px; color: #6c757d;">Or copy and paste this link into your browser:<br><a href="${signupUrl.toString()}">${signupUrl.toString()}</a></p>
-            </div>
-            <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 14px; color: #6c757d;">
-              <p>This invitation was sent by ${account.name}.</p>
-            </div>
-          </body>
-        </html>
-      `
+      const props: InviteEmailProps = {
+        accountName: account.name,
+        logoUrl: /^https?:\/\//i.test(account.logo || "") ? account.logo : null,
+        firstName,
+        inviterName,
+        signupUrl: signupUrl.toString(),
+      }
+      const { html, text } = await renderEmail(
+        createElement(InviteEmail, props),
+        inviteEmailText(props),
+      )
 
       await sendTransactionalEmail({
         sender,
         to: email,
         subject: `You're invited to join ${account.name}`,
         html,
+        text,
         account_id: activeAccountId,
         metadata: { type: "invite", role },
       })

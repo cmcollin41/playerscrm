@@ -1,4 +1,11 @@
+import { createElement } from "react"
+import {
+  EventConfirmationEmail,
+  eventConfirmationEmailText,
+  type EventConfirmationEmailProps,
+} from "@/components/emails/event-confirmation-email"
 import { sendTransactionalEmail } from "@/lib/email-service"
+import { renderEmail } from "@/lib/emails/render"
 import { resolveSender } from "@/lib/sender"
 import { storefrontBaseUrl } from "@/lib/store/links"
 
@@ -17,7 +24,7 @@ export async function sendEventConfirmations(opts: {
 
   const { data: event } = await supabase
     .from("events")
-    .select("id, name, slug, starts_at, account_id, account:accounts(id, name, subdomain, custom_domain, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email))")
+    .select("id, name, slug, starts_at, account_id, account:accounts(id, name, logo, subdomain, custom_domain, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email))")
     .eq("id", eventId)
     .single()
 
@@ -105,40 +112,24 @@ export async function sendEventConfirmations(opts: {
   const subject = `You're registered for ${event.name}`
 
   for (const recipient of Array.from(recipientsByEmail.values())) {
-    const who = registeredNames ? `${registeredNames} ` : ""
-    const opening = formattedDate
-      ? `Thanks for registering ${who}for <strong>${event.name}</strong>, which starts on ${formattedDate}.`
-      : `Thanks for registering ${who}for <strong>${event.name}</strong>.`
-
-    const html = `
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>${subject}</title>
-  </head>
-  <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-    <p>Hi ${recipient.name},</p>
-    <p>${opening}</p>
-    ${eventUrl ? `<p><a href="${eventUrl}">View event details →</a></p>` : ""}
-    <p>If you have any questions, just reply to this email.</p>
-  </body>
-</html>`.trim()
-
-    const textOpening = formattedDate
-      ? `Thanks for registering ${who}for ${event.name}, which starts on ${formattedDate}.`
-      : `Thanks for registering ${who}for ${event.name}.`
-
-    const text = `
-Hi ${recipient.name},
-
-${textOpening}
-${eventUrl ? `\nView event details: ${eventUrl}` : ""}
-
-If you have any questions, just reply to this email.
-`.trim()
+    const props: EventConfirmationEmailProps = {
+        accountName: event.account?.name || "PlayersCRM",
+        logoUrl: /^https?:\/\//i.test(event.account?.logo || "")
+          ? event.account.logo
+          : null,
+        recipientName: recipient.name,
+        eventName: event.name,
+        eventDate: formattedDate,
+        registeredNames: registeredNames || null,
+        eventUrl,
+      }
+    const { html, text } = await renderEmail(
+      createElement(EventConfirmationEmail, props),
+      eventConfirmationEmailText(props),
+    )
 
     const result = await sendTransactionalEmail({
+      supabase,
       sender,
       to: recipient.email,
       subject,
