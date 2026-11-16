@@ -108,6 +108,7 @@ export async function POST(req: Request) {
       case "payment_intent.processing":
       case "payment_intent.payment_failed":
       case "payment_intent.succeeded":
+      case "charge.refunded":
       case "checkout.session.expired":
       case "invoice.created":
       case "invoice.finalized":
