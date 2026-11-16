@@ -37,7 +37,7 @@ export default async function PortalWelcomePage() {
   const familyCount = familyRes.count ?? 0
   const upcomingEventCount = upcomingEventsRes.count ?? 0
   const openInvoiceAmount =
-    openInvoicesRes.data?.reduce((sum, inv) => sum + (inv.amount ?? 0), 0) ?? 0
+    openInvoicesRes.data?.reduce((sum, inv) => sum + Number(inv.amount ?? 0), 0) ?? 0
   const openInvoiceCount = openInvoicesRes.data?.length ?? 0
 
   const greetingName =
@@ -84,7 +84,7 @@ export default async function PortalWelcomePage() {
           label="Open invoices"
           value={
             openInvoiceCount > 0
-              ? `${openInvoiceCount} ($${(openInvoiceAmount / 100).toFixed(2)})`
+              ? `${openInvoiceCount} ($${Number(openInvoiceAmount).toFixed(2)})`
               : "0"
           }
           href="/portal/invoices"

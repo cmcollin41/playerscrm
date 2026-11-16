@@ -35,7 +35,7 @@ export default async function PortalInvoicesPage() {
   const rows = invoices ?? []
   const openTotal = rows
     .filter((r) => r.status !== "paid")
-    .reduce((sum, r) => sum + (r.amount ?? 0), 0)
+    .reduce((sum, r) => sum + Number(r.amount ?? 0), 0)
 
   return (
     <div className="space-y-6">
@@ -53,7 +53,7 @@ export default async function PortalInvoicesPage() {
         <>
           {openTotal > 0 && (
             <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              <span className="font-medium">${(openTotal / 100).toFixed(2)}</span>{" "}
+              <span className="font-medium">${Number(openTotal).toFixed(2)}</span>{" "}
               outstanding across {rows.filter((r) => r.status !== "paid").length}{" "}
               invoice(s).
             </div>
@@ -99,7 +99,7 @@ function InvoiceRowView({ row }: { row: InvoiceRow }) {
       </div>
       <div className="flex items-center gap-3">
         <span className="text-sm font-semibold text-gray-900">
-          ${((row.amount ?? 0) / 100).toFixed(2)}
+          ${Number(row.amount ?? 0).toFixed(2)}
         </span>
         <StatusBadge status={row.status} />
         {hostedUrl && (
