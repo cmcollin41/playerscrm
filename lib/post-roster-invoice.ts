@@ -16,9 +16,15 @@ export interface PostRosterInvoiceParams {
   person_id: string
 }
 
+export interface PostRosterInvoiceResult {
+  /** False when the invoice exists in Stripe but the email did not go out. */
+  emailSent: boolean
+  emailError?: string
+}
+
 export async function postRosterInvoice(
   params: PostRosterInvoiceParams,
-): Promise<void> {
+): Promise<PostRosterInvoiceResult> {
   const {
     rosterId,
     athleteName,
@@ -77,8 +83,13 @@ export async function postRosterInvoice(
     }),
   })
 
+  const invoiceData = await invoiceResponse.json()
   if (!invoiceResponse.ok) {
-    const errorData = await invoiceResponse.json()
-    throw new Error(errorData.error || "Failed to create invoice")
+    throw new Error(invoiceData.error || "Failed to create invoice")
+  }
+
+  return {
+    emailSent: invoiceData.email?.success !== false,
+    emailError: invoiceData.email?.error,
   }
 }

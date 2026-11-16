@@ -21,6 +21,15 @@ export async function POST(req: Request) {
     eventName,
   } = await req.json();
 
+  // Dollars, to the cent. Reject anything else before touching Stripe.
+  const amountCents = Math.round(Number(amount) * 100);
+  if (!Number.isFinite(amountCents) || amountCents <= 0) {
+    return NextResponse.json(
+      { error: "Enter a valid invoice amount" },
+      { status: 400 },
+    );
+  }
+
   try {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
       apiVersion: "2023-08-16",
@@ -135,7 +144,7 @@ export async function POST(req: Request) {
       .insert({
         account_id: accountId,
         person_id,
-        amount,
+        amount: amountCents / 100,
         status: 'draft',
         description: invoiceDescription,
         roster_id: resolvedRosterId,
@@ -191,7 +200,7 @@ export async function POST(req: Request) {
     // Create invoice item
     await stripe.invoiceItems.create({
       customer: customerId,
-      amount: amount * 100,
+      amount: amountCents,
       currency: 'usd',
       invoice: stripeInvoice.id,
       description: invoiceDescription,

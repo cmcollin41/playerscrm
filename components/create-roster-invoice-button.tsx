@@ -37,7 +37,7 @@ export function CreateRosterInvoiceButton({
   const handleCreateInvoice = async () => {
     try {
       setLoading(true);
-      await postRosterInvoice({
+      const result = await postRosterInvoice({
         rosterId,
         athleteName,
         teamName,
@@ -47,7 +47,13 @@ export function CreateRosterInvoiceButton({
         stripeAccountId,
         person_id,
       });
-      toast.success('Invoice created successfully');
+      if (result.emailSent) {
+        toast.success('Invoice created and emailed');
+      } else {
+        toast.error(
+          `Invoice created, but the email didn't send${result.emailError ? `: ${result.emailError}` : ''}. Use Resend to try again.`,
+        );
+      }
       await onSuccess?.();
       refresh();
     } catch (error: unknown) {

@@ -94,7 +94,7 @@ export default function AccountSettingsPage() {
 
       const { data: account } = await supabase
         .from("accounts")
-        .select("*, senders(*)")
+        .select("*, senders!senders_account_id_fkey(*)")
         .eq("id", activeAccountId)
         .single()
 

@@ -50,7 +50,7 @@ export async function sendInvoiceEmail(
         stripe_id,
         default_invoice_sender_id,
         default_sender_id,
-        senders (
+        senders!senders_account_id_fkey (
           id,
           name,
           email
@@ -62,6 +62,11 @@ export async function sendInvoiceEmail(
     .single()
 
   if (invoiceError || !invoice) {
+    console.error(
+      "sendInvoiceEmail: could not load invoice",
+      invoiceId,
+      invoiceError?.message,
+    )
     return {
       success: false,
       sent_count: 0,

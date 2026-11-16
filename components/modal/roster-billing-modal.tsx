@@ -286,7 +286,7 @@ export function RosterBillingModal({
     }
     setSendingInvoice(true)
     try {
-      await postRosterInvoice({
+      const result = await postRosterInvoice({
         rosterId,
         athleteName: personName,
         teamName,
@@ -298,7 +298,13 @@ export function RosterBillingModal({
         stripeAccountId: team.accounts.stripe_id,
         person_id: person.id,
       })
-      toast.success("Invoice created and emailed")
+      if (result.emailSent) {
+        toast.success("Invoice created and emailed")
+      } else {
+        toast.error(
+          `Invoice created, but the email didn't send${result.emailError ? `: ${result.emailError}` : ""}. Use Resend to try again.`,
+        )
+      }
       if (onRefresh) await onRefresh()
       else refresh()
       onOpenChange(false)

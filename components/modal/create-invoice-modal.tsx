@@ -128,12 +128,18 @@ export default function CreateInvoiceModal({
         })
       })
 
+      const invoiceData = await invoiceResponse.json()
       if (!invoiceResponse.ok) {
-        const error = await invoiceResponse.json()
-        throw new Error(error.error || error.message || "Failed to create invoice")
+        throw new Error(invoiceData.error || invoiceData.message || "Failed to create invoice")
       }
 
-      toast.success("Invoice created and sent successfully")
+      if (invoiceData.email?.success === false) {
+        toast.error(
+          `Invoice created, but the email didn't send${invoiceData.email.error ? `: ${invoiceData.email.error}` : ""}. Use Resend to try again.`,
+        )
+      } else {
+        toast.success("Invoice created and sent successfully")
+      }
       onInvoiceCreated?.()
       onOpenChange(false)
       setAmount("")
