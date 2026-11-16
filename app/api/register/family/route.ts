@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createAdminClient } from "@/lib/supabase/admin"
+import { isHoldingRegistration } from "@/lib/events/registration-status"
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -96,10 +97,14 @@ export async function GET(req: Request) {
   if (eventId) {
     const { data: existing } = await admin
       .from("event_registrations")
-      .select("person_id")
+      .select("person_id, status")
       .eq("event_id", eventId)
 
-    const registeredIds = new Set(existing?.map((r) => r.person_id) || [])
+    const registeredIds = new Set(
+      (existing ?? [])
+        .filter((r) => isHoldingRegistration(r.status))
+        .map((r) => r.person_id),
+    )
     allFamily = allFamily.map((p) => ({
       ...p,
       alreadyRegistered: registeredIds.has(p.id),

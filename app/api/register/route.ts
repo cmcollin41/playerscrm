@@ -3,6 +3,7 @@ import { createClient as createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { calculateApplicationFeeCents } from "@/lib/fees"
+import { confirmedPersonIds } from "@/lib/events/registration-status"
 import { getEventIntegrations } from "@/lib/integrations/install"
 import { getServerHooks } from "@/lib/integrations/server"
 import type { IntegrationValidateResult } from "@/lib/integrations"
@@ -68,6 +69,30 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "Event is not open for registration" },
         { status: 400 },
+      )
+    }
+
+    const { data: existingRegs, error: existingRegsError } = await admin
+      .from("event_registrations")
+      .select("person_id, status")
+      .eq("event_id", event_id)
+      .in("person_id", person_ids)
+
+    if (existingRegsError) {
+      return NextResponse.json(
+        { error: existingRegsError.message },
+        { status: 500 },
+      )
+    }
+
+    const alreadyConfirmed = confirmedPersonIds(existingRegs ?? [])
+    if (alreadyConfirmed.length > 0) {
+      return NextResponse.json(
+        {
+          error: "One or more people are already registered for this event",
+          person_ids: alreadyConfirmed,
+        },
+        { status: 409 },
       )
     }
 
