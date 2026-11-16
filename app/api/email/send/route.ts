@@ -85,7 +85,7 @@ export async function POST(req: Request) {
 
     const { data: rawProfile } = await supabase
       .from("profiles")
-      .select("account_id, current_account_id, role")
+      .select("account_id, current_account_id")
       .eq("id", user.id)
       .single()
 
@@ -98,9 +98,14 @@ export async function POST(req: Request) {
       )
     }
 
-    if (profile.role !== "admin") {
+    const { data: canSend } = await supabase.rpc("has_account_role", {
+      p_account_id: profile.account_id,
+      p_min_role: "manager",
+    })
+
+    if (canSend !== true) {
       return NextResponse.json(
-        { error: "Forbidden: admin access required" },
+        { error: "Forbidden: manager access required" },
         { status: 403 }
       )
     }
