@@ -32,13 +32,24 @@ export default function FeesPage() {
         return
       }
 
-      const { data: profile, error } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("account_id, current_account_id")
         .eq("id", user.id)
         .single()
 
-      if (error || profile?.role !== "admin") {
+      const activeAccountId = profile?.current_account_id || profile?.account_id
+      if (!activeAccountId) {
+        router.replace("/")
+        return
+      }
+
+      const { data: allowed } = await supabase.rpc("has_account_role", {
+        p_account_id: activeAccountId,
+        p_min_role: "admin",
+      })
+
+      if (allowed !== true) {
         router.replace("/")
         return
       }
