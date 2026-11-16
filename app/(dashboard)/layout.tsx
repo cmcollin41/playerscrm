@@ -57,12 +57,18 @@ export default async function DashboardLayout({
   if (user) {
     const { data: profile } = await supabase
       .from("profiles")
-      .select("role, first_name, last_name, people_id, people(photo), current_account_id, account_id")
+      .select("first_name, last_name, people_id, people(photo), current_account_id, account_id")
       .eq("id", user.id)
       .single()
 
-    if (profile?.role) userRole = profile.role as UserRole
     currentAccountId = profile?.current_account_id || profile?.account_id || undefined
+    if (currentAccountId) {
+      const { data: isAccountAdmin } = await supabase.rpc("has_account_role", {
+        p_account_id: currentAccountId,
+        p_min_role: "admin",
+      })
+      if (isAccountAdmin === true) userRole = "admin"
+    }
 
     const first = (profile?.first_name as string) || ""
     const last = (profile?.last_name as string) || ""
