@@ -37,6 +37,7 @@ function LoginContent() {
   const account_id = searchParams.get("account_id")
   const people_id = searchParams.get("people_id")
   const invite_role = searchParams.get("invite_role") || "member"
+  const invite = searchParams.get("invite")
   const email =
     from_events === "true"
       ? (searchParams.get("email") as string) || ""
@@ -110,6 +111,7 @@ function LoginContent() {
     formData.append("from_events", from_events || "")
     formData.append("account_id", account_id || "")
     formData.append("invite_role", invite_role || "member")
+    formData.append("invite", invite || "")
     try {
       const result = await signup(formData)
       if (result?.error) {
