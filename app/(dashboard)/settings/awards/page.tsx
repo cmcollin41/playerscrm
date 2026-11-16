@@ -66,16 +66,26 @@ export default function AwardTypesPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("account_id, current_account_id, role")
+        .select("account_id, current_account_id")
         .eq("id", user.id)
         .single()
 
-      if (!profile || profile.role !== "admin") {
+      const activeAccountId = profile?.current_account_id || profile?.account_id
+      if (!activeAccountId) {
         router.replace("/")
         return
       }
 
-      const activeAccountId = profile.current_account_id || profile.account_id
+      const { data: isAdmin } = await supabase.rpc("has_account_role", {
+        p_account_id: activeAccountId,
+        p_min_role: "admin",
+      })
+
+      if (isAdmin !== true) {
+        router.replace("/")
+        return
+      }
+
       setAccountId(activeAccountId)
       await fetchAwardTypes(activeAccountId)
       setIsLoading(false)
