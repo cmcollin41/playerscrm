@@ -10,7 +10,9 @@
     "format": "prettier \"**/*.{css,js,json,jsx,ts,tsx}\"",
     "start": "next start",
     "lint": "eslint app components lib --ext .ts,.tsx,.js,.jsx",
-    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
@@ -123,6 +125,8 @@
     "prettier-plugin-tailwindcss": "^0.3.0",
     "tailwindcss": "^3.3.3",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.1.6"
+    "typescript": "^5.1.6",
+    "vite": "^7.3.8",
+    "vitest": "^5.1.0"
   }
 }
