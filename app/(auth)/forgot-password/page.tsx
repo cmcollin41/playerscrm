@@ -36,12 +36,11 @@ export default function ForgotPasswordPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
       <Image
-        src="/vh.svg"
+        src="/athletes-logo.png"
         width={75}
         height={75}
         alt=""
         className="mb-6"
-        unoptimized
       />
       <div className="w-full max-w-[400px] rounded border border-gray-100 bg-gray-50 p-6 shadow">
         <h1 className="text-center text-lg font-semibold text-foreground">

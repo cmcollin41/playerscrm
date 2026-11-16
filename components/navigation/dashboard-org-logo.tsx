@@ -15,11 +15,10 @@ export function DashboardHeaderLogo({ orgLogoUrl, orgName }: DashboardHeaderLogo
   if (!orgLogoUrl || useDefault) {
     return (
       <Image
-        src="/vh.svg"
+        src="/athletes-logo.png"
         width={50}
         height={50}
         alt="PlayersCRM"
-        unoptimized
       />
     )
   }

@@ -44,11 +44,10 @@ export function PortalShell({
         <div className="mx-auto flex h-16 max-w-5xl items-center px-4">
           <Link href="/portal/welcome" className="flex items-center gap-2">
             <Image
-              src="/vh.svg"
+              src="/athletes-logo.png"
               width={32}
               height={32}
               alt="PlayersCRM"
-              unoptimized
             />
             <span className="text-sm font-semibold text-gray-900">
               My portal

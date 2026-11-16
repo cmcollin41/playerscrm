@@ -55,7 +55,7 @@ export function Header() {
               aria-label="Home"
               className="flex items-center gap-2"
             >
-              <img src="/vh.svg" alt="" className="h-8 w-auto" />
+              <img src="/athletes-logo.png" alt="" className="h-8 w-auto" />
               <span className="font-display text-xl text-gray-900">
                 PlayersCRM
               </span>

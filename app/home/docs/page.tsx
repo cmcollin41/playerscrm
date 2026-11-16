@@ -2,7 +2,7 @@ import Link from "next/link"
 import { ArrowRight, ExternalLink } from "lucide-react"
 
 export const metadata = {
-  title: "API Documentation · PlayersCRM",
+  title: "API Documentation",
   description:
     "Public REST API for embedding rosters, teams, and event registration on third-party websites.",
 }

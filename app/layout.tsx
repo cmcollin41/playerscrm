@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     "roster management",
   ],
   icons: {
-    icon: "/vh.svg",
+    icon: "/icon.png",
     apple: "/apple-icon.png",
   },
   openGraph: {

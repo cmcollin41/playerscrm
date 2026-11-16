@@ -36,13 +36,12 @@ export default function PortalLoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-12">
       <Link href="/" className="flex items-center gap-2">
         <Image
-          src="/vh.svg"
+          src="/athletes-logo.png"
           width={40}
           height={40}
           alt=""
           className="h-10 w-auto"
           priority
-          unoptimized
         />
         <span className="font-display text-xl text-gray-900">PlayersCRM</span>
       </Link>

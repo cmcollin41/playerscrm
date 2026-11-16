@@ -17,6 +17,10 @@ const calSansSemiBold = readFileSync(
   join(process.cwd(), "styles", "CalSans-SemiBold.otf"),
 )
 
+const logoDataUri = `data:image/png;base64,${readFileSync(
+  join(process.cwd(), "public", "athletes-logo.png"),
+).toString("base64")}`
+
 export default async function OpengraphImage() {
   return new ImageResponse(
     (
@@ -50,6 +54,18 @@ export default async function OpengraphImage() {
               maxWidth: 580,
             }}
           >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                marginBottom: 32,
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoDataUri} width={40} height={40} alt="" />
+              <span style={{ fontSize: 30, color: "#0F172A" }}>PlayersCRM</span>
+            </div>
             <span
               style={{
                 fontSize: 22,
