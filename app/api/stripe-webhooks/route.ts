@@ -1,6 +1,7 @@
 import { stripe } from "@/lib/stripe";
 import { createClient as createAdminClient } from "@/lib/supabase/admin";
 import { sendEventConfirmations } from "@/lib/events/event-confirmation";
+import { sendReceiptEmail } from "@/lib/send-invoice-email";
 import { dispatchPaidOrder } from "@/lib/store/dispatch-order";
 import { cancelRegistrationDispatchesOnRefund } from "@/lib/events/dispatch-registration-products";
 import { getEventIntegrations } from "@/lib/integrations/install";
@@ -294,6 +295,27 @@ const updateSupabase = async (event: any, supabase: any) => {
         if (paymentError && paymentError.code !== "23505") {
           console.log("Error creating payment record:", paymentError);
           throw new Error(`payment row write failed: ${paymentError.message}`);
+        }
+
+        // The payment row is the once-only guard: only the delivery that
+        // actually inserted it sends the receipt. A failed email must not
+        // fail the webhook, or Stripe would retry an already-recorded payment.
+        if (!paymentError) {
+          try {
+            const paidAtSeconds = stripeInvoice.status_transitions?.paid_at;
+            const receipt = await sendReceiptEmail({
+              supabase,
+              invoiceId,
+              amountPaid: stripeInvoice.amount_paid / 100,
+              paidAt: paidAtSeconds ? new Date(paidAtSeconds * 1000) : new Date(),
+              receiptLink: stripeInvoice.hosted_invoice_url,
+            });
+            if (!receipt.success) {
+              console.error(`Receipt email not sent for invoice ${invoiceId}:`, receipt.error);
+            }
+          } catch (receiptErr) {
+            console.error(`Receipt email failed for invoice ${invoiceId}:`, receiptErr);
+          }
         }
       } else {
         console.log(`Payment record already exists for invoice ${invoiceId}, skipping`);

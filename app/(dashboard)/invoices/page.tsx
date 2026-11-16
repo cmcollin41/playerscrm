@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import InvoicesClient from "./invoices-client"
-import { Button } from "@/components/ui/button"
+import NewInvoiceButton from "./new-invoice-button"
 
 export default async function InvoicesPage() {
   const supabase = await createClient()
@@ -25,6 +25,12 @@ export default async function InvoicesPage() {
   if (!accountId) {
     redirect("/login")
   }
+
+  const { data: account } = await supabase
+    .from("accounts")
+    .select("stripe_id")
+    .eq("id", accountId)
+    .maybeSingle()
 
   // Fetch all invoices for the account with related data
   const { data: invoices, error } = await supabase
@@ -73,9 +79,10 @@ export default async function InvoicesPage() {
             View and manage all invoices sent to your athletes and families.
           </p>
         </div>
-        <Button>
-          + New Invoice
-        </Button>
+        <NewInvoiceButton
+          accountId={accountId}
+          stripeAccountId={account?.stripe_id ?? null}
+        />
       </div>
 
       <InvoicesClient invoices={invoices || []} accountId={accountId} />

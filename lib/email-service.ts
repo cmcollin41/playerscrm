@@ -10,6 +10,7 @@
 
 import React from "react"
 import resend from "./resend"
+import type { SupabaseClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
 import { BasicTemplate } from "@/components/emails/basic-template"
 import { render } from "@react-email/render"
@@ -264,11 +265,16 @@ export async function sendTransactionalEmail(options: {
   person_id?: string
   metadata?: any
   attachments?: TransactionalAttachment[]
+  /**
+   * Client used to log the send. Pass the service-role client from webhooks
+   * and other cookie-less contexts; defaults to the request's session client.
+   */
+  supabase?: SupabaseClient
 }): Promise<EmailResult> {
   const { sender, to, subject, html, text, account_id, person_id, metadata = {}, attachments } = options
 
   try {
-    const supabase = await createClient()
+    const supabase = options.supabase ?? (await createClient())
 
     const { data, error } = await resend.emails.send({
       from: sender,
@@ -292,7 +298,7 @@ export async function sendTransactionalEmail(options: {
     }
 
     // Log to database
-    await supabase.from("emails").insert({
+    const { error: logError } = await supabase.from("emails").insert({
       account_id,
       sender,
       recipient_id: person_id || null,
@@ -307,6 +313,10 @@ export async function sendTransactionalEmail(options: {
       broadcast_id: metadata?.broadcast_id || null,
       click_count: 0,
     })
+    if (logError) {
+      // The email went out; only the record of it failed.
+      console.error("Error logging transactional email:", logError.message)
+    }
 
     return {
       success: true,

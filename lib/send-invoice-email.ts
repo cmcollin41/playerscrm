@@ -1,5 +1,18 @@
+import { createElement } from "react"
 import Stripe from "stripe"
+import type { SupabaseClient } from "@supabase/supabase-js"
+import {
+  InvoiceEmail,
+  invoiceEmailText,
+  type InvoiceEmailProps,
+} from "@/components/emails/invoice-email"
+import {
+  ReceiptEmail,
+  receiptEmailText,
+  type ReceiptEmailProps,
+} from "@/components/emails/receipt-email"
 import { sendTransactionalEmail } from "@/lib/email-service"
+import { renderEmail } from "@/lib/emails/render"
 import { resolveSender } from "@/lib/sender"
 import { createClient } from "@/lib/supabase/server"
 
@@ -15,6 +28,108 @@ interface Recipient {
   email: string
   name: string
   person_id: string
+}
+
+interface InvoicePerson {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  email: string | null
+  name: string | null
+  dependent: boolean | null
+}
+
+const INVOICE_SELECT = `
+  *,
+  person:people (
+    id,
+    first_name,
+    last_name,
+    email,
+    name,
+    dependent
+  ),
+  account:accounts (
+    id,
+    name,
+    logo,
+    stripe_id,
+    default_invoice_sender_id,
+    default_sender_id,
+    senders!senders_account_id_fkey (
+      id,
+      name,
+      email
+    )
+  )
+`
+
+function failure(error: string): SendInvoiceEmailResult {
+  return { success: false, sent_count: 0, failed_count: 0, error }
+}
+
+function personFullName(person: InvoicePerson | null): string | null {
+  if (!person) return null
+  const full = [person.first_name, person.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim()
+  return full || person.name || null
+}
+
+/** Only absolute http(s) URLs render in email clients. */
+function emailLogoUrl(logo: unknown): string | null {
+  return typeof logo === "string" && /^https?:\/\//i.test(logo) ? logo : null
+}
+
+/**
+ * Who gets billing email for a person: the person themselves when they have
+ * an address, plus every primary guardian when they are a dependent.
+ */
+async function resolveBillingRecipients(
+  supabase: SupabaseClient,
+  person: InvoicePerson | null,
+): Promise<Recipient[]> {
+  const recipients: Recipient[] = []
+  if (!person) return recipients
+
+  if (person.email) {
+    recipients.push({
+      email: person.email,
+      name: person.first_name || person.name || "there",
+      person_id: person.id,
+    })
+  }
+
+  if (!person.dependent) return recipients
+
+  const { data: relationships } = await supabase
+    .from("relationships")
+    .select("person_id")
+    .eq("relation_id", person.id)
+    .eq("primary", true)
+
+  if (!relationships || relationships.length === 0) return recipients
+
+  const { data: guardians } = await supabase
+    .from("people")
+    .select("id, email, first_name, name")
+    .in(
+      "id",
+      relationships.map((r) => r.person_id),
+    )
+
+  for (const guardian of guardians ?? []) {
+    if (!guardian.email) continue
+    if (recipients.some((r) => r.email === guardian.email)) continue
+    recipients.push({
+      email: guardian.email,
+      name: guardian.first_name || guardian.name || "there",
+      person_id: guardian.id,
+    })
+  }
+
+  return recipients
 }
 
 /**
@@ -33,31 +148,7 @@ export async function sendInvoiceEmail(
 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")
-    .select(
-      `
-      *,
-      person:people (
-        id,
-        first_name,
-        last_name,
-        email,
-        name,
-        dependent
-      ),
-      account:accounts (
-        id,
-        name,
-        stripe_id,
-        default_invoice_sender_id,
-        default_sender_id,
-        senders!senders_account_id_fkey (
-          id,
-          name,
-          email
-        )
-      )
-    `,
-    )
+    .select(INVOICE_SELECT)
     .eq("id", invoiceId)
     .single()
 
@@ -67,62 +158,12 @@ export async function sendInvoiceEmail(
       invoiceId,
       invoiceError?.message,
     )
-    return {
-      success: false,
-      sent_count: 0,
-      failed_count: 0,
-      error: "Invoice not found",
-    }
+    return failure("Invoice not found")
   }
 
-  const recipients: Recipient[] = []
-
-  if (invoice.person?.email) {
-    recipients.push({
-      email: invoice.person.email,
-      name: invoice.person.first_name || invoice.person.name || "there",
-      person_id: invoice.person.id,
-    })
-  }
-
-  if (invoice.person?.dependent) {
-    const { data: relationships } = await supabase
-      .from("relationships")
-      .select("person_id")
-      .eq("relation_id", invoice.person.id)
-      .eq("primary", true)
-
-    if (relationships && relationships.length > 0) {
-      const guardianIds = relationships.map((r: any) => r.person_id)
-      const { data: guardians } = await supabase
-        .from("people")
-        .select("id, email, first_name, name")
-        .in("id", guardianIds)
-
-      if (guardians) {
-        for (const guardian of guardians) {
-          if (
-            guardian.email &&
-            !recipients.some((r) => r.email === guardian.email)
-          ) {
-            recipients.push({
-              email: guardian.email,
-              name: guardian.first_name || guardian.name || "there",
-              person_id: guardian.id,
-            })
-          }
-        }
-      }
-    }
-  }
-
+  const recipients = await resolveBillingRecipients(supabase, invoice.person)
   if (recipients.length === 0) {
-    return {
-      success: false,
-      sent_count: 0,
-      failed_count: 0,
-      error: "No email address found for recipient or their guardian(s)",
-    }
+    return failure("No email address found for recipient or their guardian(s)")
   }
 
   const sender = resolveSender(invoice.account, "invoice")
@@ -145,13 +186,9 @@ export async function sendInvoiceEmail(
 
   if (!paymentLink) {
     if (!stripeInvoiceId || !stripeAccountId) {
-      return {
-        success: false,
-        sent_count: 0,
-        failed_count: 0,
-        error:
-          "No Stripe invoice found for this invoice. Cannot generate payment link.",
-      }
+      return failure(
+        "No Stripe invoice found for this invoice. Cannot generate payment link.",
+      )
     }
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
       apiVersion: "2023-08-16",
@@ -163,97 +200,42 @@ export async function sendInvoiceEmail(
   }
 
   if (!paymentLink) {
-    return {
-      success: false,
-      sent_count: 0,
-      failed_count: 0,
-      error:
-        "Stripe invoice has no payment link. It may have been voided or already paid.",
-    }
+    return failure(
+      "Stripe invoice has no payment link. It may have been voided or already paid.",
+    )
   }
 
-  const formattedAmount = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(invoice.amount || 0)
-
-  const emailSubject = `Invoice ${invoice.invoice_number || invoice.id.slice(0, 8)} from ${invoice.account.name}`
+  const invoiceNumber = invoice.invoice_number || invoice.id.slice(0, 8)
+  const accountName = invoice.account.name
+  const subject = `Invoice ${invoiceNumber} from ${accountName}`
+  const billedFor = personFullName(invoice.person)
 
   let sentCount = 0
   let failedCount = 0
 
   for (const recipient of recipients) {
-    const emailHtml = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>${emailSubject}</title>
-            <style>
-              body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-              .content { padding: 20px 0; }
-              .invoice-details { background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0; }
-              .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #dee2e6; font-size: 14px; color: #6c757d; }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <h1 style="margin: 0; font-size: 24px;">${invoice.account.name}</h1>
-              <p style="margin: 10px 0 0 0; color: #6c757d;">Invoice</p>
-            </div>
-
-            <div class="content">
-              <p>Hello ${recipient.name},</p>
-
-              <p>You have an invoice from <strong>${invoice.account.name}</strong>:</p>
-
-              <div class="invoice-details">
-                <p style="margin: 5px 0;"><strong>Invoice Number:</strong> ${invoice.invoice_number || invoice.id.slice(0, 8)}</p>
-                <p style="margin: 5px 0;"><strong>Amount Due:</strong> ${formattedAmount}</p>
-                ${invoice.due_date ? `<p style="margin: 5px 0;"><strong>Due Date:</strong> ${new Date(invoice.due_date).toLocaleDateString()}</p>` : ""}
-                ${invoice.description ? `<p style="margin: 5px 0;"><strong>Description:</strong> ${invoice.description}</p>` : ""}
-              </div>
-
-              <a href="${paymentLink}" style="display: inline-block; padding: 12px 24px; background-color: #16a34a; color: #ffffff !important; text-decoration: none; border-radius: 6px; margin: 20px 0; font-weight: 600;">Pay Invoice</a>
-
-              <p>Or copy and paste this link into your browser:<br>
-              <a href="${paymentLink}">${paymentLink}</a></p>
-
-              <p>If you have any questions about this invoice, please contact ${invoice.account.name}.</p>
-            </div>
-
-            <div class="footer">
-              <p>This is an automated message from ${invoice.account.name}.</p>
-            </div>
-          </body>
-        </html>
-      `
-
-    const emailText = `
-Invoice from ${invoice.account.name}
-
-Hello ${recipient.name},
-
-You have an invoice from ${invoice.account.name}:
-
-Invoice Number: ${invoice.invoice_number || invoice.id.slice(0, 8)}
-Amount Due: ${formattedAmount}
-${invoice.due_date ? `Due Date: ${new Date(invoice.due_date).toLocaleDateString()}` : ""}
-${invoice.description ? `Description: ${invoice.description}` : ""}
-
-To pay this invoice, please visit:
-${paymentLink}
-
-If you have any questions about this invoice, please contact ${invoice.account.name}.
-      `.trim()
+    const props: InvoiceEmailProps = {
+      accountName,
+      logoUrl: emailLogoUrl(invoice.account.logo),
+      recipientName: recipient.name,
+      invoiceNumber,
+      amount: Number(invoice.amount || 0),
+      dueDate: invoice.due_date,
+      description: invoice.description,
+      billedFor: recipient.person_id === invoice.person?.id ? null : billedFor,
+      paymentLink,
+    }
+    const { html, text } = await renderEmail(
+      createElement(InvoiceEmail, props),
+      invoiceEmailText(props),
+    )
 
     const result = await sendTransactionalEmail({
       sender,
       to: recipient.email,
-      subject: emailSubject,
-      html: emailHtml,
-      text: emailText,
+      subject,
+      html,
+      text,
       account_id: invoice.account_id,
       person_id: recipient.person_id,
       metadata: {
@@ -280,5 +262,108 @@ If you have any questions about this invoice, please contact ${invoice.account.n
     sent_count: sentCount,
     failed_count: failedCount,
     payment_link: paymentLink,
+  }
+}
+
+interface SendReceiptEmailOptions {
+  /** Service-role client — receipts are sent from the Stripe webhook. */
+  supabase: SupabaseClient
+  invoiceId: string
+  /** Dollars actually collected. */
+  amountPaid: number
+  paidAt: Date
+  /** Stripe-hosted invoice page, which shows the paid state and receipt. */
+  receiptLink?: string | null
+}
+
+/**
+ * Email a payment receipt for a paid invoice to the same people who received
+ * the invoice. Callers must make sure this runs once per payment.
+ */
+export async function sendReceiptEmail(
+  options: SendReceiptEmailOptions,
+): Promise<SendInvoiceEmailResult> {
+  const { supabase, invoiceId, amountPaid, paidAt } = options
+
+  const { data: invoice, error: invoiceError } = await supabase
+    .from("invoices")
+    .select(INVOICE_SELECT)
+    .eq("id", invoiceId)
+    .single()
+
+  if (invoiceError || !invoice) {
+    console.error(
+      "sendReceiptEmail: could not load invoice",
+      invoiceId,
+      invoiceError?.message,
+    )
+    return failure("Invoice not found")
+  }
+
+  const recipients = await resolveBillingRecipients(supabase, invoice.person)
+  if (recipients.length === 0) {
+    return failure("No email address found for recipient or their guardian(s)")
+  }
+
+  const metadata = (invoice.metadata ?? {}) as Record<string, unknown>
+  const receiptLink =
+    options.receiptLink ||
+    (typeof metadata.hosted_invoice_url === "string"
+      ? metadata.hosted_invoice_url
+      : null)
+
+  const sender = resolveSender(invoice.account, "invoice")
+  const invoiceNumber = invoice.invoice_number || invoice.id.slice(0, 8)
+  const accountName = invoice.account.name
+  const subject = `Receipt from ${accountName} — invoice ${invoiceNumber}`
+  const billedFor = personFullName(invoice.person)
+
+  let sentCount = 0
+  let failedCount = 0
+
+  for (const recipient of recipients) {
+    const props: ReceiptEmailProps = {
+      accountName,
+      logoUrl: emailLogoUrl(invoice.account.logo),
+      recipientName: recipient.name,
+      invoiceNumber,
+      amountPaid,
+      paidAt,
+      description: invoice.description,
+      billedFor: recipient.person_id === invoice.person?.id ? null : billedFor,
+      receiptLink,
+    }
+    const { html, text } = await renderEmail(
+      createElement(ReceiptEmail, props),
+      receiptEmailText(props),
+    )
+
+    const result = await sendTransactionalEmail({
+      supabase,
+      sender,
+      to: recipient.email,
+      subject,
+      html,
+      text,
+      account_id: invoice.account_id,
+      person_id: recipient.person_id,
+      metadata: { type: "receipt", invoice_id: invoice.id },
+    })
+
+    if (result.success) {
+      sentCount++
+    } else {
+      failedCount++
+      console.error(
+        `Failed to send receipt to ${recipient.email}:`,
+        result.error,
+      )
+    }
+  }
+
+  return {
+    success: sentCount > 0,
+    sent_count: sentCount,
+    failed_count: failedCount,
   }
 }

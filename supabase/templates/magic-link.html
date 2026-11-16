@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="supported-color-schemes" content="light">
+    <title>Sign in to PlayersCRM</title>
+  </head>
+  <body style="margin:0;padding:32px 12px;background-color:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;">Your sign-in link for PlayersCRM</div>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+            <tr>
+              <td style="padding:0 4px 16px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="vertical-align:middle;">
+                      <img src="https://playerscrm.com/athletes-logo.png" alt="" width="28" height="28" style="display:inline-block;vertical-align:middle;border:0;">
+                      <span style="vertical-align:middle;padding-left:6px;font-size:17px;line-height:24px;font-weight:700;color:#18181b;">PlayersCRM</span>
+                    </td>
+                    <td align="right" style="vertical-align:middle;font-size:11px;line-height:16px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#71717a;">Sign in</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="background-color:#ffffff;border:1px solid #e4e4e7;border-radius:12px;padding:32px;">
+                <h1 style="margin:0 0 8px;font-size:22px;line-height:30px;font-weight:700;color:#18181b;">Sign in to PlayersCRM</h1>
+                <p style="margin:0 0 16px;font-size:15px;line-height:24px;color:#3f3f46;">Use the button below to sign in as <strong style="color:#18181b;">{{ .Email }}</strong>. No password needed.</p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;">
+                  <tr>
+                    <td align="center">
+                      <a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email" style="display:inline-block;padding:13px 28px;border-radius:8px;background-color:#18181b;color:#ffffff;font-size:15px;font-weight:600;text-decoration:none;">Sign in</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0;font-size:13px;line-height:20px;color:#71717a;">Button not working? Copy this link into your browser:<br><a href="{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email" style="color:#71717a;word-break:break-all;">{{ .RedirectTo }}&token_hash={{ .TokenHash }}&type=email</a></p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0 0;">
+                  <tr>
+                    <td style="background-color:#fafafa;border:1px solid #e4e4e7;border-radius:8px;padding:12px 16px;font-size:13px;line-height:20px;color:#71717a;">This link expires soon and can only be used once. If you didn't ask to sign in, you can safely ignore this email.</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:20px 4px 0;text-align:center;font-size:13px;line-height:20px;color:#a1a1aa;">PlayersCRM &middot; the operating system for your sports program</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -9,8 +9,13 @@ import { createAccountInvite } from "@/lib/invites"
 import { sendTransactionalEmail } from "@/lib/email-service"
 import { resolveSender } from "@/lib/sender"
 import { NextResponse } from "next/server"
-import { render } from "@react-email/render"
-import { BasicTemplate } from "@/components/emails/basic-template"
+import { createElement } from "react"
+import {
+  InviteEmail,
+  inviteEmailText,
+  type InviteEmailProps,
+} from "@/components/emails/invite-email"
+import { renderEmail } from "@/lib/emails/render"
 import { resolvePersonInviteRecipientEmail } from "@/lib/person-invite-email"
 
 const appOrigin =
@@ -119,7 +124,7 @@ export async function POST(req: Request) {
 
     const { data: account, error: accountErr } = await supabase
       .from("accounts")
-      .select("id, name, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email)")
+      .select("id, name, logo, default_invoice_sender_id, default_sender_id, senders!senders_account_id_fkey(id, name, email)")
       .eq("id", activeAccountId)
       .single()
 
@@ -148,22 +153,24 @@ export async function POST(req: Request) {
 
     const sign_in = `${signInOrigin}/login`
 
-    const message = `You've been invited to join ${account.name} on PlayersCRM. If you already have an account, sign in at ${sign_in}. If not, use the link below to create one and connect your profile. ${signupUrl.toString()}`
-
-    const emailHtml = await render(
-      BasicTemplate({
-        message,
-        account,
-        preview: `You're invited to join ${account.name}`,
-      }),
+    const props: InviteEmailProps = {
+      accountName: account.name,
+      logoUrl: /^https?:\/\//i.test(account.logo || "") ? account.logo : null,
+      firstName: person.first_name,
+      signupUrl: signupUrl.toString(),
+      signInUrl: sign_in,
+    }
+    const { html, text } = await renderEmail(
+      createElement(InviteEmail, props),
+      inviteEmailText(props),
     )
 
     const result = await sendTransactionalEmail({
       sender,
       to: email,
       subject: `You're invited to join ${account.name}`,
-      html: emailHtml,
-      text: message,
+      html,
+      text,
       account_id: activeAccountId,
       person_id: person.id,
       metadata: {
