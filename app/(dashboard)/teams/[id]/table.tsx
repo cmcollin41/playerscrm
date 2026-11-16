@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import SendEmailSheet from "@/components/modal/send-email-sheet";
-import { RosterBillingModal } from "@/components/modal/roster-billing-modal";
+import { RosterBillingSheet } from "@/components/modal/roster-billing-sheet";
 import { RosterInvoicesDialog } from "@/components/modal/roster-invoices-dialog";
 import {
   invoicesForRoster,
@@ -567,7 +567,7 @@ export function TeamTable({
         />
       ) : null}
       {billingPerson && billingRoster ? (
-        <RosterBillingModal
+        <RosterBillingSheet
           open={billingOpen}
           onOpenChange={(open) => {
             setBillingOpen(open);

@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import GenericButton from "@/components/modal-buttons/generic-button";
-import CreateTeamModal from "@/components/modal/create-team-modal";
+import TeamSheet from "@/components/modal/team-sheet";
 import { TeamTable } from "./table";
 import { getAccount } from "@/lib/fetchers/server";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,9 +52,7 @@ export default async function TeamsPage() {
               Manage your teams, rosters, and staff
             </p>
           </div>
-          <GenericButton cta="+ New Team" classNames="">
-            <CreateTeamModal account={account} />
-          </GenericButton>
+          <TeamSheet cta="+ New Team" account={account} />
         </div>
       </div>
 

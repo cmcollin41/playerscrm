@@ -4,12 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client"
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { useModal } from "./provider";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  sheetFormClassName,
+} from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2, Camera, X, Plus, Trophy, Pencil, DollarSign } from "lucide-react";
@@ -27,14 +35,44 @@ const TEAM_LEVELS = [
   { value: "varsity", label: "Varsity" },
 ] as const
 
-interface EditTeamModalProps {
+interface TeamSheetProps {
+  /** Team to edit. Omit to create a new team (then `account` is required). */
   team?: any
+  account?: { id: string } | null
+  cta: string
   onRefresh?: () => void | Promise<void>
 }
 
-export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
+export default function TeamSheet({ team, account, cta, onRefresh }: TeamSheetProps) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button>{cta}</Button>
+      </SheetTrigger>
+      <SheetContent side="right">
+        <TeamForm
+          team={team}
+          accountId={team?.account_id ?? account?.id ?? null}
+          onRefresh={onRefresh}
+          onClose={() => setOpen(false)}
+        />
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+interface TeamFormProps {
+  team?: any
+  accountId: string | null
+  onRefresh?: () => void | Promise<void>
+  onClose: () => void
+}
+
+// Rendered inside SheetContent, so it mounts fresh each time the sheet opens.
+function TeamForm({ team, accountId, onRefresh, onClose }: TeamFormProps) {
   const { refresh } = useRouter();
-  const modal = useModal();
   const [isLoading, setIsLoading] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(team?.icon || null);
@@ -82,21 +120,21 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
 
   // Load fee options and then set the default fee ID (must happen after options load)
   useEffect(() => {
-    if (!team?.account_id) return;
+    if (!accountId) return;
     let cancelled = false;
     void (async () => {
       const { data } = await supabase
         .from("fees")
         .select("id, name, amount")
-        .eq("account_id", team.account_id)
+        .eq("account_id", accountId)
         .eq("is_active", true)
         .order("name", { ascending: true });
       if (cancelled) return;
       setRosterFeeOptions(data ?? []);
-      setDefaultRosterFeeId(team.fee_id ? String(team.fee_id) : "none");
+      setDefaultRosterFeeId(team?.fee_id ? String(team.fee_id) : "none");
     })();
     return () => { cancelled = true };
-  }, [team?.account_id, team?.fee_id, team?.id, supabase]);
+  }, [accountId, team?.fee_id, team?.id, supabase]);
 
   const addAward = async () => {
     if (!team?.id || !newAwardTitle.trim()) return;
@@ -174,7 +212,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
       setIsUploadingImage(true)
       try {
         const ext = file.name.split(".").pop()
-        const fileName = `teams/${team?.account_id || "new"}/${crypto.randomUUID()}.${ext}`
+        const fileName = `teams/${accountId || "new"}/${crypto.randomUUID()}.${ext}`
 
         const { data, error: uploadError } = await supabase.storage
           .from("headshots")
@@ -203,13 +241,17 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
   }
 
   const onSubmit = async (data: any) => {
+    if (!accountId) {
+      toast.error("Missing account");
+      return;
+    }
     setIsLoading(true);
     try {
       const baseSlug = slugify(data.name || "team");
       const { data: existing } = await supabase
         .from("teams")
         .select("id, slug")
-        .eq("account_id", team?.account_id || "");
+        .eq("account_id", accountId);
       const existingSlugs = (existing ?? [])
         .filter((t: { id: string; slug: string }) => t.id !== team?.id)
         .map((t: { slug: string }) => t.slug)
@@ -228,21 +270,18 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
         season_id: seasonId,
       };
 
-      let error;
-      if (team) {
-        const { error: updateError } = await supabase
-          .from("teams")
-          .update(teamData)
-          .eq("id", team.id);
-        error = updateError;
-      }
+      const { error } = team
+        ? await supabase.from("teams").update(teamData).eq("id", team.id)
+        : await supabase
+            .from("teams")
+            .insert([{ ...teamData, account_id: accountId }]);
 
       if (error) {
-        toast.error("Failed to update team");
+        toast.error(team ? "Failed to update team" : "Failed to create team");
         console.error("FORM ERRORS: ", error);
       } else {
         toast.success(team ? "Team updated successfully" : "Team created successfully");
-        modal?.hide();
+        onClose();
         onRefresh?.()
         refresh();
       }
@@ -252,12 +291,12 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col min-h-0 flex-1">
-      <DialogHeader className="shrink-0 border-b px-6 pb-4 pt-6">
-        <DialogTitle>{team ? "Edit Team" : "New Team"}</DialogTitle>
-      </DialogHeader>
+    <form onSubmit={handleSubmit(onSubmit)} className={sheetFormClassName}>
+      <SheetHeader>
+        <SheetTitle>{team ? "Edit Team" : "New Team"}</SheetTitle>
+      </SheetHeader>
 
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 space-y-4">
+      <SheetBody className="space-y-4">
         {/* Team Image */}
         <div className="flex items-center gap-4">
           <div className="relative group">
@@ -327,12 +366,12 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
         </div>
 
         {/* Season */}
-        {team?.account_id ? (
+        {accountId ? (
           <div className="space-y-2">
             <Label htmlFor="season">Season</Label>
             <SeasonSelect
               id="season"
-              accountId={team.account_id}
+              accountId={accountId}
               value={seasonId}
               onChange={setSeasonId}
             />
@@ -340,7 +379,7 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
         ) : null}
 
         {/* Default Roster Fee */}
-        {team?.id ? (
+        {accountId ? (
           <div className="space-y-2">
             <Label htmlFor="default_roster_fee" className="flex items-center gap-2">
               <DollarSign className="h-3.5 w-3.5" />
@@ -475,22 +514,14 @@ export default function EditTeamModal({ team, onRefresh }: EditTeamModalProps) {
             </div>
           </div>
         )}
-      </div>
+      </SheetBody>
 
-      <DialogFooter className="shrink-0 border-t bg-zinc-50/90 px-6 py-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => modal?.hide()}
-          disabled={isLoading}
-        >
-          Cancel
-        </Button>
-        <Button type="submit" disabled={isLoading}>
+      <SheetFooter>
+        <Button type="submit" className="w-full" disabled={isLoading}>
           {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {team ? "Update Team" : "Create Team"}
         </Button>
-      </DialogFooter>
+      </SheetFooter>
     </form>
   );
 }

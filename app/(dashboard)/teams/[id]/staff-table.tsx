@@ -9,8 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/ui/data-table";
 
-import SendEmailModal from "@/components/modal/send-email-sheet";
-import SendButton from "@/components/modal-buttons/send-button";
+import SendEmailSheet from "@/components/modal/send-email-sheet";
 import { useRouter } from "next/navigation";
 
 export type Person = {
@@ -140,14 +139,12 @@ export function StaffTable({
 
         return (
           <>
-            <SendButton channel="email" cta="Send Email">
-              <SendEmailModal
-                people={people}
-                cta="Send Email"
-                account={account}
-                onClose={clearSelection}
-              />
-            </SendButton>
+            <SendEmailSheet
+              people={people}
+              cta="Send Email"
+              account={account}
+              onClose={clearSelection}
+            />
             <Button
               onClick={handleRemoveSelected}
               variant="outline"

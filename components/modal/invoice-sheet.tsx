@@ -1,7 +1,16 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  sheetFormClassName,
+} from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -20,7 +29,7 @@ export interface InvoiceRosterOption {
   label: string
 }
 
-interface CreateInvoiceModalProps {
+interface InvoiceSheetProps {
   person: any
   account: any
   open: boolean
@@ -36,7 +45,7 @@ interface CreateInvoiceModalProps {
   initialDescription?: string | null
 }
 
-export default function CreateInvoiceModal({
+export default function InvoiceSheet({
   person,
   account,
   open,
@@ -47,7 +56,7 @@ export default function CreateInvoiceModal({
   onInvoiceCreated,
   initialAmount = null,
   initialDescription = null,
-}: CreateInvoiceModalProps) {
+}: InvoiceSheetProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
@@ -153,28 +162,29 @@ export default function CreateInvoiceModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right">
+        <form onSubmit={handleSubmit} className={sheetFormClassName}>
+        <SheetHeader>
+          <SheetTitle>
             {lockedRosterId
               ? "Invoice (custom line text)"
               : "Create invoice"}
-          </DialogTitle>
+          </SheetTitle>
           {lockedRosterLabel ? (
-            <p className="text-sm text-muted-foreground font-normal pt-1">
+            <SheetDescription>
               Linked to roster: {lockedRosterLabel}. For roster pricing, use{" "}
               <strong>Save billing</strong> and &quot;Create invoice&quot; in
               player billing. Open this when you need different Stripe wording or
               a one-off amount (equipment, partial pay, etc.).
-            </p>
+            </SheetDescription>
           ) : (
-            <p className="text-sm text-muted-foreground font-normal pt-1">
+            <SheetDescription>
               One-off Stripe invoice with your description and amount.
-            </p>
+            </SheetDescription>
           )}
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        </SheetHeader>
+        <SheetBody className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Amount ($)</label>
             <Input
@@ -228,16 +238,14 @@ export default function CreateInvoiceModal({
               </p>
             </div>
           ) : null}
-          <div className="flex justify-end space-x-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Creating..." : "Create invoice"}
-            </Button>
-          </div>
+        </SheetBody>
+        <SheetFooter>
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Creating..." : "Create invoice"}
+          </Button>
+        </SheetFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   )
 }

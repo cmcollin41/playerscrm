@@ -8,13 +8,15 @@ import { useRouter } from "next/navigation";
 import { Mail } from "lucide-react";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  sheetFormClassName,
 } from "@/components/ui/sheet";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -203,22 +205,18 @@ export default function SendEmailSheet({
           {cta}
         </Button>
       </SheetTrigger>
-      <SheetContent 
-        side="right" 
-        className="w-full sm:max-w-md bg-white flex flex-col p-2"
-      >
+      <SheetContent side="right">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
-            <div className="flex h-full flex-col">
-              <SheetHeader className="p-6 animate-in fade-in-0 slide-in-from-top-2 duration-300 delay-100">
+          <form onSubmit={form.handleSubmit(onSubmit)} className={sheetFormClassName}>
+              <SheetHeader>
                 <SheetTitle>Send Email</SheetTitle>
                 <SheetDescription>
                   Sending to {getRecipientDescription()}
                 </SheetDescription>
               </SheetHeader>
 
-              <ScrollArea className="flex-1">
-                <div className="space-y-6 p-3 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 delay-150">
+              <SheetBody>
+                <div className="space-y-6">
                   {error && (
                     <div className="rounded-md bg-red-50 p-4 text-sm text-red-500">
                       {error}
@@ -827,9 +825,9 @@ export default function SendEmailSheet({
                     )}
                   />
                 </div>
-              </ScrollArea>
+              </SheetBody>
 
-              <div className="sticky bottom-0 bg-white p-6 border-t mt-auto animate-in fade-in-0 slide-in-from-bottom-2 duration-300 delay-200">
+              <SheetFooter>
                 <Button 
                   type="submit"
                   disabled={
@@ -838,7 +836,7 @@ export default function SendEmailSheet({
                     account.senders.length === 0 ||
                     people.length === 0
                   }
-                  className="w-full transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+                  className="w-full"
                 >
                   {isSubmitting ? (
                     <LoadingDots color="#fff" />
@@ -847,17 +845,16 @@ export default function SendEmailSheet({
                   )}
                 </Button>
                 {(!account?.senders || account.senders.length === 0) && (
-                  <p className="text-xs text-center text-yellow-600 mt-2">
+                  <p className="text-xs text-center text-yellow-600">
                     Cannot send email without a sender address
                   </p>
                 )}
                 {people.length === 0 && allowRecipientSelection && (
-                  <p className="text-xs text-center text-yellow-600 mt-2">
+                  <p className="text-xs text-center text-yellow-600">
                     Please select at least one recipient
                   </p>
                 )}
-              </div>
-            </div>
+              </SheetFooter>
           </form>
         </Form>
       </SheetContent>

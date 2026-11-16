@@ -8,7 +8,9 @@ import { ArrowRight, Minus, Plus, ShoppingBag, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
+  SheetBody,
   SheetContent,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
@@ -77,12 +79,9 @@ export function CartSheet() {
 
   return (
     <Sheet open={isOpen} onOpenChange={setOpen}>
-      <SheetContent
-        side="right"
-        className="flex w-full flex-col gap-0 bg-white p-0 text-foreground sm:max-w-md"
-      >
-        <SheetHeader className="flex flex-row items-center justify-between border-b px-4 py-4 sm:px-5">
-          <SheetTitle className="text-base font-semibold">
+      <SheetContent side="right">
+        <SheetHeader>
+          <SheetTitle>
             Your cart{itemCount > 0 ? ` (${itemCount})` : ""}
           </SheetTitle>
         </SheetHeader>
@@ -100,7 +99,7 @@ export function CartSheet() {
           </div>
         ) : (
           <>
-            <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+            <SheetBody>
               <div className="flex flex-col gap-5">
                 {groups.map((group, i) => (
                   <section
@@ -137,9 +136,9 @@ export function CartSheet() {
                   </section>
                 ))}
               </div>
-            </div>
+            </SheetBody>
 
-            <div className="border-t bg-white px-4 py-4 sm:px-5">
+            <SheetFooter className="gap-0">
               <dl className="flex flex-col gap-2 text-sm">
                 <div className="flex items-center justify-between">
                   <dt className="text-muted-foreground">Subtotal</dt>
@@ -159,7 +158,7 @@ export function CartSheet() {
               <p className="mt-2 text-center text-xs text-muted-foreground">
                 Made-to-order. Free returns on unused items.
               </p>
-            </div>
+            </SheetFooter>
           </>
         )}
       </SheetContent>

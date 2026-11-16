@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 
 import {
   TrashIcon,
-  ListBulletIcon,
 } from "@radix-ui/react-icons";
 
 import {
@@ -27,7 +26,6 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 
 import AddToTeamModal from "@/components/modal/add-to-team-modal";
-import IconButton from "@/components/modal-buttons/icon-button";
 import SendEmailSheet from "@/components/modal/send-email-sheet";
 import MergePeopleModal from "@/components/modal/merge-people-modal";
 
@@ -229,12 +227,7 @@ export function PeopleTable({
                 name: "Selected People",
               }}
             />
-            <IconButton
-              icon={<ListBulletIcon className="mr-2" />}
-              cta="Add to Team"
-            >
-              <AddToTeamModal people={people} onClose={clearSelection} />
-            </IconButton>
+            <AddToTeamModal people={people} onClose={clearSelection} />
             {selectedRows.length === 2 && (
               <MergePeopleModal
                 person1={people[0]}

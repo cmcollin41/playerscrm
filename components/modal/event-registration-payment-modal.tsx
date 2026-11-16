@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -101,7 +102,7 @@ export function EventRegistrationPaymentModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <DialogBody className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="payment-status">Status</Label>
             <Select
@@ -149,9 +150,9 @@ export function EventRegistrationPaymentModal({
               />
             </div>
           )}
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+        <DialogFooter className="sm:justify-between">
           {hasOverride ? (
             <Button
               type="button"

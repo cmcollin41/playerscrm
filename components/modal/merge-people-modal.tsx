@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -298,7 +299,7 @@ export default function MergePeopleModal({
           Merge Records
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle>Merge People Records</DialogTitle>
           <DialogDescription>
@@ -308,7 +309,7 @@ export default function MergePeopleModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <DialogBody className="space-y-6">
           {/* Primary Record Selection */}
           <div className="space-y-3">
             <Label className="text-sm font-medium">Which record should be the primary?</Label>
@@ -358,7 +359,7 @@ export default function MergePeopleModal({
               <li>Stripe customer information (if any)</li>
             </ul>
           </div>
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button

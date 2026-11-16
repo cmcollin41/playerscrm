@@ -22,7 +22,7 @@ import { getInitials } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button";
 import PersonSheet from "@/components/modal/person-sheet";
-import CreateInvoiceModal from "@/components/modal/create-invoice-modal"
+import InvoiceSheet from "@/components/modal/invoice-sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { formatCurrency } from "@/lib/utils"
 import {
@@ -1107,7 +1107,7 @@ export default function PersonPage({ params }: PersonPageProps) {
         </TabsContent>
       </Tabs>
 
-      <CreateInvoiceModal
+      <InvoiceSheet
         person={person}
         account={account}
         open={invoiceModalOpen}

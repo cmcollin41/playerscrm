@@ -43,12 +43,14 @@ import { Check, ChevronsUpDown, Plus, X, Trophy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  dialogFormClassName,
 } from "@/components/ui/dialog"
 
 const GRADE_OPTIONS = [
@@ -269,7 +271,8 @@ export function AddToRosterModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className={dialogFormClassName}>
+            <DialogBody className="space-y-4">
             <FormField
               control={form.control}
               name="person"
@@ -590,6 +593,7 @@ export function AddToRosterModal({
               )}
             />
 
+            </DialogBody>
             <DialogFooter>
               <Button
                 type="button"

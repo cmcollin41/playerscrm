@@ -4,7 +4,6 @@ import { createClient } from "@/lib/supabase/client"
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { getAccount } from "@/lib/fetchers/client";
-import { useModal } from "./provider";
 import { toast } from 'sonner'
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -15,8 +14,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2 } from "lucide-react";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  dialogFormClassName,
+} from "@/components/ui/dialog";
+import { List, Loader2 } from "lucide-react";
 
 interface Team {
   id: number;
@@ -36,7 +44,7 @@ export default function AddToTeamModal({
   onClose: any;
 }) {
   const { refresh } = useRouter();
-  const modal = useModal();
+  const [open, setOpen] = useState(false);
 
   const supabase = createClient();
 
@@ -128,7 +136,7 @@ export default function AddToTeamModal({
         `Successfully added ${people.length} ${people.length === 1 ? 'person' : 'people'} to team`,
       )
 
-      modal?.hide()
+      setOpen(false)
       onClose()
       refresh()
     } catch (error: any) {
@@ -140,11 +148,19 @@ export default function AddToTeamModal({
   }
 
   return (
-    <div className="p-6">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline">
+          <List className="mr-2 h-4 w-4" />
+          Add to Team
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
       <DialogHeader>
         <DialogTitle>Add to Team</DialogTitle>
       </DialogHeader>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className={dialogFormClassName}>
+        <DialogBody className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="team">Team</Label>
           <Select
@@ -192,12 +208,13 @@ export default function AddToTeamModal({
             </SelectContent>
           </Select>
         </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button
             type="button"
             variant="outline"
-            onClick={() => modal?.hide()}
+            onClick={() => setOpen(false)}
             disabled={isLoading}
           >
             Cancel
@@ -208,6 +225,7 @@ export default function AddToTeamModal({
           </Button>
         </DialogFooter>
       </form>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

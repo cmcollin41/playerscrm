@@ -7,9 +7,12 @@ import { getAccount } from "@/lib/fetchers/client";
 import { toast } from "sonner";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogFormClassName,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -154,7 +157,8 @@ export default function EditRosterFeeModal({
         <DialogHeader>
           <DialogTitle>Edit roster — {personName}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className={dialogFormClassName}>
+          <DialogBody className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="jersey_number">Jersey #</Label>
@@ -343,8 +347,9 @@ export default function EditRosterFeeModal({
           <p className="text-xs text-muted-foreground">
             Fees and invoices are managed from the receipt icon on the team roster row.
           </p>
+          </DialogBody>
 
-          <div className="flex justify-end space-x-2">
+          <DialogFooter>
             <Button
               type="button"
               variant="outline"
@@ -356,7 +361,7 @@ export default function EditRosterFeeModal({
             <Button type="submit" disabled={isLoading}>
               {isLoading ? "Saving..." : "Save"}
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

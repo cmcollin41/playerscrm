@@ -11,23 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { InviteUserDialog } from "@/components/modal/invite-user-dialog"
 
 import { getAccountWithDomain } from "@/lib/fetchers/client"
 import { createClient } from "@/lib/supabase/client"
@@ -43,9 +27,7 @@ import {
   UserPlus,
   Users,
 } from "lucide-react"
-import { toast } from "sonner"
 import type { UserRole } from "@/types/schema.types"
-import LoadingDots from "@/components/icons/loading-dots"
 
 interface UserNavProps {
   userRole?: UserRole
@@ -58,13 +40,6 @@ export function UserNav({ userRole = "general", userInitials, userPhoto }: UserN
   const [account, setAccount] = useState<any>(null)
   const [user, setUser] = useState<any>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [inviting, setInviting] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState("")
-  const [inviteFirstName, setInviteFirstName] = useState("")
-  const [inviteLastName, setInviteLastName] = useState("")
-  const [inviteRole, setInviteRole] = useState<
-    "member" | "manager" | "admin"
-  >("member")
   const supabase = createClient()
   const router = useRouter()
 
@@ -93,50 +68,6 @@ export function UserNav({ userRole = "general", userInitials, userPhoto }: UserN
     }
   }
 
-  const resetInviteForm = () => {
-    setInviteEmail("")
-    setInviteFirstName("")
-    setInviteLastName("")
-    setInviteRole("member")
-  }
-
-  const handleInvite = async () => {
-    if (!inviteEmail) {
-      toast.error("Email is required")
-      return
-    }
-
-    setInviting(true)
-    try {
-      const res = await fetch("/api/admin/invite", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: inviteEmail,
-          firstName: inviteFirstName,
-          lastName: inviteLastName,
-          role: inviteRole,
-        }),
-      })
-
-      const data = await res.json()
-
-      if (!res.ok) throw new Error(data.error || "Failed to send invite")
-
-      if (data.emailSent) {
-        toast.success(`Invitation sent to ${inviteEmail}`)
-      } else {
-        toast.success("Invite link generated (no sender configured to email it)")
-      }
-
-      resetInviteForm()
-      setInviteOpen(false)
-    } catch (error: any) {
-      toast.error(error.message)
-    } finally {
-      setInviting(false)
-    }
-  }
 
   return (
     <>
@@ -240,85 +171,11 @@ export function UserNav({ userRole = "general", userInitials, userPhoto }: UserN
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="bg-white sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Invite User</DialogTitle>
-            <DialogDescription>
-              Send an invitation to join {account?.name || "your organization"}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="invite-first-name">First Name</Label>
-                <Input
-                  id="invite-first-name"
-                  placeholder="Jane"
-                  value={inviteFirstName}
-                  onChange={(e) => setInviteFirstName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invite-last-name">Last Name</Label>
-                <Input
-                  id="invite-last-name"
-                  placeholder="Doe"
-                  value={inviteLastName}
-                  onChange={(e) => setInviteLastName(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invite-email">Email *</Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="jane@example.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invite-role">Role</Label>
-              <Select
-                value={inviteRole}
-                onValueChange={(val) =>
-                  setInviteRole(val as "member" | "manager" | "admin")
-                }
-              >
-                <SelectTrigger id="invite-role">
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-500">
-                Role when they accept the invite. Admins can manage users, fees,
-                emails, and invoices.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                resetInviteForm()
-                setInviteOpen(false)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleInvite} disabled={inviting || !inviteEmail}>
-              {inviting ? <LoadingDots color="#fff" /> : "Send Invitation"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <InviteUserDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        accountName={account?.name}
+      />
     </>
   )
 }

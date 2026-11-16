@@ -6,12 +6,13 @@ import { useRouter } from "next/navigation"
 import { getAccount } from "@/lib/fetchers/client"
 import { toast } from "sonner"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -55,7 +56,7 @@ export interface RosterBillingPerson {
   primary_contacts: any[]
 }
 
-export interface RosterBillingModalProps {
+export interface RosterBillingSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   rosterId: string
@@ -69,7 +70,7 @@ export interface RosterBillingModalProps {
   onRefresh?: () => void | Promise<void>
 }
 
-export function RosterBillingModal({
+export function RosterBillingSheet({
   open,
   onOpenChange,
   rosterId,
@@ -81,7 +82,7 @@ export function RosterBillingModal({
   currentFeeId,
   accountId,
   onRefresh,
-}: RosterBillingModalProps) {
+}: RosterBillingSheetProps) {
   const { refresh } = useRouter()
   const supabase = createClient()
 
@@ -339,16 +340,16 @@ export function RosterBillingModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[90vh] w-full max-w-md flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
-        <DialogHeader className="shrink-0 space-y-1.5 border-b border-zinc-200 px-6 pb-4 pt-6 pr-14 text-left dark:border-zinc-800">
-          <DialogTitle>Player billing</DialogTitle>
-          <DialogDescription>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="right">
+        <SheetHeader>
+          <SheetTitle>Player billing</SheetTitle>
+          <SheetDescription>
             {personName} · {teamName}
-          </DialogDescription>
-        </DialogHeader>
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+        <SheetBody>
           <Tabs
             value={billingTab}
             onValueChange={(v) => setBillingTab(v as BillingTab)}
@@ -617,8 +618,8 @@ export function RosterBillingModal({
               </Button>
             </TabsContent>
           </Tabs>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   )
 }

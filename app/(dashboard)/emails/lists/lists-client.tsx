@@ -15,12 +15,14 @@ import {
 } from "@/components/ui/card"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  dialogFormClassName,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline"
@@ -333,7 +335,7 @@ export default function ListsClient({
             </Button>
           </DialogTrigger>
           <DialogContent>
-            <form onSubmit={handleCreateList}>
+            <form onSubmit={handleCreateList} className={dialogFormClassName}>
               <DialogHeader>
                 <DialogTitle>Create New List</DialogTitle>
                 <DialogDescription>
@@ -341,7 +343,7 @@ export default function ListsClient({
                   specific groups
                 </DialogDescription>
               </DialogHeader>
-              <div className="space-y-4 py-4">
+              <DialogBody className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">List Name</Label>
                   <Input
@@ -362,7 +364,7 @@ export default function ListsClient({
                     rows={3}
                   />
                 </div>
-              </div>
+              </DialogBody>
               <DialogFooter>
                 <Button
                   type="button"
@@ -494,7 +496,7 @@ export default function ListsClient({
               Search and select people to add to this list.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <DialogBody className="space-y-4">
             {availablePeople.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 All people are already in this list
@@ -607,7 +609,7 @@ export default function ListsClient({
                 )}
               </>
             )}
-          </div>
+          </DialogBody>
           <DialogFooter>
             <Button
               type="button"

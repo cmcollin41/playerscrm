@@ -16,13 +16,15 @@ import { Textarea } from "@/components/ui/textarea"
 import RichTextEditor from "@/components/emails/rich-text-editor"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  dialogFormClassName,
 } from "@/components/ui/dialog"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -444,16 +446,16 @@ export default function ListDetailClient({
 
       {/* New Broadcast Dialog */}
       <Dialog open={showBroadcastForm} onOpenChange={setShowBroadcastForm}>
-        <DialogContent className="sm:max-w-[550px] max-h-[85vh] h-[85vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
+        <DialogContent className="sm:max-w-[550px]">
+          <DialogHeader>
             <DialogTitle>New Broadcast</DialogTitle>
             <DialogDescription>
               Send an email to all {list.list_people.length} members of {list.name}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateBroadcast} className="flex flex-col flex-1 min-h-0">
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="space-y-4 px-6 py-4">
+          <form onSubmit={handleCreateBroadcast} className={dialogFormClassName}>
+            <DialogBody>
+              <div className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="bc-sender">From *</Label>
@@ -510,8 +512,8 @@ export default function ListDetailClient({
                   </p>
                 </div>
               </div>
-            </ScrollArea>
-            <div className="shrink-0 flex items-center justify-between border-t px-6 py-4">
+            </DialogBody>
+            <DialogFooter className="flex-row items-center justify-between sm:justify-between">
               <div className="flex items-center gap-2">
                 <Switch
                   id="bc-send-now"
@@ -543,7 +545,7 @@ export default function ListDetailClient({
                   {sendNow ? "Send Broadcast" : "Save as Draft"}
                 </Button>
               </div>
-            </div>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

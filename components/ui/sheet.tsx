@@ -34,17 +34,23 @@ const SheetOverlay = React.forwardRef<
 
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
+// Layout contract: SheetContent is a non-scrolling flex column. Compose it as
+// SheetHeader (fixed) + SheetBody (scrolls) + SheetFooter (fixed). When the
+// sheet wraps a <form>, give the form `className={sheetFormClassName}` so the
+// column layout carries through it.
+const sheetFormClassName = "flex min-h-0 flex-1 flex-col";
+
 const sheetVariants = cva(
-  "fixed z-50 gap-4 bg-background p-6 shadow-lg transition-all data-[state=open]:animate-in data-[state=closed]:animate-out",
+  "fixed z-50 flex flex-col overflow-hidden bg-white text-foreground shadow-lg transition-all data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:duration-300 data-[state=closed]:duration-200",
   {
     variants: {
       side: {
-        top: "inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top data-[state=open]:duration-300 data-[state=closed]:duration-200",
+        top: "inset-x-0 top-0 max-h-[90dvh] border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom:
-          "inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom data-[state=open]:duration-300 data-[state=closed]:duration-200",
-        left: "inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm data-[state=open]:duration-300 data-[state=closed]:duration-200",
+          "inset-x-0 bottom-0 max-h-[90dvh] rounded-t-lg border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
+        left: "inset-y-0 left-0 h-full w-full border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-md",
         right:
-          "inset-y-0 right-0 h-full w-4/5 md:w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm data-[state=open]:duration-300 data-[state=closed]:duration-200",
+          "inset-y-0 right-0 h-full w-full border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-md",
       },
     },
     defaultVariants: {
@@ -65,15 +71,11 @@ const SheetContent = React.forwardRef<
     <SheetOverlay />
     <SheetPrimitive.Content
       ref={ref}
-      className={cn(
-        sheetVariants({ side }),
-        "h-screen overflow-y-auto p-3",
-        className,
-      )}
+      className={cn(sheetVariants({ side }), className)}
       {...props}
     >
       {children}
-      <SheetPrimitive.Close className="fixed right-4 top-4 z-30 rounded-sm opacity-70 ring-offset-background transition-all duration-200 hover:opacity-100 hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+      <SheetPrimitive.Close className="absolute right-3 top-3 z-30 rounded-sm p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none sm:right-5">
         <Cross2Icon className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </SheetPrimitive.Close>
@@ -82,13 +84,14 @@ const SheetContent = React.forwardRef<
 ));
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
+// Fixed to the top of the sheet. Right padding leaves room for the close button.
 const SheetHeader = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      "sticky left-0 right-0 top-0 z-20 flex w-full flex-col space-y-2 bg-gray-50 text-center sm:text-left",
+      "flex shrink-0 flex-col gap-1 border-b bg-white py-3 pl-4 pr-12 text-left sm:pl-6 sm:pr-14",
       className,
     )}
     {...props}
@@ -96,12 +99,32 @@ const SheetHeader = ({
 );
 SheetHeader.displayName = "SheetHeader";
 
+// The only scrolling region of a sheet.
+const SheetBody = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
+      "min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6",
+      className,
+    )}
+    {...props}
+  />
+));
+SheetBody.displayName = "SheetBody";
+
+// Fixed to the bottom of the sheet.
 const SheetFooter = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("fixed inset-x-0 bottom-5 flex justify-center", className)}
+    className={cn(
+      "flex shrink-0 flex-col gap-2 border-t bg-white px-4 py-3 sm:px-6",
+      className,
+    )}
     {...props}
   />
 );
@@ -142,7 +165,9 @@ export {
   SheetClose,
   SheetContent,
   SheetHeader,
+  SheetBody,
   SheetFooter,
+  sheetFormClassName,
   SheetTitle,
   SheetDescription,
 };

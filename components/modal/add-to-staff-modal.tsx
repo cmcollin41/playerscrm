@@ -6,7 +6,6 @@ import { useForm } from "react-hook-form";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { useModal } from "./provider";
 import { toast } from "sonner";
 
 import {
@@ -35,12 +34,14 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  dialogFormClassName,
 } from "@/components/ui/dialog"
 
 // Define the form schema
@@ -69,7 +70,6 @@ export function AddToStaffModal({
   onSuccess?: () => void;
 }) {
   const { refresh } = useRouter();
-  const modal = useModal();
   const supabase = createClient();
   const [people, setPeople] = useState<Person[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -147,7 +147,8 @@ export function AddToStaffModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className={dialogFormClassName}>
+            <DialogBody className="space-y-4">
             <FormField
               control={form.control}
               name="person"
@@ -242,6 +243,7 @@ export function AddToStaffModal({
               </div>
             )}
 
+            </DialogBody>
             <DialogFooter>
               <Button
                 type="button"

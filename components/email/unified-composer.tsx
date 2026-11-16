@@ -8,11 +8,14 @@ import * as z from "zod"
 import { toast } from "sonner"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  dialogFormClassName,
 } from "@/components/ui/dialog"
 import {
   Form,
@@ -223,7 +226,7 @@ export default function UnifiedComposer({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Compose Email</DialogTitle>
           <DialogDescription>
@@ -232,7 +235,8 @@ export default function UnifiedComposer({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className={dialogFormClassName}>
+            <DialogBody className="space-y-4">
             {/* Sender */}
             <FormField
               control={form.control}
@@ -342,7 +346,8 @@ export default function UnifiedComposer({
 
 
             {/* Actions */}
-            <div className="flex justify-end gap-2 pt-4">
+            </DialogBody>
+            <DialogFooter>
               <Button
                 type="button"
                 variant="outline"
@@ -364,7 +369,7 @@ export default function UnifiedComposer({
                   </>
                 )}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
         </Form>
       </DialogContent>

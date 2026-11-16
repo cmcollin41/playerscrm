@@ -6,12 +6,14 @@ import { ExternalLink, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  dialogFormClassName,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -71,7 +73,8 @@ export function ConnectButton({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className={dialogFormClassName}>
+          <DialogBody className="flex flex-col gap-4">
           {tokenSetupUrl && (
             <a
               href={tokenSetupUrl}
@@ -96,7 +99,8 @@ export function ConnectButton({
             />
           </div>
 
-          <DialogFooter className="gap-2">
+          </DialogBody>
+          <DialogFooter>
             <Button
               type="button"
               variant="ghost"

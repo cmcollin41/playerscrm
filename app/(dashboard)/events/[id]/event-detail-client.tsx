@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -688,7 +689,7 @@ function SignedWaiversModal({
             signer details captured at signing time.
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] space-y-4 overflow-y-auto">
+        <DialogBody className="space-y-4">
           {acceptances.length === 0 && (
             <p className="text-sm text-gray-500">No signed waivers on file.</p>
           )}
@@ -735,7 +736,7 @@ function SignedWaiversModal({
               </details>
             </div>
           ))}
-        </div>
+        </DialogBody>
       </DialogContent>
     </Dialog>
   )
@@ -894,6 +895,7 @@ function SendEventInvoiceModal({
                 }. When paid, the registration auto-flips to Confirmed.`}
           </DialogDescription>
         </DialogHeader>
+        <DialogBody className="space-y-4">
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
@@ -960,6 +962,7 @@ function SendEventInvoiceModal({
             </div>
           )}
         </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={sending}>

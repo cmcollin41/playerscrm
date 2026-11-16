@@ -6,7 +6,9 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -69,7 +71,7 @@ export function EditStaffModal({
         <DialogHeader>
           <DialogTitle>Edit Staff — {personName}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <DialogBody>
           <div className="space-y-1">
             <ImageDropzone
               value={photo || null}
@@ -90,15 +92,15 @@ export function EditStaffModal({
             />
             <p className="text-xs text-muted-foreground">Overrides person photo for this team</p>
           </div>
-          <div className="flex justify-end gap-2">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={isLoading}>
-              {isLoading ? "Saving..." : "Save"}
-            </Button>
-          </div>
-        </div>
+        </DialogBody>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button onClick={handleSave} disabled={isLoading}>
+            {isLoading ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

@@ -4,6 +4,7 @@ import { useState } from "react"
 import { toast } from "sonner"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -155,7 +156,7 @@ export function RosterInvoicesDialog({
                 The invoice will be canceled in Stripe and can no longer be paid. This cannot be undone.
               </DialogDescription>
             </DialogHeader>
-            <DialogFooter className="gap-2 sm:gap-0">
+            <DialogFooter>
               <Button
                 variant="outline"
                 onClick={() => setConfirmVoidInvoice(null)}
@@ -181,6 +182,7 @@ export function RosterInvoicesDialog({
               </DialogDescription>
             </DialogHeader>
 
+            <DialogBody className="space-y-4">
             {invoices.length > 0 ? (
               <div className="flex items-baseline justify-between rounded-lg border px-4 py-3">
                 <div>
@@ -207,7 +209,7 @@ export function RosterInvoicesDialog({
                 No invoices linked to this roster yet.
               </p>
             ) : (
-              <ul className="max-h-[50vh] space-y-2 overflow-y-auto">
+              <ul className="space-y-2">
                 {sorted.map((inv) => {
                   const canResend = inv.status === "sent"
                   const canVoid = inv.status === "sent" || inv.status === "draft" || inv.status === "overdue"
@@ -266,6 +268,7 @@ export function RosterInvoicesDialog({
                 })}
               </ul>
             )}
+            </DialogBody>
           </>
         )}
       </DialogContent>

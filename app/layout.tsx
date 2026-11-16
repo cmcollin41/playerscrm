@@ -5,7 +5,6 @@ import "@/styles/slick-theme.css";
 import { Analytics } from "@vercel/analytics/react";
 import { Providers } from "./providers";
 import { Metadata } from "next";
-import { ModalProvider } from "@/components/modal/provider";
 import { inter, cal } from "@/styles/fonts";
 
 const defaultTitle =
@@ -65,7 +64,7 @@ export default async function RootLayout(props: { children: React.ReactNode }) {
       </head>
       <body className={inter.className}>
         <Providers>
-          <ModalProvider>{props.children}</ModalProvider>
+          {props.children}
           <Analytics />
         </Providers>
       </body>

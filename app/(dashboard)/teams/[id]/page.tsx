@@ -5,8 +5,7 @@ import { getAccount } from "@/lib/fetchers/client";
 
 import { TeamTable } from "./table";
 
-import GenericButton from "@/components/modal-buttons/generic-button";
-import EditTeamModal from "@/components/modal/edit-team-modal";
+import TeamSheet from "@/components/modal/team-sheet";
 import { useEffect, useState, use } from "react";
 import { AddToStaffModal } from "@/components/modal/add-to-staff-modal";
 import { EditStaffModal } from "@/components/modal/edit-staff-modal";
@@ -314,14 +313,7 @@ export default function TeamPage({ params }: { params: Promise<{ id: string }> }
                 onRefresh={fetchTeam}
               />
             )}
-            <GenericButton
-              cta="Edit Team"
-              size={undefined}
-              variant={undefined}
-              classNames=""
-            >
-              <EditTeamModal team={team} onRefresh={fetchTeam} />
-            </GenericButton>
+            <TeamSheet cta="Edit Team" team={team} onRefresh={fetchTeam} />
           </div>
         </div>
       </div>

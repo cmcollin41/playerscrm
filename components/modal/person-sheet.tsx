@@ -9,13 +9,15 @@ import LoadingDots from "@/components/icons/loading-dots"
 import { PlusIcon, XIcon, Trash2 } from "lucide-react"
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  sheetFormClassName,
 } from "@/components/ui/sheet"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Check, ChevronsUpDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -479,19 +481,19 @@ export default function PersonSheet({
           {cta}
         </Button>
       </SheetTrigger>
-      <SheetContent side="right" className="flex h-full w-full flex-col overflow-hidden p-0 sm:max-w-md bg-white">
+      <SheetContent side="right">
         <Form {...form}>
           <form 
             onSubmit={form.handleSubmit(handleSubmit)} 
-            className="flex flex-col h-full"
+            className={sheetFormClassName}
           >
-            <SheetHeader className="shrink-0 border-b px-4 py-3">
+            <SheetHeader>
               <SheetTitle>{title}</SheetTitle>
               <SheetDescription>{description}</SheetDescription>
             </SheetHeader>
 
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="space-y-6 px-4 py-4">
+            <SheetBody>
+              <div className="space-y-6">
                   {form.formState.errors.root && (
                     <div className="rounded-md bg-red-50 p-4 text-sm text-red-500">
                       {form.formState.errors.root.message}
@@ -1012,9 +1014,9 @@ export default function PersonSheet({
                       </Button>
                     </div>
               </div>
-            </ScrollArea>
+            </SheetBody>
 
-            <div className="shrink-0 border-t bg-white px-4 py-3 space-y-3">
+            <SheetFooter>
               {error && (
                 <div className="text-red-500 text-sm">{error}</div>
               )}
@@ -1067,7 +1069,7 @@ export default function PersonSheet({
                   </AlertDialogContent>
                 </AlertDialog>
               )}
-            </div>
+            </SheetFooter>
           </form>
         </Form>
       </SheetContent>

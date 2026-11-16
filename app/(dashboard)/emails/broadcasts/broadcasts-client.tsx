@@ -22,15 +22,17 @@ import {
 } from "@/components/ui/card"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  dialogFormClassName,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/outline"
 import { formatDistanceToNow } from "date-fns"
 import {
@@ -347,8 +349,8 @@ export default function BroadcastsClient({
               New Broadcast
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[85vh] h-[85vh] flex flex-col p-0 gap-0">
-            <DialogHeader className="shrink-0 px-6 pt-6 pb-4 border-b">
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
               <DialogTitle>Create New Broadcast</DialogTitle>
               <DialogDescription>
                 Compose and send a newsletter to one of your lists
@@ -356,10 +358,10 @@ export default function BroadcastsClient({
             </DialogHeader>
             <form
               onSubmit={handleCreateBroadcast}
-              className="flex flex-col flex-1 min-h-0"
+              className={dialogFormClassName}
             >
-              <ScrollArea className="flex-1 min-h-0">
-                <div className="space-y-4 px-6 py-4">
+              <DialogBody>
+                <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="list">Select List</Label>
                     <Select
@@ -453,8 +455,8 @@ export default function BroadcastsClient({
                     </p>
                   </div>
                 </div>
-              </ScrollArea>
-              <div className="shrink-0 flex items-center justify-between border-t px-6 py-4">
+              </DialogBody>
+              <DialogFooter className="flex-row items-center justify-between sm:justify-between">
                 <div className="flex items-center gap-2">
                   <Switch
                     id="sendNow"
@@ -488,7 +490,7 @@ export default function BroadcastsClient({
                     {sendNow ? "Send Broadcast" : "Save as Draft"}
                   </Button>
                 </div>
-              </div>
+              </DialogFooter>
             </form>
           </DialogContent>
         </Dialog>

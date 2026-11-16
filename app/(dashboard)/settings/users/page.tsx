@@ -25,15 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Label } from "@/components/ui/label"
+import { InviteUserDialog } from "@/components/modal/invite-user-dialog"
 import {
   Select,
   SelectContent,
@@ -70,11 +62,6 @@ export default function UsersPage() {
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
 
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [inviting, setInviting] = useState(false)
-  const [inviteEmail, setInviteEmail] = useState("")
-  const [inviteFirstName, setInviteFirstName] = useState("")
-  const [inviteLastName, setInviteLastName] = useState("")
-  const [inviteRole, setInviteRole] = useState<AccountRole>("member")
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -203,50 +190,6 @@ export default function UsersPage() {
     [],
   )
 
-  const resetInviteForm = () => {
-    setInviteEmail("")
-    setInviteFirstName("")
-    setInviteLastName("")
-    setInviteRole("member")
-  }
-
-  const handleInvite = async () => {
-    if (!inviteEmail) {
-      toast.error("Email is required")
-      return
-    }
-
-    setInviting(true)
-    try {
-      const res = await fetch("/api/admin/invite", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: inviteEmail,
-          firstName: inviteFirstName,
-          lastName: inviteLastName,
-          role: inviteRole,
-        }),
-      })
-
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || "Failed to send invite")
-
-      if (data.emailSent) {
-        toast.success(`Invitation sent to ${inviteEmail}`)
-      } else {
-        toast.success("Invite link generated (no sender configured to email it)")
-      }
-
-      resetInviteForm()
-      setInviteOpen(false)
-    } catch (error: any) {
-      toast.error(error.message)
-    } finally {
-      setInviting(false)
-    }
-  }
 
   if (!isAdmin) {
     return (
@@ -338,84 +281,11 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="bg-white sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Invite User</DialogTitle>
-            <DialogDescription>
-              Send an invitation to join {accountName || "your account"}.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label htmlFor="invite-first-name">First Name</Label>
-                <Input
-                  id="invite-first-name"
-                  placeholder="Jane"
-                  value={inviteFirstName}
-                  onChange={(e) => setInviteFirstName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invite-last-name">Last Name</Label>
-                <Input
-                  id="invite-last-name"
-                  placeholder="Doe"
-                  value={inviteLastName}
-                  onChange={(e) => setInviteLastName(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invite-email">Email *</Label>
-              <Input
-                id="invite-email"
-                type="email"
-                placeholder="jane@example.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invite-role">Role</Label>
-              <Select
-                value={inviteRole}
-                onValueChange={(val) => setInviteRole(val as AccountRole)}
-              >
-                <SelectTrigger id="invite-role">
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  {ACCOUNT_ROLES.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {ROLE_CONFIG[role].label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-gray-500">
-                {ROLE_CONFIG[inviteRole].description}
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                resetInviteForm()
-                setInviteOpen(false)
-              }}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleInvite} disabled={inviting || !inviteEmail}>
-              {inviting ? "Sending..." : "Send Invitation"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <InviteUserDialog
+        open={inviteOpen}
+        onOpenChange={setInviteOpen}
+        accountName={accountName}
+      />
     </div>
   )
 }

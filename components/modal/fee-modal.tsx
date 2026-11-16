@@ -7,10 +7,12 @@ import { getAccount } from "@/lib/fetchers/client"
 import { toast } from "sonner"
 import {
   Dialog,
+  DialogBody,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  dialogFormClassName,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -123,7 +125,8 @@ export default function FeeModal({
         <DialogHeader>
           <DialogTitle>{fee ? "Edit Fee" : "Create Fee"}</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className={dialogFormClassName}>
+          <DialogBody className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Fee Name *</Label>
             <Input
@@ -165,6 +168,7 @@ export default function FeeModal({
             />
           </div>
 
+          </DialogBody>
           <DialogFooter>
             <Button
               type="button"
