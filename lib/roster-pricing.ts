@@ -6,6 +6,7 @@ import {
   sumPaidInvoiceAmounts,
   sumPaymentAmounts,
 } from "./invoice-aggregates"
+import { dollarsToCents } from "./money"
 
 /**
  * The roster's fee: custom override or catalog amount.
@@ -24,10 +25,6 @@ export function rosterTemplateDollars(roster: any): number | null {
   const fa = roster?.fees?.amount
   if (fa != null && Number(fa) > 0) return Number(fa)
   return null
-}
-
-function dollarsToCents(value: number): number {
-  return Math.round(value * 100)
 }
 
 /**
@@ -174,7 +171,7 @@ export function unpaidSentInvoicesForRoster(roster: any): any[] {
 }
 
 export function amountsDifferCents(a: number, b: number) {
-  return Math.round(a * 100) !== Math.round(b * 100)
+  return dollarsToCents(a) !== dollarsToCents(b)
 }
 
 /**

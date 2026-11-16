@@ -1,3 +1,5 @@
+import { dollarsToCents } from "./money"
+
 interface AccountFeeConfig {
   application_fee?: number | null
   application_fee_flat?: number | null
@@ -18,7 +20,7 @@ export function calculateApplicationFeeFromDollars(
   account: AccountFeeConfig,
 ): number {
   return calculateApplicationFeeCents(
-    Math.round(amountDollars * 100),
+    dollarsToCents(amountDollars),
     account,
   )
 }
