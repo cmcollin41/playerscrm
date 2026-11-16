@@ -1,5 +1,11 @@
 -- add maxpreps_url to people and create player_season_stats table
 
+drop policy if exists "Allow authenticated select player_season_stats" on public.player_season_stats;
+drop policy if exists "Allow authenticated insert player_season_stats" on public.player_season_stats;
+drop policy if exists "Allow authenticated update player_season_stats" on public.player_season_stats;
+drop policy if exists "Allow authenticated delete player_season_stats" on public.player_season_stats;
+drop policy if exists "Allow anon read player_season_stats for public people" on public.player_season_stats;
+
 alter table public.people
   add column if not exists maxpreps_url text null;
 
@@ -43,13 +49,6 @@ create index if not exists player_season_stats_account_id_idx
 
 alter table public.player_season_stats enable row level security;
 
-drop policy if exists "Allow authenticated select player_season_stats" on public.player_season_stats;
-drop policy if exists "Allow authenticated insert player_season_stats" on public.player_season_stats;
-drop policy if exists "Allow authenticated update player_season_stats" on public.player_season_stats;
-drop policy if exists "Allow authenticated delete player_season_stats" on public.player_season_stats;
-drop policy if exists "Allow anon read player_season_stats for public people" on public.player_season_stats;
-
--- authenticated: crud scoped to account
 create policy "Allow authenticated select player_season_stats"
   on public.player_season_stats
   for select
@@ -85,7 +84,6 @@ create policy "Allow authenticated delete player_season_stats"
     account_id = (select account_id from public.profiles where id = (select auth.uid()))
   );
 
--- anon: read for public people
 create policy "Allow anon read player_season_stats for public people"
   on public.player_season_stats
   for select

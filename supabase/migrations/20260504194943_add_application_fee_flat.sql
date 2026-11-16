@@ -2,7 +2,7 @@
 -- percent. Final fee = round(amount_cents * percent/100) + flat_cents.
 
 alter table public.accounts
-  add column application_fee_flat integer not null default 0;
+  add column if not exists application_fee_flat integer not null default 0;
 
 comment on column public.accounts.application_fee
   is 'platform fee percent (e.g. 3 means 3%)';

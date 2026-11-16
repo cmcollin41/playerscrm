@@ -6,7 +6,7 @@ values (
   'organization-logos',
   true,
   2097152,
-  array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml']
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 )
 on conflict (id) do update set
   public = excluded.public,

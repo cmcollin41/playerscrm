@@ -10,7 +10,7 @@ Your email system has been completely overhauled with a unified, efficient, and 
 
 ### ✅ Phase 1: Database Improvements
 
-**Migration File:** `supabase/migrations/20251105230000_email_system_improvements.sql`
+**Migration File:** `supabase/migrations/20251105221241_email_system_improvements.sql`
 
 **New Database Features:**
 - ✅ Click tracking columns (`clicked_at`, `click_count`)
@@ -401,7 +401,7 @@ Bulk sync all people from account to Resend contacts.
 ## 📚 Files Modified/Created
 
 ### New Files (19)
-1. `supabase/migrations/20251105230000_email_system_improvements.sql`
+1. `supabase/migrations/20251105221241_email_system_improvements.sql`
 2. `lib/email-service.ts`
 3. `app/api/email/send/route.ts`
 4. `app/api/resend/sync-contact/route.ts`
