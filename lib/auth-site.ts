@@ -3,7 +3,7 @@ export function getAuthSiteUrl(): string {
   const base = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "")
   if (base) return base
   return process.env.NODE_ENV === "production"
-    ? "https://app.varsityhabits.com"
+    ? "https://app.playerscrm.com"
     : "http://app.localhost:3000"
 }
 

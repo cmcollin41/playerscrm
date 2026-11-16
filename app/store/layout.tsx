@@ -63,7 +63,7 @@ export default async function PublicStoreLayout({
         </header>
         <main className="mx-auto max-w-screen-lg px-4 py-8">{children}</main>
         <footer className="border-t py-6 text-center text-xs text-muted-foreground">
-          Powered by Varsity Habits
+          Powered by PlayersCRM
         </footer>
         <CartSheet />
       </div>

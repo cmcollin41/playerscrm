@@ -113,7 +113,7 @@ export async function signup(formData: FormData): Promise<{ error?: string } | v
     .eq("id", account_id)
     .maybeSingle()
 
-  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "varsityhabits.com"
+  const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "playerscrm.com"
   const proto = rootDomain.startsWith("localhost") ? "http" : "https"
   const host = acctRow?.subdomain
     ? `${acctRow.subdomain}.${rootDomain}`

@@ -14,7 +14,7 @@ export function storefrontBaseUrl(tenant: TenantHost): string | null {
     return `https://${tenant.custom_domain}`
   }
   if (!tenant.subdomain) return null
-  const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "varsityhabits.com"
+  const root = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "playerscrm.com"
   const protocol = root.includes("localhost") ? "http" : "https"
   return `${protocol}://${tenant.subdomain}.${root}`
 }

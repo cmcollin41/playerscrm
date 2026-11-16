@@ -5,11 +5,11 @@ import { render } from "@react-email/render";
 
 const domain =
   process.env.NODE_ENV === "production"
-    ? "https://app.varsityhabits.com"
+    ? "https://app.playerscrm.com"
     : "http://app.localhost:3000";
 const sign_in =
   process.env.NODE_ENV === "production"
-    ? "https://app.varsityhabits.com/login"
+    ? "https://app.playerscrm.com/login"
     : "http://app.localhost:3000/login";
 
 /**
@@ -26,7 +26,7 @@ export async function POST(req) {
     const email = data?.email;
     const encryptedEmail = data?.encryptedEmail;
     
-    const message = `You've been invited to join ${account.name} on Varsity Habits. If you have a Varsity Habits account please sign in at ${sign_in}. If you don't click this link to get access to your account. ${domain}/login?email=${encryptedEmail}&account_id=${account.id}&people_id=${person.id}&sign_up=true`;
+    const message = `You've been invited to join ${account.name} on PlayersCRM. If you have a PlayersCRM account please sign in at ${sign_in}. If you don't click this link to get access to your account. ${domain}/login?email=${encryptedEmail}&account_id=${account.id}&people_id=${person.id}&sign_up=true`;
 
     // Validation
     if (!person) {

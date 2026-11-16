@@ -50,12 +50,15 @@ export function Header() {
       <nav>
         <Container className="relative z-50 flex justify-between py-4">
           <div className="relative z-10 flex items-center gap-16">
-            <Link href="/" aria-label="Home">
-              <img
-                src="/varsityhabits.svg"
-                alt="Varsity Habits"
-                className="h-8 w-auto"
-              />
+            <Link
+              href="/"
+              aria-label="Home"
+              className="flex items-center gap-2"
+            >
+              <img src="/vh.svg" alt="" className="h-8 w-auto" />
+              <span className="font-display text-xl text-gray-900">
+                PlayersCRM
+              </span>
             </Link>
             <div className="hidden lg:flex lg:gap-10">
               <NavLinks />

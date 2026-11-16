@@ -145,7 +145,7 @@ function HeroMockup() {
               Provo Basketball
             </p>
             <p className="truncate font-mono text-xs text-gray-500">
-              provobasketball.varsityhabits.com
+              provobasketball.playerscrm.com
             </p>
           </div>
           <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
@@ -424,7 +424,7 @@ function ApiMockup() {
         <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70" />
         <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70" />
         <span className="ml-3 truncate font-mono text-[11px] text-gray-400">
-          GET varsityhabits.com/api/public/players?account_id=…
+          GET playerscrm.com/api/public/players?account_id=…
         </span>
       </div>
       <pre className="overflow-x-auto px-4 py-4 font-mono text-[12px] leading-relaxed text-gray-200">
@@ -531,7 +531,7 @@ function CommsMockup() {
               Camp registration is open
             </p>
             <p className="mt-0.5 text-gray-500">
-              coach@yourprogram.varsityhabits.com · to All Parents (218)
+              coach@yourprogram.playerscrm.com · to All Parents (218)
             </p>
           </div>
           <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-blue-700">
@@ -691,7 +691,7 @@ function PricingTeaser() {
             <div className="grid grid-cols-1 gap-0 md:grid-cols-5">
               <div className="bg-gray-950 p-8 text-white md:col-span-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-orange-400">
-                  Varsity Habits
+                  PlayersCRM
                 </p>
                 <div className="mt-4 flex items-baseline gap-2">
                   <span className="font-display text-6xl leading-none">
@@ -764,7 +764,7 @@ function PricingTeaser() {
               <p className="mt-3 border-t border-gray-200 pt-3 text-xs text-gray-500">
                 Stripe&apos;s standard processing fees (currently 2.9% + $0.30
                 in the US) apply on top and go directly to Stripe — they
-                aren&apos;t part of the Varsity Habits fee.
+                aren&apos;t part of the PlayersCRM fee.
               </p>
             </div>
           </div>
@@ -820,7 +820,7 @@ function FaqSection() {
           />
           <FaqItem
             q="Who handles payments?"
-            a="Stripe. You connect a Stripe account and money goes directly to it — we don't hold funds. Refunds, payouts, and tax forms come from Stripe. The Varsity Habits fee ($1 + 7%) is on top of Stripe's normal processing fees (typically 2.9% + $0.30 in the US), which stay with Stripe."
+            a="Stripe. You connect a Stripe account and money goes directly to it — we don't hold funds. Refunds, payouts, and tax forms come from Stripe. The PlayersCRM fee ($1 + 7%) is on top of Stripe's normal processing fees (typically 2.9% + $0.30 in the US), which stay with Stripe."
           />
           <FaqItem
             q="Can parents log in?"

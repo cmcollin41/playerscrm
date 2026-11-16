@@ -3,7 +3,7 @@
  *
  * Inbound webhooks from fulfillment partners (Printify, ...). Per-connection
  * URLs keep webhook secrets isolated per merchant integration:
- *   https://{tenant}.varsityhabits.com/api/webhooks/partners/{connectionId}
+ *   https://{tenant}.playerscrm.com/api/webhooks/partners/{connectionId}
  *
  * Routes two event families based on the adapter-normalized WebhookEvent.kind:
  *   - "order"                    → update store_order_dispatches

@@ -87,7 +87,7 @@ export async function POST(req: Request) {
 
   try {
     switch (event.type) {
-      // Platform subscription lifecycle (the $99/yr Varsity Habits plan).
+      // Platform subscription lifecycle (the $99/yr PlayersCRM plan).
       // These events arrive on the platform webhook with event.account = null
       // and carry an account_id in subscription.metadata, set by
       // createSubscriptionCheckoutSession in lib/billing.ts.

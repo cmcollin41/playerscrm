@@ -299,7 +299,7 @@ export function CheckoutForm({
             <div className="flex items-center gap-2">
               <UserCircle2 className="h-5 w-5" />
               <span className="text-sm font-semibold">
-                Sign in to Varsity Habits
+                Sign in to PlayersCRM
               </span>
             </div>
             <p className="text-xs text-muted-foreground">

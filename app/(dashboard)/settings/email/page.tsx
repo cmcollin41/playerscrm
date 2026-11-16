@@ -595,8 +595,8 @@ export default function EmailSettingsPage() {
           <p className="text-muted-foreground mt-1 text-xs">
             Pick which sender address each type of email goes from. Unassigned
             types fall back to the platform default ({" "}
-            <span className="font-mono">invoices@e.varsityhabits.com</span> for
-            invoices, <span className="font-mono">noreply@e.varsityhabits.com</span>{" "}
+            <span className="font-mono">invoices@mail.playerscrm.com</span> for
+            invoices, <span className="font-mono">noreply@mail.playerscrm.com</span>{" "}
             otherwise).
           </p>
         </div>
@@ -617,7 +617,7 @@ export default function EmailSettingsPage() {
                 className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 disabled:bg-gray-50 disabled:text-gray-400"
               >
                 <option value="">
-                  Platform default (invoices@e.varsityhabits.com)
+                  Platform default (invoices@mail.playerscrm.com)
                 </option>
                 {senders.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -641,7 +641,7 @@ export default function EmailSettingsPage() {
                 className="mt-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-500 disabled:bg-gray-50 disabled:text-gray-400"
               >
                 <option value="">
-                  Platform default (noreply@e.varsityhabits.com)
+                  Platform default (noreply@mail.playerscrm.com)
                 </option>
                 {senders.map((s) => (
                   <option key={s.id} value={s.id}>

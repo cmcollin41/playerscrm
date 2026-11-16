@@ -9,7 +9,7 @@ import { DashboardAccessDenied } from "../(dashboard)/access-denied"
 import { PortalAccessPending } from "@/components/portal/portal-access-pending"
 
 export const metadata = {
-  title: "No access · Varsity Habits",
+  title: "No access · PlayersCRM",
 }
 
 export default async function NoAccessPage() {

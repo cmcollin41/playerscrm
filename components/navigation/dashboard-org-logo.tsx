@@ -18,7 +18,7 @@ export function DashboardHeaderLogo({ orgLogoUrl, orgName }: DashboardHeaderLogo
         src="/vh.svg"
         width={50}
         height={50}
-        alt="Varsity Habits"
+        alt="PlayersCRM"
         unoptimized
       />
     )

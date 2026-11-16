@@ -31,11 +31,11 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           src="/vh.svg"
           width={48}
           height={48}
-          alt="Varsity Habits"
+          alt="PlayersCRM"
           unoptimized
         />
         <span className="font-display text-xl text-gray-900">
-          Varsity Habits
+          PlayersCRM
         </span>
       </Link>
 
@@ -44,7 +44,7 @@ export default async function SignupPage({ searchParams }: SignupPageProps) {
           Get started
         </p>
         <h1 className="mt-2 font-display text-3xl leading-tight tracking-tight text-gray-900">
-          Run your program with Varsity Habits.
+          Run your program with PlayersCRM.
         </h1>
         <p className="mt-2 text-sm text-gray-600">
           Create your account, then continue to checkout.

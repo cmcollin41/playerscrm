@@ -108,7 +108,7 @@ export function Hero() {
               Manage Your Athletes®
             </h1>
             <p className="mt-6 text-lg text-gray-600">
-              Varsity Habits is an relationship management tool that helps
+              PlayersCRM is an relationship management tool that helps
               coaches manage the players, parents, and alumni in their programs.
             </p>
             <div className="mt-8 flex flex-wrap gap-x-6 gap-y-4">

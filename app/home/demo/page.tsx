@@ -49,7 +49,7 @@ export default function DemoPage() {
             Request a Demo
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            See how Varsity Habits can help streamline your team management
+            See how PlayersCRM can help streamline your team management
           </p>
         </div>
 

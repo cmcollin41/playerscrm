@@ -136,6 +136,6 @@ export function getPortalBaseUrl(): string {
   const explicit = process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, "")
   if (explicit) return explicit
   return process.env.NODE_ENV === "production"
-    ? "https://app.varsityhabits.com"
+    ? "https://app.playerscrm.com"
     : "http://app.localhost:3000"
 }

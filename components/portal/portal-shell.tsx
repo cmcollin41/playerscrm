@@ -47,7 +47,7 @@ export function PortalShell({
               src="/vh.svg"
               width={32}
               height={32}
-              alt="Varsity Habits"
+              alt="PlayersCRM"
               unoptimized
             />
             <span className="text-sm font-semibold text-gray-900">

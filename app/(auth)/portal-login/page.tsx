@@ -34,16 +34,17 @@ export default function PortalLoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4 py-12">
-      <Link href="/" className="flex items-center">
+      <Link href="/" className="flex items-center gap-2">
         <Image
-          src="/varsityhabits.svg"
-          width={275}
+          src="/vh.svg"
+          width={40}
           height={40}
-          alt="Varsity Habits"
+          alt=""
           className="h-10 w-auto"
           priority
           unoptimized
         />
+        <span className="font-display text-xl text-gray-900">PlayersCRM</span>
       </Link>
 
       <div className="mt-8 w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 shadow-xl ring-1 ring-black/5">
@@ -61,7 +62,7 @@ export default function PortalLoginPage() {
           <div className="mt-6 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-800">
             <p className="font-medium">Check your inbox.</p>
             <p className="mt-1 text-xs">
-              If your email matches a Varsity Habits account, a sign-in link is
+              If your email matches a PlayersCRM account, a sign-in link is
               on its way. The link expires shortly for security.
             </p>
           </div>

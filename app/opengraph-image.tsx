@@ -6,7 +6,7 @@ export const runtime = "nodejs"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 export const alt =
-  "Varsity Habits — the operating system for your sports program"
+  "PlayersCRM — the operating system for your sports program"
 
 const BULLDOG_LOGO_URL =
   "https://zkoxnmdrhgbjovfvparc.supabase.co/storage/v1/object/public/logos/provo-bulldog.svg"
@@ -121,7 +121,7 @@ export default async function OpengraphImage() {
                 fontWeight: 500,
               }}
             >
-              varsityhabits.com
+              playerscrm.com
             </span>
           </div>
         </div>
@@ -204,7 +204,7 @@ export default async function OpengraphImage() {
                     marginTop: 2,
                   }}
                 >
-                  provobasketball.varsityhabits.com
+                  provobasketball.playerscrm.com
                 </span>
               </div>
               <span

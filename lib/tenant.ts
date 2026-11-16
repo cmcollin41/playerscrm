@@ -22,7 +22,7 @@ function subdomainFromHost(host: string): string | null {
  *
  * Page routes: reads x-subdomain (set by proxy.ts).
  * API routes (proxy matcher excludes /api/*): falls back to deriving from
- *   the request host header — strips the root domain for *.varsityhabits.com
+ *   the request host header — strips the root domain for *.playerscrm.com
  *   subdomains, or looks the host up by custom_domain for custom CNAMEs.
  *
  * Returns null on the root domain (no tenant).

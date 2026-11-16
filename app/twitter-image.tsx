@@ -9,6 +9,6 @@ export const runtime = "nodejs"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 export const alt =
-  "Varsity Habits — the operating system for your sports program"
+  "PlayersCRM — the operating system for your sports program"
 
 export default OpengraphImage
